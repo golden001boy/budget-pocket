@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "postinstall": "prisma generate",
     "format": "prettier --write .",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
