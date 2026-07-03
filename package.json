@@ -1,0 +1,34 @@
+{
+  "name": "budget-pocket",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "format": "turbo run format",
+    "db:migrate": "pnpm --filter web run db:migrate",
+    "db:generate": "pnpm --filter web run db:generate",
+    "db:seed": "pnpm --filter web run db:seed",
+    "db:studio": "pnpm --filter web run db:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.6.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "18.3.1",
+      "@types/react-dom": "18.3.1"
+    },
+    "packageExtensions": {
+      "lucide-react": {
+        "peerDependencies": {
+          "@types/react": "18.3.1"
+        }
+      }
+    },
+    "neverBuiltDependencies": ["react-native-screens"]
+  }
+}

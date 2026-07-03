@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name":   "Budget-Pocket",
+    "slug":   "budget-pocket",
+    "version": "1.0.0",
+    "scheme": "budget-pocket",
+    "orientation": "portrait",
+    "icon":   "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image":           "./assets/splash.png",
+      "resizeMode":      "contain",
+      "backgroundColor": "#0F4C75"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet":   true,
+      "bundleIdentifier": "ci.budgetpocket.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F4C75"
+      },
+      "package": "ci.budgetpocket.app"
+    },
+    "web": {
+      "bundler":   "metro",
+      "output":    "static",
+      "favicon":   "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-notifications", { "icon": "./assets/notification-icon.png" }]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
