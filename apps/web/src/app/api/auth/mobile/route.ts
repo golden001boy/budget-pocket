@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   }
 
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user || !user.password) {
+  if (!user || !user.passwordHash) {
     return NextResponse.json({ error: 'Identifiants invalides' }, { status: 401 });
   }
 
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
   const token = await encode({
     token: {
       sub:            user.id,
+      id:             user.id,
       name:           user.name,
       email:          user.email,
       role:           user.role,

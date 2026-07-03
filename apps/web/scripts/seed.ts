@@ -156,7 +156,7 @@ async function main() {
 
   for (const b of budgets) {
     await prisma.budget.upsert({
-      where:  { userId_category_year_month: { userId: user.id, category: b.category, year, month } },
+      where:  { userId_category_month_year: { userId: user.id, category: b.category, year, month } },
       update: {},
       create: { userId: user.id, ...b, year, month },
     });
@@ -187,7 +187,7 @@ async function main() {
       id:            `${user.id}-goal-brvm`,
       userId:        user.id,
       name:          'Portefeuille BRVM 1M FCFA',
-      type:          'INVESTMENT',
+      type:          'SAVINGS',
       targetAmount:  1000000,
       currentAmount: 300000,
       status:        'ACTIVE',
@@ -273,6 +273,7 @@ async function main() {
       monthlyContribution:  80000,
       currentSavings:       850000,
       expectedReturnRate:   8,
+      targetMonthlyIncome:  500000,
     },
   });
   console.log('  ✅ Retirement plan créé');
@@ -284,9 +285,11 @@ async function main() {
     create: {
       id:          `${user.id}-loyer`,
       userId:      user.id,
+      name:        'Loyer appartement',
       amount:      150000,
       category:    'HOUSING',
       dayOfMonth:  5,
+      startDate:   new Date(now.getFullYear(), now.getMonth() - 5, 5),
       isActive:    true,
       nextRunAt:   new Date(now.getFullYear(), now.getMonth() + 1, 5),
     },
@@ -298,9 +301,11 @@ async function main() {
     create: {
       id:          `${user.id}-epargne`,
       userId:      user.id,
+      name:        'Virement épargne',
       amount:      80000,
       category:    'SAVINGS',
       dayOfMonth:  28,
+      startDate:   new Date(now.getFullYear(), now.getMonth() - 5, 28),
       isActive:    true,
       nextRunAt:   new Date(now.getFullYear(), now.getMonth() + 1, 28),
     },
