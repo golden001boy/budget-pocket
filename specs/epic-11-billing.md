@@ -17,10 +17,10 @@ yearly plan and become a `PREMIUM` user once payment completes.
   user's `role`.
 - The billing settings page lists premium features and plan pricing.
 
-**Implementation**: [apps/web/src/app/api/stripe/checkout/route.ts](../../apps/web/src/app/api/stripe/checkout/route.ts),
-[apps/web/src/app/api/stripe/webhook/route.ts](../../apps/web/src/app/api/stripe/webhook/route.ts),
-[apps/web/src/app/(dashboard)/settings/billing/page.tsx](../../apps/web/src/app/(dashboard)/settings/billing/page.tsx),
-`Subscription` model in [apps/web/prisma/schema.prisma](../../apps/web/prisma/schema.prisma).
+**Implementation**: [apps/web/src/app/api/stripe/checkout/route.ts](../apps/web/src/app/api/stripe/checkout/route.ts),
+[apps/web/src/app/api/stripe/webhook/route.ts](../apps/web/src/app/api/stripe/webhook/route.ts),
+[apps/web/src/app/(dashboard)/settings/billing/page.tsx](../apps/web/src/app/(dashboard)/settings/billing/page.tsx),
+`Subscription` model in [apps/web/prisma/schema.prisma](../apps/web/prisma/schema.prisma).
 
 ## Story 11.2 — Billing portal
 
@@ -29,7 +29,7 @@ yearly plan and become a `PREMIUM` user once payment completes.
 **Story**: As a premium user, I can manage or cancel my subscription via
 Stripe's hosted billing portal.
 
-**Implementation**: [apps/web/src/app/api/stripe/portal/route.ts](../../apps/web/src/app/api/stripe/portal/route.ts).
+**Implementation**: [apps/web/src/app/api/stripe/portal/route.ts](../apps/web/src/app/api/stripe/portal/route.ts).
 
 ## Story 11.3 — Profile settings
 
@@ -37,6 +37,6 @@ Stripe's hosted billing portal.
 
 **Story**: As a user, I can update my name, currency, and timezone.
 
-**Implementation**: [apps/web/src/app/api/user/profile/route.ts](../../apps/web/src/app/api/user/profile/route.ts),
-[apps/web/src/components/settings/ProfileForm.tsx](../../apps/web/src/components/settings/ProfileForm.tsx),
-[apps/web/src/app/(dashboard)/settings/page.tsx](../../apps/web/src/app/(dashboard)/settings/page.tsx).
+**Implementation**: [apps/web/src/app/api/user/profile/route.ts](../apps/web/src/app/api/user/profile/route.ts),
+[apps/web/src/components/settings/ProfileForm.tsx](../apps/web/src/components/settings/ProfileForm.tsx),
+[apps/web/src/app/(dashboard)/settings/page.tsx](../apps/web/src/app/(dashboard)/settings/page.tsx).

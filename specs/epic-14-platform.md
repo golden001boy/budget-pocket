@@ -9,8 +9,8 @@ every other epic.
 
 **Status**: Done
 
-**Implementation**: [pnpm-workspace.yaml](../../pnpm-workspace.yaml),
-[turbo.json](../../turbo.json), root [package.json](../../package.json).
+**Implementation**: [pnpm-workspace.yaml](../pnpm-workspace.yaml),
+[turbo.json](../turbo.json), root [package.json](../package.json).
 
 ## Story 14.2 — Shared domain package
 
@@ -21,7 +21,7 @@ web and mobile live in one package so the two apps can't silently drift apart on
 shape or business rules (categories, currencies, provider names, investment
 limits).
 
-**Implementation**: [packages/shared/](../../packages/shared/).
+**Implementation**: [packages/shared/](../packages/shared/).
 
 ## Story 14.3 — Dependency version consistency across apps
 
@@ -34,8 +34,8 @@ Expo/RN) can coexist in one workspace without their type packages colliding.
 `@types/react`/`@types/react-dom` version workspace-wide; `packageExtensions`
 patches `lucide-react`'s peer dependency declaration to match.
 
-**Implementation**: root [package.json](../../package.json) `pnpm` block,
-[.npmrc](../../.npmrc).
+**Implementation**: root [package.json](../package.json) `pnpm` block,
+[.npmrc](../.npmrc).
 
 ## Story 14.4 — Reliable install on a clean machine
 
@@ -55,16 +55,16 @@ manual follow-up steps.
   `PrismaClient` as `any`, masking real type errors and crashing at runtime on
   the first DB call.
 
-**Implementation**: root [package.json](../../package.json) `pnpm.neverBuiltDependencies`,
-[apps/web/package.json](../../apps/web/package.json) `postinstall` script.
+**Implementation**: root [package.json](../package.json) `pnpm.neverBuiltDependencies`,
+[apps/web/package.json](../apps/web/package.json) `postinstall` script.
 
 ## Story 14.5 — Background job scheduling
 
 **Status**: Done
 
-**Implementation**: [apps/web/vercel.json](../../apps/web/vercel.json) (4 cron
+**Implementation**: [apps/web/vercel.json](../apps/web/vercel.json) (4 cron
 schedules), each corresponding job under
-[apps/web/src/app/api/cron/](../../apps/web/src/app/api/cron/).
+[apps/web/src/app/api/cron/](../apps/web/src/app/api/cron/).
 
 ## Story 14.6 — Database seed script
 
@@ -74,4 +74,4 @@ schedules), each corresponding job under
 demo account (6 months of transactions, budgets, goals, a 3-position portfolio,
 a retirement plan, recurring rules, and an alert) via `pnpm db:seed`.
 
-**Implementation**: [apps/web/scripts/seed.ts](../../apps/web/scripts/seed.ts).
+**Implementation**: [apps/web/scripts/seed.ts](../apps/web/scripts/seed.ts).

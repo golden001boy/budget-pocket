@@ -17,10 +17,10 @@ invested value.
   cost basis and current value (`quantity × currentPrice`, falling back to
   `averageCost` when no price has been fetched yet).
 
-**Implementation**: [apps/web/src/app/api/portfolio/route.ts](../../apps/web/src/app/api/portfolio/route.ts),
-[apps/web/src/components/investments/AddPortfolioItemForm.tsx](../../apps/web/src/components/investments/AddPortfolioItemForm.tsx),
-[apps/web/src/app/(dashboard)/investments/page.tsx](../../apps/web/src/app/(dashboard)/investments/page.tsx),
-[packages/shared/src/types/portfolio.ts](../../packages/shared/src/types/portfolio.ts).
+**Implementation**: [apps/web/src/app/api/portfolio/route.ts](../apps/web/src/app/api/portfolio/route.ts),
+[apps/web/src/components/investments/AddPortfolioItemForm.tsx](../apps/web/src/components/investments/AddPortfolioItemForm.tsx),
+[apps/web/src/app/(dashboard)/investments/page.tsx](../apps/web/src/app/(dashboard)/investments/page.tsx),
+[packages/shared/src/types/portfolio.ts](../packages/shared/src/types/portfolio.ts).
 
 ## Story 6.2 — Live price refresh (crypto & BRVM)
 
@@ -34,11 +34,11 @@ prices without me having to enter them manually.
   BRVM equity prices via a scraper, writing `AssetPriceSnapshot` rows and
   updating `PortfolioItem.currentPrice`/`priceUpdatedAt`.
 
-**Implementation**: [apps/web/src/app/api/cron/refresh-prices/route.ts](../../apps/web/src/app/api/cron/refresh-prices/route.ts),
-[apps/web/src/lib/market-data/coingecko.ts](../../apps/web/src/lib/market-data/coingecko.ts),
-[apps/web/src/lib/scrapers/brvm.ts](../../apps/web/src/lib/scrapers/brvm.ts),
-[apps/web/src/app/api/prices/brvm/route.ts](../../apps/web/src/app/api/prices/brvm/route.ts),
-[apps/web/src/app/api/prices/crypto/route.ts](../../apps/web/src/app/api/prices/crypto/route.ts).
+**Implementation**: [apps/web/src/app/api/cron/refresh-prices/route.ts](../apps/web/src/app/api/cron/refresh-prices/route.ts),
+[apps/web/src/lib/market-data/coingecko.ts](../apps/web/src/lib/market-data/coingecko.ts),
+[apps/web/src/lib/scrapers/brvm.ts](../apps/web/src/lib/scrapers/brvm.ts),
+[apps/web/src/app/api/prices/brvm/route.ts](../apps/web/src/app/api/prices/brvm/route.ts),
+[apps/web/src/app/api/prices/crypto/route.ts](../apps/web/src/app/api/prices/crypto/route.ts).
 
 ## Story 6.3 — Portfolio allocation chart
 
@@ -47,7 +47,7 @@ prices without me having to enter them manually.
 **Story**: As a user, I can see my portfolio's allocation across asset classes
 visually.
 
-**Implementation**: [apps/web/src/components/charts/PortfolioAllocationChart.tsx](../../apps/web/src/components/charts/PortfolioAllocationChart.tsx).
+**Implementation**: [apps/web/src/components/charts/PortfolioAllocationChart.tsx](../apps/web/src/components/charts/PortfolioAllocationChart.tsx).
 
 ## Story 6.4 — Mobile portfolio view
 
@@ -56,4 +56,4 @@ visually.
 **Story**: As a mobile user, I can see my total portfolio value, gain/loss, and
 individual positions in the Investments tab.
 
-**Implementation**: [apps/mobile/app/(tabs)/investments/index.tsx](../../apps/mobile/app/(tabs)/investments/index.tsx).
+**Implementation**: [apps/mobile/app/(tabs)/investments/index.tsx](../apps/mobile/app/(tabs)/investments/index.tsx).

@@ -15,9 +15,9 @@ how much I've spent against it so far this month.
   for the same period updates rather than duplicates.
 - `BudgetForm` and the budgets dashboard page show spent-vs-limit per category.
 
-**Implementation**: [apps/web/src/app/api/budgets/route.ts](../../apps/web/src/app/api/budgets/route.ts),
-[apps/web/src/components/budgets/BudgetForm.tsx](../../apps/web/src/components/budgets/BudgetForm.tsx),
-[apps/web/src/app/(dashboard)/budgets/page.tsx](../../apps/web/src/app/(dashboard)/budgets/page.tsx).
+**Implementation**: [apps/web/src/app/api/budgets/route.ts](../apps/web/src/app/api/budgets/route.ts),
+[apps/web/src/components/budgets/BudgetForm.tsx](../apps/web/src/components/budgets/BudgetForm.tsx),
+[apps/web/src/app/(dashboard)/budgets/page.tsx](../apps/web/src/app/(dashboard)/budgets/page.tsx).
 
 ## Story 4.2 — Budget threshold alerts
 
@@ -31,4 +31,4 @@ the budget I set for it (`alertAt` percentage), so I can react before going over
 - The daily `api/cron/alerts` job compares current-month spend against each
   budget and creates an `Alert` row when the threshold is crossed.
 
-**Implementation**: [apps/web/src/app/api/cron/alerts/route.ts](../../apps/web/src/app/api/cron/alerts/route.ts).
+**Implementation**: [apps/web/src/app/api/cron/alerts/route.ts](../apps/web/src/app/api/cron/alerts/route.ts).

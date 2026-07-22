@@ -15,8 +15,8 @@ premium users, new signups this month, transaction volume) at a glance.
 - Metrics are computed via parallel Prisma aggregate queries
   (`Promise.all([...counts])`).
 
-**Implementation**: [apps/web/src/app/admin/page.tsx](../../apps/web/src/app/admin/page.tsx),
-[apps/web/src/app/admin/layout.tsx](../../apps/web/src/app/admin/layout.tsx).
+**Implementation**: [apps/web/src/app/admin/page.tsx](../apps/web/src/app/admin/page.tsx),
+[apps/web/src/app/admin/layout.tsx](../apps/web/src/app/admin/layout.tsx).
 
 ## Story 12.2 — User list & management
 
@@ -24,4 +24,4 @@ premium users, new signups this month, transaction volume) at a glance.
 
 **Story**: As an admin, I can browse the full user list to investigate accounts.
 
-**Implementation**: [apps/web/src/app/admin/users/page.tsx](../../apps/web/src/app/admin/users/page.tsx).
+**Implementation**: [apps/web/src/app/admin/users/page.tsx](../apps/web/src/app/admin/users/page.tsx).

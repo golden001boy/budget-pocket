@@ -16,5 +16,5 @@ recommendation, etc.) that I can mark as read.
   4.2); other alert types can be created directly (e.g. seeded
   `AI_RECOMMENDATION` alerts).
 
-**Implementation**: `Alert` model in [apps/web/prisma/schema.prisma](../../apps/web/prisma/schema.prisma),
-[apps/web/src/app/api/cron/alerts/route.ts](../../apps/web/src/app/api/cron/alerts/route.ts).
+**Implementation**: `Alert` model in [apps/web/prisma/schema.prisma](../apps/web/prisma/schema.prisma),
+[apps/web/src/app/api/cron/alerts/route.ts](../apps/web/src/app/api/cron/alerts/route.ts).

@@ -14,11 +14,11 @@ category, amount, description, and date, and edit or delete them later.
 - `GET/PATCH/DELETE /api/transactions/[id]` for a single transaction.
 - `TransactionForm` covers both create and edit.
 
-**Implementation**: [apps/web/src/app/api/transactions/route.ts](../../apps/web/src/app/api/transactions/route.ts),
-[apps/web/src/app/api/transactions/[id]/route.ts](../../apps/web/src/app/api/transactions/[id]/route.ts),
-[apps/web/src/components/transactions/TransactionForm.tsx](../../apps/web/src/components/transactions/TransactionForm.tsx),
-[apps/web/src/app/(dashboard)/expenses/page.tsx](../../apps/web/src/app/(dashboard)/expenses/page.tsx),
-[apps/web/src/app/(dashboard)/expenses/new/page.tsx](../../apps/web/src/app/(dashboard)/expenses/new/page.tsx).
+**Implementation**: [apps/web/src/app/api/transactions/route.ts](../apps/web/src/app/api/transactions/route.ts),
+[apps/web/src/app/api/transactions/[id]/route.ts](../apps/web/src/app/api/transactions/[id]/route.ts),
+[apps/web/src/components/transactions/TransactionForm.tsx](../apps/web/src/components/transactions/TransactionForm.tsx),
+[apps/web/src/app/(dashboard)/expenses/page.tsx](../apps/web/src/app/(dashboard)/expenses/page.tsx),
+[apps/web/src/app/(dashboard)/expenses/new/page.tsx](../apps/web/src/app/(dashboard)/expenses/new/page.tsx).
 
 ## Story 3.2 — Categorization
 
@@ -34,8 +34,8 @@ define my own custom categories.
 - Category list/labels are centralized in `@budget-pocket/shared` constants, not
   duplicated per app.
 
-**Implementation**: [packages/shared/src/constants/categories.ts](../../packages/shared/src/constants/categories.ts),
-`CustomCategory` in [apps/web/prisma/schema.prisma](../../apps/web/prisma/schema.prisma).
+**Implementation**: [packages/shared/src/constants/categories.ts](../packages/shared/src/constants/categories.ts),
+`CustomCategory` in [apps/web/prisma/schema.prisma](../apps/web/prisma/schema.prisma).
 
 ## Story 3.3 — Recurring transactions
 
@@ -51,7 +51,7 @@ them every month.
 - The daily `api/cron/recurring` job finds due rules and materializes
   `Transaction` rows, then advances `nextRunAt`.
 
-**Implementation**: [apps/web/src/app/api/cron/recurring/route.ts](../../apps/web/src/app/api/cron/recurring/route.ts).
+**Implementation**: [apps/web/src/app/api/cron/recurring/route.ts](../apps/web/src/app/api/cron/recurring/route.ts).
 
 ## Story 3.4 — Mobile expense list
 
@@ -63,5 +63,5 @@ tab.
 **Acceptance criteria**: fetches `GET /api/transactions?limit=50` via
 `mfetchJson` and renders the list.
 
-**Implementation**: [apps/mobile/app/(tabs)/expenses/index.tsx](../../apps/mobile/app/(tabs)/expenses/index.tsx),
-[apps/mobile/app/modals/add-transaction.tsx](../../apps/mobile/app/modals/add-transaction.tsx).
+**Implementation**: [apps/mobile/app/(tabs)/expenses/index.tsx](../apps/mobile/app/(tabs)/expenses/index.tsx),
+[apps/mobile/app/modals/add-transaction.tsx](../apps/mobile/app/modals/add-transaction.tsx).

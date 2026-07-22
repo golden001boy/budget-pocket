@@ -17,9 +17,9 @@ progress toward it.
 - `GoalForm` creates/edits a goal; goal cards show `currentAmount` /
   `targetAmount` progress and `status` (`ACTIVE`, etc.).
 
-**Implementation**: [apps/web/src/app/api/goals/route.ts](../../apps/web/src/app/api/goals/route.ts),
-[apps/web/src/app/api/goals/[id]/route.ts](../../apps/web/src/app/api/goals/[id]/route.ts),
-[apps/web/src/components/goals/GoalForm.tsx](../../apps/web/src/components/goals/GoalForm.tsx).
+**Implementation**: [apps/web/src/app/api/goals/route.ts](../apps/web/src/app/api/goals/route.ts),
+[apps/web/src/app/api/goals/[id]/route.ts](../apps/web/src/app/api/goals/[id]/route.ts),
+[apps/web/src/components/goals/GoalForm.tsx](../apps/web/src/components/goals/GoalForm.tsx).
 
 ## Story 5.2 — Goals analysis view
 
@@ -28,4 +28,4 @@ progress toward it.
 **Story**: As a user, I can see all my goals together with progress bars and
 projected completion, on a dedicated analysis page.
 
-**Implementation**: [apps/web/src/app/(dashboard)/analysis/goals/page.tsx](../../apps/web/src/app/(dashboard)/analysis/goals/page.tsx).
+**Implementation**: [apps/web/src/app/(dashboard)/analysis/goals/page.tsx](../apps/web/src/app/(dashboard)/analysis/goals/page.tsx).

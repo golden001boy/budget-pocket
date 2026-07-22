@@ -15,9 +15,9 @@ mobile-money balance I update myself) and see it listed with its balance.
 - `LinkAccountForm` creates a `MANUAL` provider account.
 - The accounts page shows a running total balance across all accounts.
 
-**Implementation**: [apps/web/src/app/api/accounts/route.ts](../../apps/web/src/app/api/accounts/route.ts),
-[apps/web/src/components/accounts/LinkAccountForm.tsx](../../apps/web/src/components/accounts/LinkAccountForm.tsx),
-[apps/web/src/app/(dashboard)/accounts/page.tsx](../../apps/web/src/app/(dashboard)/accounts/page.tsx).
+**Implementation**: [apps/web/src/app/api/accounts/route.ts](../apps/web/src/app/api/accounts/route.ts),
+[apps/web/src/components/accounts/LinkAccountForm.tsx](../apps/web/src/components/accounts/LinkAccountForm.tsx),
+[apps/web/src/app/(dashboard)/accounts/page.tsx](../apps/web/src/app/(dashboard)/accounts/page.tsx).
 
 ## Story 2.2 — Mobile-money provider sync (Wave, MTN, Orange)
 
@@ -40,5 +40,5 @@ mobile-money provider (or an aggregator), credential storage, and a sync
 scheduler (likely another `api/cron/*` job) to periodically pull transactions
 into `Transaction` rows tagged with the originating `source`.
 
-**Implementation (stub)**: [apps/web/src/lib/sync/providers/](../../apps/web/src/lib/sync/providers/)
+**Implementation (stub)**: [apps/web/src/lib/sync/providers/](../apps/web/src/lib/sync/providers/)
 (`wave.ts`, `mtn.ts`, `orange.ts`, `manual.ts`, `index.ts`).

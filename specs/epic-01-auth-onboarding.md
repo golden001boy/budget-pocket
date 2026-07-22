@@ -17,8 +17,8 @@ can start tracking my finances.
   `passwordHash`.
 - Duplicate email registration is rejected.
 
-**Implementation**: [apps/web/src/app/api/auth/register/route.ts](../../apps/web/src/app/api/auth/register/route.ts),
-[apps/web/src/app/(auth)/register/](../../apps/web/src/app/(auth)/register/).
+**Implementation**: [apps/web/src/app/api/auth/register/route.ts](../apps/web/src/app/api/auth/register/route.ts),
+[apps/web/src/app/(auth)/register/](../apps/web/src/app/(auth)/register/).
 
 ## Story 1.2 — Web session login (NextAuth)
 
@@ -32,9 +32,9 @@ in across page loads.
 - `jwt`/`session` callbacks propagate `id`, `role`, `currency`, `onboardingDone`
   onto `session.user`.
 
-**Implementation**: [apps/web/src/lib/auth.ts](../../apps/web/src/lib/auth.ts),
-[apps/web/src/app/api/auth/[...nextauth]/route.ts](../../apps/web/src/app/api/auth/[...nextauth]/route.ts),
-[apps/web/src/types/next-auth.d.ts](../../apps/web/src/types/next-auth.d.ts).
+**Implementation**: [apps/web/src/lib/auth.ts](../apps/web/src/lib/auth.ts),
+[apps/web/src/app/api/auth/[...nextauth]/route.ts](../apps/web/src/app/api/auth/[...nextauth]/route.ts),
+[apps/web/src/types/next-auth.d.ts](../apps/web/src/types/next-auth.d.ts).
 
 ## Story 1.3 — Mobile login (bearer token)
 
@@ -49,11 +49,11 @@ app and have the app remember me.
 - The mobile app persists the token via `expo-secure-store` and attaches it as
   `Authorization: Bearer <token>` on subsequent API calls.
 
-**Implementation**: [apps/web/src/app/api/auth/mobile/route.ts](../../apps/web/src/app/api/auth/mobile/route.ts),
-[apps/mobile/lib/storage.ts](../../apps/mobile/lib/storage.ts),
-[apps/mobile/lib/mfetch.ts](../../apps/mobile/lib/mfetch.ts),
-[apps/mobile/contexts/AuthContext.tsx](../../apps/mobile/contexts/AuthContext.tsx),
-[apps/mobile/app/(auth)/login.tsx](../../apps/mobile/app/(auth)/login.tsx).
+**Implementation**: [apps/web/src/app/api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts),
+[apps/mobile/lib/storage.ts](../apps/mobile/lib/storage.ts),
+[apps/mobile/lib/mfetch.ts](../apps/mobile/lib/mfetch.ts),
+[apps/mobile/contexts/AuthContext.tsx](../apps/mobile/contexts/AuthContext.tsx),
+[apps/mobile/app/(auth)/login.tsx](../apps/mobile/app/(auth)/login.tsx).
 
 ## Story 1.4 — First-run onboarding wizard
 
@@ -67,5 +67,5 @@ completed it.
 - `User.onboardingDone` gates whether the onboarding route is shown.
 - Wizard is a multi-step client component.
 
-**Implementation**: [apps/web/src/components/onboarding/OnboardingWizard.tsx](../../apps/web/src/components/onboarding/OnboardingWizard.tsx),
-[apps/web/src/app/(onboarding)/onboarding/page.tsx](../../apps/web/src/app/(onboarding)/onboarding/page.tsx).
+**Implementation**: [apps/web/src/components/onboarding/OnboardingWizard.tsx](../apps/web/src/components/onboarding/OnboardingWizard.tsx),
+[apps/web/src/app/(onboarding)/onboarding/page.tsx](../apps/web/src/app/(onboarding)/onboarding/page.tsx).

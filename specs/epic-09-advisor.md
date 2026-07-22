@@ -13,8 +13,8 @@ if I increase rent budget by 20%") tied to my account.
 **Acceptance criteria**: `GET/POST /api/advisor/scenarios` on the `Scenario`
 model, `ScenarioType` enum for the kind of scenario.
 
-**Implementation**: [apps/web/src/app/api/advisor/scenarios/route.ts](../../apps/web/src/app/api/advisor/scenarios/route.ts),
-[apps/web/src/components/advisor/ScenarioList.tsx](../../apps/web/src/components/advisor/ScenarioList.tsx).
+**Implementation**: [apps/web/src/app/api/advisor/scenarios/route.ts](../apps/web/src/app/api/advisor/scenarios/route.ts),
+[apps/web/src/components/advisor/ScenarioList.tsx](../apps/web/src/components/advisor/ScenarioList.tsx).
 
 ## Story 9.2 — Context builder for grounded AI answers
 
@@ -24,8 +24,8 @@ model, `ScenarioType` enum for the kind of scenario.
 a summary of the user's accounts, transactions, budgets, and goals to give an AI
 model real context instead of generic advice.
 
-**Implementation**: [apps/web/src/lib/ai/buildContext.ts](../../apps/web/src/lib/ai/buildContext.ts),
-provider config in [apps/web/src/lib/ai/client.ts](../../apps/web/src/lib/ai/client.ts)
+**Implementation**: [apps/web/src/lib/ai/buildContext.ts](../apps/web/src/lib/ai/buildContext.ts),
+provider config in [apps/web/src/lib/ai/client.ts](../apps/web/src/lib/ai/client.ts)
 (Groq primary / Anthropic fallback).
 
 ## Story 9.3 — Conversational chat endpoint
@@ -39,7 +39,7 @@ finances and get an answer grounded in my own data.
 `503 { code: "FEATURE_DISABLED" }` — the route does not call `buildContext` or
 any AI provider. `AIConversation`/`AIMessage` models exist in the schema but are
 unused by any route today. The mobile Advisor tab and
-[apps/web/src/components/advisor/AIChat.tsx](../../apps/web/src/components/advisor/AIChat.tsx)
+[apps/web/src/components/advisor/AIChat.tsx](../apps/web/src/components/advisor/AIChat.tsx)
 render a chat UI against this disabled endpoint.
 
 **What's missing to close this out**: wire `POST /api/advisor/chat` to call
@@ -47,6 +47,6 @@ render a chat UI against this disabled endpoint.
 `AIConversation`/`AIMessage`, and flip `NEXT_PUBLIC_ENABLE_AI_ADVISOR` on once a
 provider API key is configured.
 
-**Implementation (stub)**: [apps/web/src/app/api/advisor/chat/route.ts](../../apps/web/src/app/api/advisor/chat/route.ts),
-[apps/web/src/app/(dashboard)/advisor/page.tsx](../../apps/web/src/app/(dashboard)/advisor/page.tsx),
-[apps/mobile/app/(tabs)/advisor/index.tsx](../../apps/mobile/app/(tabs)/advisor/index.tsx).
+**Implementation (stub)**: [apps/web/src/app/api/advisor/chat/route.ts](../apps/web/src/app/api/advisor/chat/route.ts),
+[apps/web/src/app/(dashboard)/advisor/page.tsx](../apps/web/src/app/(dashboard)/advisor/page.tsx),
+[apps/mobile/app/(tabs)/advisor/index.tsx](../apps/mobile/app/(tabs)/advisor/index.tsx).
