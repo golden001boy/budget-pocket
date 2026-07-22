@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { encode } from 'next-auth/jwt';
+import { loginSchema } from '@budget-pocket/shared';
 import { rateLimit, getClientIp, loginRateLimitKey, LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS } from '@/lib/rateLimit';
 
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json();
-
-  if (!email || !password) {
-    return NextResponse.json({ error: 'Email et mot de passe requis' }, { status: 400 });
+  const body   = await req.json();
+  const parsed = loginSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
   }
+  const { email, password } = parsed.data;
 
   const ip = getClientIp(req.headers);
   const limit = await rateLimit(loginRateLimitKey(email, ip), LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);

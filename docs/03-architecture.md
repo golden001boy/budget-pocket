@@ -130,9 +130,18 @@ résumé JSON. Pas de session utilisateur impliquée.
   non authentifié, 404 non trouvé/non autorisé, 400 validation échouée). Pas
   de code d'erreur structuré (`code: "..."`) sur la plupart des routes, sauf
   exception ponctuelle (`FEATURE_DISABLED` sur `/api/advisor/chat`).
-- **Validation** : Zod sur la majorité des routes mutatives via
-  `@budget-pocket/shared` (schémas partagés avec le mobile). Exceptions
-  documentées dans [04-tests.md](04-tests.md) BE-03/FE-08.
+- **Incohérence relevée (story 15.2)** : les routes API sous le matcher de
+  `middleware.ts` (voir [apps/web/src/middleware.ts](../apps/web/src/middleware.ts))
+  reçoivent une redirection `307` vers `/api/auth/signin` si non
+  authentifiées, **avant** même d'atteindre le `getServerSession` du handler
+  — donc jamais le `401 { error: ... }` JSON attendu par un client API/mobile.
+  Le contrôle `if (!session) return NextResponse.json(...)` dans chaque
+  handler est de fait mort pour ces routes. Non corrigé ici (hors périmètre
+  de 15.2) — à traiter dans une story dédiée si confirmé gênant pour le
+  client mobile (`@budget-pocket/api-client`).
+- **Validation** : Zod sur toutes les routes mutatives connues via
+  `@budget-pocket/shared` (schémas partagés avec le mobile) depuis la story
+  15.2 — voir [04-tests.md](04-tests.md) FE-08/API-03.
 - **Erreurs serveur** : les erreurs Prisma non interceptées remontent leur
   message brut dans certains handlers (ex. `/api/health` expose le message
   `PrismaClientInitializationError` complet) — acceptable pour un endpoint de

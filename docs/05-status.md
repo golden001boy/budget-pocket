@@ -1,7 +1,7 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-03 (story 15.1 livrée)
+**Dernière mise à jour** : 2026-07-03 (story 15.2 livrée)
 
 ## Vue d'ensemble des phases
 
@@ -10,7 +10,7 @@
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 1/9 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 2/9 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🔴 |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -32,12 +32,11 @@
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 1/9 stories (15.1 ✅) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 2/9 stories (15.1, 15.2 ✅) |
 
 ## Prochaine action recommandée
 
-`bmad dev 15.2` — validation Zod manquante sur `/api/auth/mobile` et
-`/api/goals/[id]` (FE-08/BE-03/API-03). Voir
+`bmad dev 15.6` — pipeline CI/CD (DEV-03). Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch) pour
 l'ordre complet.
 
@@ -47,6 +46,15 @@ mais **non vérifiée de bout en bout** — Redis n'est pas encore up dans
 l'environnement local. À qualifier (`bmad qa 15.1`) dès que Redis est
 disponible. A aussi produit la story 15.9 (câbler Jest), nécessaire avant que
 toute story suivante puisse respecter la règle "tests écrits avec le code".
+Observation incidente : le fail-open Redis prend ~9-10s (backoff de
+reconnexion par défaut d'ioredis) — latence à corriger si l'epic revient sur
+ce fichier.
+
+**Note story 15.2** : implémentée et partiellement vérifiée (voir
+[02-prd.md](02-prd.md) pour le détail). A révélé un gap d'API hors périmètre :
+les routes protégées par `middleware.ts` renvoient une redirection `307` HTML
+plutôt qu'un `401` JSON pour les clients non authentifiés — noté dans
+[03-architecture.md §5](03-architecture.md), pas encore transformé en story.
 
 ## Gate Phase 6 — non atteignable en l'état
 

@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (1/9)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (2/9)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -153,7 +153,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | Story | Titre | MoSCoW | Estim. | Statut | Réf. catalogue |
 |---|---|---|---|---|---|
 | 15.1 | Rate limiting sur login + inscription | Must | M | ✅ | BE-07, API-04, API-06 |
-| 15.2 | Validation Zod sur `/api/auth/mobile` et `/api/goals/[id]` | Must | S | 🔴 | BE-03, FE-08 |
+| 15.2 | Validation Zod sur `/api/auth/mobile` et `/api/goals/[id]` | Must | S | ✅ | BE-03, FE-08 |
 | 15.3 | Pagination sur `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` | Should | S | 🔴 | Perf (règle Phase 1) |
 | 15.4 | Intégration monitoring d'erreurs (Sentry) | Must | M | 🔴 | PROD-01 |
 | 15.5 | Scan SCA des dépendances + plan de remédiation | Must | S | 🔴 | DEV-02 |
@@ -197,6 +197,56 @@ jusqu'à l'appel Prisma suivant. Le chemin "bloque après N tentatives"
 **reste non vérifié** — nécessite Redis réellement joignable pour que
 `INCR`/`EXPIRE` s'exécutent. À vérifier dès que Redis est disponible :
 `bmad qa 15.1`.
+
+**Observation opérationnelle (relevée pendant la vérification de la story
+15.2)** : quand Redis est injoignable, le fail-open prend **~9-10 secondes**
+avant de répondre (backoff de reconnexion par défaut d'`ioredis`) — le
+comportement est correct (pas de panne), mais l'utilisateur attend
+anormalement longtemps pendant un incident Redis. Pas un défaut fonctionnel,
+mais une latence à corriger (ex. `retryStrategy`/`connectTimeout` plus
+agressifs) si l'Epic 15 revient sur ce fichier — non traité ici pour ne pas
+rouvrir une story déjà ✅.
+
+### Story 15.2 — Validation Zod manquante · ✅ Done
+
+**Story** : En tant que développeur, je veux que chaque route API valide son
+body avec un schéma Zod côté serveur, afin qu'aucune donnée malformée
+n'atteigne Prisma sans contrôle (BE-03/FE-08/API-03).
+
+**Critères d'acceptation**
+- [x] `POST /api/auth/mobile` rejette avec `400` un email malformé, un mot de
+      passe absent, ou un body non conforme — via `loginSchema` (déjà
+      présent dans `@budget-pocket/shared`, jusqu'ici inutilisé par cette
+      route).
+- [x] `PATCH /api/goals/[id]` rejette avec `400` un body non conforme — via
+      `updateGoalSchema` (déjà présent, jusqu'ici inutilisé par cette route).
+- [x] Aucun champ non whitelisté par le schéma n'est transmis à Prisma
+      (Zod ignore silencieusement les clés inconnues par défaut).
+- [ ] Test unitaire — même limitation que 15.1, reporté à 15.9 (ADR-005).
+
+**Implémentation** : [apps/web/src/app/api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts),
+[apps/web/src/app/api/goals/[id]/route.ts](../apps/web/src/app/api/goals/[id]/route.ts) —
+les deux schémas existaient déjà dans `packages/shared/src/schemas/`
+(`auth.ts`, `goal.ts`) mais n'étaient importés par aucune route ; aucun nouveau
+schéma n'a été nécessaire.
+
+**Vérification** : `auth/mobile` testé en direct — email malformé → `400`,
+mot de passe manquant → `400`, body valide → passe la validation et atteint
+l'appel Prisma suivant (confirmé par les logs serveur). `goals/[id]` non
+testable de bout en bout sans session authentifiée fonctionnelle (bloqué par
+le même manque de BDD/Redis locaux que 15.1) — la route est cependant
+protégée en amont par `middleware.ts` (redirection si non authentifié), donc
+le chemin de validation Zod n'est atteignable qu'après une vraie session, ce
+qui n'a pas pu être simulé ici. À vérifier dès que l'environnement est
+opérationnel : `bmad qa 15.2`.
+
+**Observation incidente (hors périmètre de cette story)** : en testant
+`goals/[id]` sans session, la requête reçoit une redirection `307` vers
+`/api/auth/signin` (comportement de `middleware.ts`/`withAuth`) plutôt qu'un
+`401` JSON propre — ce qui casse le contrat attendu par un client API/mobile
+consommant du JSON. Comportement pré-existant, non introduit par 15.1/15.2 ;
+à traiter dans une story dédiée si confirmé problématique pour le client
+mobile.
 
 ---
 

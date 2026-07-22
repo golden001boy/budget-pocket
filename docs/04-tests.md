@@ -38,7 +38,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | FE-05 | Mauvaise gestion tokens client | 🟡 | ✅ Couvert | Web : cookie HttpOnly (défaut NextAuth), jamais lu en JS. Mobile : `expo-secure-store` (keychain chiffré), pas de `localStorage`/`AsyncStorage` en clair |
 | FE-06 | CSP absente ou faible | 🟢 | ✅ Couvert | CSP stricte déployée globalement dans `next.config.mjs` (`default-src 'self'`, etc.) |
 | FE-07 | Fuite via source maps/HTML | 🟢 | ✅ Couvert | `productionBrowserSourceMaps` non activé (défaut Next.js = pas de source maps en prod) |
-| FE-08 | Validation seulement côté client | 🔴 | 🟡 Partiel | Validation Zod côté serveur sur la majorité des routes ; **absente** sur `PATCH /api/goals/[id]` (body non validé, passé quasi tel quel à Prisma) et `/api/auth/mobile` (déstructuration directe sans schéma) → story 15.2 |
+| FE-08 | Validation seulement côté client | 🔴 | ✅ Couvert | Validation Zod côté serveur sur toutes les routes mutatives connues, y compris `PATCH /api/goals/[id]` (`updateGoalSchema`) et `/api/auth/mobile` (`loginSchema`) depuis la story 15.2 |
 
 ## 3. Couche API — OWASP API Top 10 (API-01 à API-10)
 
@@ -46,7 +46,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 |---|---|---|---|---|
 | API-01 | BOLA | 🔴 | ✅ Couvert | Voir BE-01 |
 | API-02 | Broken Authentication | 🔴 | 🟡 Partiel | Voir BE-02 |
-| API-03 | Broken Object Property Level Auth | 🟡 | 🟡 Partiel | Les schémas Zod whitelistent les champs acceptés sur la plupart des routes ; `goals/[id]` PATCH n'a pas cette protection (même gap que FE-08) |
+| API-03 | Broken Object Property Level Auth | 🟡 | ✅ Couvert | Les schémas Zod whitelistent les champs acceptés sur toutes les routes mutatives connues, y compris `goals/[id]` PATCH depuis la story 15.2 |
 | API-04 | Unrestricted Resource Consumption | 🟡 | 🟡 Partiel | Login/inscription limités (story 15.1, ✅) ; pas de limite de taille de payload ni de quota sur les autres routes mutatives |
 | API-05 | Broken Function Level Auth | 🔴 | ✅ Couvert | `middleware.ts` protège `/admin/*` par rôle (`token.role !== 'ADMIN'` → redirect) et toutes les routes API sensibles par le matcher |
 | API-06 | Unrestricted Access to Business Flows | 🟡 | 🟡 Partiel | Brute force de connexion/spam d'inscription limités (story 15.1, ✅) ; pas de protection anti-bot ni de limite métier sur les autres flux (ex. création de transactions en masse) |
@@ -92,7 +92,7 @@ Tous les 🔴 ci-dessus doivent être résolus (Epic 15) avant que la checklist
 Ordre recommandé (Critique → Haute → Moyenne) :
 
 1. ~~BE-07 / API-04 / API-06 — rate limiting login/inscription (story 15.1)~~ ✅
-2. FE-08 / BE-03 / API-03 — validation Zod manquante (story 15.2)
+2. ~~FE-08 / BE-03 / API-03 — validation Zod manquante (story 15.2)~~ ✅
 3. DEV-03 — pipeline CI/CD (story 15.6)
 4. PROD-01 — monitoring Sentry (story 15.4)
 5. DEV-02 — remédiation `pnpm audit` (story 15.5)
