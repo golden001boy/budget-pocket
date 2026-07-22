@@ -160,7 +160,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.6 | Pipeline CI/CD avec protections de branche | Must | M | 🔴 | DEV-03 |
 | 15.7 | Politique de backup/rollback BDD production | Must | S | 🔴 | Gate Phase 6 §9.1 |
 | 15.8 | MFA ou hardening de l'authentification | Should | L | 🔴 | BE-02 |
-| 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | 🔴 | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
+| 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -181,7 +181,11 @@ le risque de brute force et d'abus de ressources (BE-07/API-04/API-06).
 - [x] Si Redis est injoignable, la requête est autorisée (fail-open) et
       l'échec est journalisé côté serveur — pas de panne d'authentification à
       cause d'un incident Redis (ADR-004).
-- [ ] Test unitaire — reporté à la story 15.9 (aucun test runner câblé), voir ADR-005.
+- [x] Test unitaire — `apps/web/src/lib/__tests__/rateLimit.test.ts` (câblé
+      rétroactivement par la story 15.9, voir ADR-005) : couvre le succès sous
+      la limite, l'absence de ré-`expire` après le premier incrément, le
+      blocage au-delà de la limite, le fail-open sur erreur Redis, et
+      `getClientIp`/`loginRateLimitKey`.
 
 **Implémentation** : [apps/web/src/lib/rateLimit.ts](../apps/web/src/lib/rateLimit.ts),
 [apps/web/src/lib/auth.ts](../apps/web/src/lib/auth.ts),
@@ -222,7 +226,12 @@ n'atteigne Prisma sans contrôle (BE-03/FE-08/API-03).
       `updateGoalSchema` (déjà présent, jusqu'ici inutilisé par cette route).
 - [x] Aucun champ non whitelisté par le schéma n'est transmis à Prisma
       (Zod ignore silencieusement les clés inconnues par défaut).
-- [ ] Test unitaire — même limitation que 15.1, reporté à 15.9 (ADR-005).
+- [x] Test unitaire — `apps/web/src/lib/__tests__/authSchemas.test.ts`
+      (câblé rétroactivement par la story 15.9, voir ADR-005) : couvre
+      `loginSchema` et `updateGoalSchema` (acceptation valide, rejet email
+      malformé/mot de passe vide/montant négatif/statut invalide, et
+      confirmation que les champs non whitelistés — ex. `userId` — sont
+      silencieusement retirés plutôt que transmis à Prisma).
 
 **Implémentation** : [apps/web/src/app/api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts),
 [apps/web/src/app/api/goals/[id]/route.ts](../apps/web/src/app/api/goals/[id]/route.ts) —
@@ -247,6 +256,46 @@ Zod n'est atteignable qu'avec une vraie session cookie — pas simulable via
 consommant du JSON. Comportement pré-existant, non introduit par 15.1/15.2 ;
 à traiter dans une story dédiée si confirmé problématique pour le client
 mobile.
+
+### Story 15.9 — Câbler un test runner (Jest) · ✅ Done
+
+**Story** : En tant que développeur, je veux un test runner fonctionnel dans
+le monorepo, afin que la règle §6.1 "tests écrits avec le code" soit
+respectable pour toute story future — au lieu de systématiquement produire
+un ADR de report comme 15.1 et 15.2 l'ont fait.
+
+**Critères d'acceptation**
+- [x] `pnpm --filter web run test` exécute une suite Jest et réussit.
+- [x] `pnpm test` (racine, via Turborepo) exécute la même suite — le test
+      runner est disponible au niveau du monorepo, pas seulement en local
+      dans `apps/web`.
+- [x] `pnpm type-check` reste vert avec les fichiers de test inclus.
+- [x] Les tests différés de 15.1 et 15.2 sont écrits rétroactivement
+      (voir leurs cases à cocher ci-dessus) — la preuve que le runner
+      fonctionne n'est pas un test bidon, mais la dette réelle qu'il devait
+      résorber.
+
+**Implémentation** : [apps/web/jest.config.js](../apps/web/jest.config.js)
+(`next/jest`), scripts `test`/`test:watch` dans `apps/web/package.json`,
+tâche `test` ajoutée à [turbo.json](../turbo.json) et au `package.json`
+racine. Tests : [apps/web/src/lib/__tests__/rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts),
+[apps/web/src/lib/__tests__/authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts).
+
+**Déviations rencontrées** (voir [03-architecture.md ADR-006](03-architecture.md#adr-006--pin-jest-2910-pour-compatibilité-avec-nextjest)) :
+`next/jest` (fourni par `next@14.2.35`) est incompatible avec `jest@30`
+(erreur interne `clearMocksOnScope is not a function`) — `jest` a été
+repointé sur `^29.7.0`, la ligne pour laquelle `next/jest` a réellement été
+écrite. `@types/jest` a aussi dû être ajouté (absent malgré `jest` en
+devDependency depuis le début du projet).
+
+**Vérification** : `pnpm test` et `pnpm type-check` exécutés à la racine du
+monorepo — 19 tests passent, aucune régression de type.
+
+**Portée non couverte** : uniquement `apps/web`. `apps/mobile` (Expo/React
+Native) nécessiterait un preset différent (`jest-expo`) — hors périmètre S de
+cette story. `packages/shared`/`packages/api-client` peuvent réutiliser la
+suite `apps/web` sans config propre (déjà démontré par `authSchemas.test.ts`,
+qui teste du code de `packages/shared` depuis `apps/web`).
 
 ---
 

@@ -78,10 +78,16 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 - **E2E** : 2 specs Playwright — `apps/web/tests/auth.spec.ts`,
   `apps/web/tests/golden-path.spec.ts` (config :
   [apps/web/playwright.config.ts](../apps/web/playwright.config.ts)).
-- **Unitaires** : `jest` est en devDependency mais **aucun test unitaire
-  n'existe** — les simulateurs (`retirement.ts`, `realEstate.ts`,
-  `stockGrowth.ts`), l'analytique (`forecast.ts`, `snapshot.ts`) et les routes
-  API n'ont aucune couverture.
+- **Unitaires** : câblés depuis la story 15.9 (`apps/web/jest.config.js`,
+  `pnpm test`/`pnpm --filter web run test`). 19 tests, 2 fichiers —
+  [rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts) et
+  [authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts).
+  **Couverture encore très partielle** : les simulateurs (`retirement.ts`,
+  `realEstate.ts`, `stockGrowth.ts`), l'analytique (`forecast.ts`,
+  `snapshot.ts`) et les handlers de routes API n'ont toujours aucun test —
+  seuls `rateLimit.ts` et les schémas Zod d'auth/goals sont couverts à ce
+  jour. `apps/mobile` n'a pas de runner (nécessiterait `jest-expo`, hors
+  périmètre de 15.9).
 - **Sécurité** : aucun test automatisé des items du catalogue §8 — cet audit
   est une revue de code manuelle, pas une exécution de suite de tests.
 
@@ -93,9 +99,12 @@ Ordre recommandé (Critique → Haute → Moyenne) :
 
 1. ~~BE-07 / API-04 / API-06 — rate limiting login/inscription (story 15.1)~~ ✅
 2. ~~FE-08 / BE-03 / API-03 — validation Zod manquante (story 15.2)~~ ✅
-3. DEV-03 — pipeline CI/CD (story 15.6)
-4. PROD-01 — monitoring Sentry (story 15.4)
-5. DEV-02 — remédiation `pnpm audit` (story 15.5)
-6. PROD-03 — politique backup/rollback (story 15.7)
-7. Perf : pagination manquante (story 15.3)
-8. BE-02 — MFA / hardening auth (story 15.8, non bloquant Must mais recommandé)
+3. ~~Prérequis §6.1 — test runner Jest câblé (story 15.9)~~ ✅ (fait hors
+   ordre — nécessaire pour que les stories suivantes respectent enfin la
+   règle "tests écrits avec le code" sans nouvel ADR de report)
+4. DEV-03 — pipeline CI/CD (story 15.6)
+5. PROD-01 — monitoring Sentry (story 15.4)
+6. DEV-02 — remédiation `pnpm audit` (story 15.5)
+7. PROD-03 — politique backup/rollback (story 15.7)
+8. Perf : pagination manquante (story 15.3)
+9. BE-02 — MFA / hardening auth (story 15.8, non bloquant Must mais recommandé)

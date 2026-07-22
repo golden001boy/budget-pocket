@@ -30,9 +30,11 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 2/9 (15.1
-rate limiting et 15.2 validation Zod livrées, non encore pleinement
-qualifiées faute de Redis/BDD locaux) et bloque la Phase 6. Voir
+sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 3/9 (15.1
+rate limiting, 15.2 validation Zod, 15.9 test runner Jest livrées ; BDD Neon
+opérationnelle, Redis encore manquant) et bloque la Phase 6. `pnpm test`
+fonctionne désormais à la racine — toute nouvelle story doit inclure ses
+tests unitaires, plus d'ADR de report type ADR-005. Voir
 [docs/04-tests.md](docs/04-tests.md) pour le détail par item du catalogue de
 failles.
 
@@ -45,6 +47,7 @@ Prisma/PostgreSQL. Détail complet : [docs/03-architecture.md](docs/03-architect
 pnpm install          # installe + génère le client Prisma (postinstall)
 pnpm dev              # lance web + mobile
 pnpm type-check        # gate de correction de type (le build ignore les erreurs TS)
+pnpm test               # suite Jest (apps/web uniquement à ce jour)
 pnpm db:migrate         # migration Prisma (jamais de modif directe du schéma en prod)
 pnpm db:seed            # compte de démo
 ```

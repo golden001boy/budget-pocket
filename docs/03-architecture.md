@@ -217,6 +217,27 @@ seule story à la fois).
 **Conséquence** : story 15.9 ajoutée pour câbler Jest ; une fois faite, elle
 débloque des tests unitaires réels pour `rateLimit.ts` et toutes les stories
 suivantes de l'Epic 15.
+**Résolu par la story 15.9** — voir ADR-006 ci-dessous. Les tests différés
+existent maintenant : [apps/web/src/lib/__tests__/rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts),
+[apps/web/src/lib/__tests__/authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts).
+
+### ADR-006 — Pin `jest@29.x` pour compatibilité avec `next/jest`
+**Contexte** (story 15.9) : `next/jest` (le wrapper fourni par `next@14.2.35`
+pour configurer Jest avec le transform SWC et la résolution `tsconfig.json`)
+plantait avec `jest@30` (`TypeError: this._moduleMocker.clearMocksOnScope is
+not a function`) — `jest` était déjà en devDependency (`^30.0.0`) sans jamais
+avoir été réellement exercé (aucun `jest.config.js` n'existait avant cette
+story). `next@14.x` est en maintenance et n'a pas été mis à jour pour la
+nouvelle API interne de `jest-mock` utilisée par Jest 30.
+**Décision** : repointer `jest` sur `^29.7.0` (la ligne pour laquelle
+`next/jest` a été écrite) plutôt que d'abandonner `next/jest` au profit d'une
+config manuelle (`ts-jest`/`@swc/jest`) — `next/jest` reste la voie la plus
+simple pour ce projet (auto-résolution de `@/*`, chargement de `.env`,
+alignement avec le transform de build de Next.js). `@types/jest` a été ajouté
+(absent malgré `jest` en devDependency depuis le début).
+**Conséquence** : si le projet migre vers Next.js 15+ à l'avenir, revalider
+si `jest@30` (ou plus récent) redevient compatible et si le pin peut être
+levé.
 
 ## 7. Mapping Story → Fichiers affectés
 

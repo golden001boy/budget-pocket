@@ -1,7 +1,7 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-22 (base de données Neon opérationnelle)
+**Dernière mise à jour** : 2026-07-22 (story 15.9 — test runner Jest câblé)
 
 ## Vue d'ensemble des phases
 
@@ -10,8 +10,8 @@
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 2/9 |
-| 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🔴 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 3/9 |
+| 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
 ## Epics — progression
@@ -32,13 +32,23 @@
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 2/9 stories (15.1, 15.2 ✅) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 3/9 stories (15.1, 15.2, 15.9 ✅) |
 
 ## Prochaine action recommandée
 
 `bmad dev 15.6` — pipeline CI/CD (DEV-03). Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch) pour
 l'ordre complet.
+
+**Note story 15.9** : test runner Jest câblé (`apps/web/jest.config.js`,
+`pnpm test` fonctionne à la racine du monorepo via Turborepo). A résolu au
+passage les deux ADR-005 en suspens : `rateLimit.ts` et les schémas
+`loginSchema`/`updateGoalSchema` ont maintenant de vrais tests unitaires
+(19 tests, tous verts). A nécessité de repointer `jest` de `^30` vers
+`^29.7.0` — `next/jest` (fourni par `next@14.2.35`) n'est pas compatible avec
+Jest 30 (voir [03-architecture.md ADR-006](03-architecture.md#adr-006--pin-jest-29x-pour-compatibilité-avec-nextjest)).
+Couverture encore très partielle — simulateurs, analytique et routes API
+n'ont aucun test à ce jour ; `apps/mobile` n'a pas de runner du tout.
 
 **Note story 15.1** : implémentée (rate limiting Redis sur login web/mobile +
 inscription, voir [03-architecture.md ADR-004](03-architecture.md#adr-004--rate-limiting--fenêtre-fixe-redis-fail-open))
