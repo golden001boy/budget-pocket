@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-22 (story 15.6 — pipeline CI/CD +
-protection de branche, ✅ complet)
+**Dernière mise à jour** : 2026-07-22 (story 15.5 — scan SCA + remédiation,
+✅ complet ; story 15.10 créée pour le résidu Next.js)
 
 ## Vue d'ensemble des phases
 
@@ -11,7 +11,7 @@ protection de branche, ✅ complet)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 4/9 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 5/10 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -33,13 +33,24 @@ protection de branche, ✅ complet)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 4/9 stories (15.1, 15.2, 15.6, 15.9 ✅) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 5/10 stories (15.1, 15.2, 15.5, 15.6, 15.9 ✅) |
 
 ## Prochaine action recommandée
 
-`bmad dev 15.5` — remédiation `pnpm audit` (46 vulnérabilités, 1 critique).
-Voir [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
+`bmad dev 15.4` — monitoring d'erreurs Sentry (PROD-01). Voir
+[04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour l'ordre complet.
+
+**Note story 15.5** : ✅ complet. `pnpm audit` réduit de **46 → 14**
+vulnérabilités via `pnpm.overrides` — le critique éliminé entièrement, hautes
+26→5, modérées 16→7, basses 3→2. Vérifié sans régression : `pnpm type-check`
+(4/4), `pnpm test` (19/19), serveur de dev redémarré et testé en direct. Les
+14 restantes sont **toutes** `next@14.2.35` — aucune n'a de correctif dans la
+branche 14.x, seul un passage à Next.js ≥15.5.16 (changement majeur) les
+corrige → nouvelle story **15.10** créée, non commencée. Risque résiduel
+documenté dans [03-architecture.md ADR-007](03-architecture.md#adr-007--overrides-pnpm-pour-la-remédiation-sca-story-155) :
+`js-yaml`/`brace-expansion` forcés en override "bare" faute d'un ciblage par
+plage fonctionnel — non revérifié contre un vrai `expo start`.
 
 **Note story 15.6** : ✅ complet. Pipeline GitHub Actions
 ([.github/workflows/ci.yml](../.github/workflows/ci.yml)) exécute
@@ -90,7 +101,7 @@ pour les clients non authentifiés — noté dans
 
 ## Gate Phase 6 — non atteignable en l'état
 
-Les 9 stories de l'Epic 15 doivent toutes passer à ✅ avant de pouvoir cocher
+Les 10 stories de l'Epic 15 doivent toutes passer à ✅ avant de pouvoir cocher
 la checklist [Phase 6](BMAD_FRAMEWORK_v2.md#9-phase-6--pre-launch-gate). En
 particulier, deux points de la checklist n'ont **aucune story associée pour
 l'instant** et devront être ajoutés à l'Epic 15 avant le gate :

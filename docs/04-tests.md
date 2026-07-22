@@ -60,7 +60,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | ID | Faiblesse | Priorité | État | Constat |
 |---|---|---|---|---|
 | DEV-01 | Secrets dans le code/variables | 🔴 | ✅ Couvert | `.env` gitignoré et jamais commité (vérifié) ; aucun secret en dur trouvé dans le code source |
-| DEV-02 | Dépendances vulnérables / supply chain | 🟡 | 🔴 Gap | `pnpm audit` : **46 vulnérabilités (1 critique, 26 hautes, 16 modérées, 3 basses)** — la critique (`node-tar` DoS) est une dépendance transitive de tooling mobile (`expo-cli`/`cacache`), pas dans le chemin runtime prod, mais non traitée → story 15.5 |
+| DEV-02 | Dépendances vulnérables / supply chain | 🟡 | 🟡 Partiel | `pnpm audit` réduit de **46 → 14** vulnérabilités via `pnpm.overrides` (story 15.5) — critique éliminé (0 restant), hautes 26→5, modérées 16→7, basses 3→2. **Les 14 restantes sont toutes `next@14.2.35`**, nécessitent Next.js ≥15.5.16 (changement majeur, hors périmètre de 15.5) → story 15.10 |
 | DEV-03 | Pipeline CI/CD non protégé | 🔴 | ✅ Couvert | Pipeline GitHub Actions (`type-check` + `test` sur push/PR, story 15.6) et protection de branche sur `master` (PR requise + check `type-check-and-test` requis) — les deux confirmés actifs via l'API GitHub |
 
 ## 5. Couche Production (PROD-01 à PROD-03)
@@ -104,8 +104,9 @@ Ordre recommandé (Critique → Haute → Moyenne) :
    règle "tests écrits avec le code" sans nouvel ADR de report)
 4. ~~DEV-03 — pipeline CI/CD (story 15.6)~~ ✅ (workflow + protection de
    branche, tous deux confirmés actifs)
-5. PROD-01 — monitoring Sentry (story 15.4)
-6. DEV-02 — remédiation `pnpm audit` (story 15.5)
+5. ~~DEV-02 — remédiation `pnpm audit` (story 15.5)~~ ✅ (46 → 14 ; résidu
+   `next` = story 15.10)
+6. PROD-01 — monitoring Sentry (story 15.4)
 7. PROD-03 — politique backup/rollback (story 15.7)
 8. Perf : pagination manquante (story 15.3)
 9. BE-02 — MFA / hardening auth (story 15.8, non bloquant Must mais recommandé)

@@ -239,6 +239,29 @@ alignement avec le transform de build de Next.js). `@types/jest` a été ajouté
 si `jest@30` (ou plus récent) redevient compatible et si le pin peut être
 levé.
 
+### ADR-007 — Overrides `pnpm` pour la remédiation SCA (story 15.5)
+**Contexte** : `pnpm audit` remontait 46 vulnérabilités, presque toutes dans
+des dépendances transitives de l'outillage mobile (`@expo/cli` →
+`cacache`/`tar`, `js-yaml`, `brace-expansion`, etc. — jamais exécutées en
+production) plus une quinzaine dans `next@14.2.35` (dépendance de production
+réelle).
+**Décision** : forcer via `pnpm.overrides` toutes les versions patchées qui
+restent dans la même ligne majeure (`send`, `glob`, `tar`, `postcss`,
+`@xmldom/xmldom`, `fast-xml-parser`, `uuid`, `turbo-stream`, `fast-uri` —
+overrides ciblés par plage semver ; `js-yaml` et `brace-expansion` — override
+"bare", toutes résolutions, car le ciblage par plage n'a pas fonctionné comme
+attendu pour ces deux paquets). **Ne pas** tenter de corriger `next` de la
+même façon : aucun correctif n'existe dans la branche 14.x pour aucune des 14
+vulnérabilités restantes — seul un passage à 15.5.16+ les corrige, ce qui est
+un changement majeur avec API de requête asynchrone modifiée, hors périmètre
+d'une story de remédiation SCA. Story dédiée créée : 15.10.
+**Conséquence / risque résiduel** : l'override "bare" de `js-yaml` en v4.3.0
+force TOUTES ses résolutions vers v4, y compris tout code qui attendrait
+l'API v3 (`safeLoad`/`safeDump`, supprimée en v4). `pnpm type-check` ne
+détecte pas ce genre de rupture dans du JS compilé tiers (`@expo/cli`) — seul
+un `expo start` réel le révélerait, non exécuté dans cette session. À
+surveiller à la prochaine utilisation réelle de l'outillage mobile.
+
 ## 7. Mapping Story → Fichiers affectés
 
 Voir chaque fichier `specs/epic-XX-*.md` — chaque story y liste ses fichiers

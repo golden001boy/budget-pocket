@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (4/9 ✅)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (5/9 ✅)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -156,11 +156,12 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.2 | Validation Zod sur `/api/auth/mobile` et `/api/goals/[id]` | Must | S | ✅ | BE-03, FE-08 |
 | 15.3 | Pagination sur `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` | Should | S | 🔴 | Perf (règle Phase 1) |
 | 15.4 | Intégration monitoring d'erreurs (Sentry) | Must | M | 🔴 | PROD-01 |
-| 15.5 | Scan SCA des dépendances + plan de remédiation | Must | S | 🔴 | DEV-02 |
+| 15.5 | Scan SCA des dépendances + plan de remédiation | Must | S | ✅ | DEV-02 |
 | 15.6 | Pipeline CI/CD avec protections de branche | Must | M | ✅ | DEV-03 |
 | 15.7 | Politique de backup/rollback BDD production | Must | S | 🔴 | Gate Phase 6 §9.1 |
 | 15.8 | MFA ou hardening de l'authentification | Should | L | 🔴 | BE-02 |
 | 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
+| 15.10 | Migrer Next.js 14 → 15+ | Should | L | 🔴 | DEV-02 (résidu de 15.5) |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -351,7 +352,73 @@ publiques, sans authentification, le dépôt étant désormais public).
 
 ---
 
-## Non-goals / gaps explicites
+### Story 15.5 — Scan SCA des dépendances + plan de remédiation · ✅ Done
+
+**Story** : En tant que mainteneur, je veux connaître les vulnérabilités
+connues dans les dépendances du projet et un plan pour les traiter, afin de
+ne pas laisser de failles de supply chain non gérées (DEV-02).
+
+**Scan initial** : `pnpm audit` → **46 vulnérabilités** (1 critique, 26
+hautes, 16 modérées, 3 basses). Répartition par origine :
+- La quasi-totalité venait de dépendances **transitives de l'outillage
+  mobile** (`@expo/cli` → `cacache`/`tar`, `js-yaml`, `brace-expansion`,
+  `@xmldom/xmldom`, `fast-uri`, `fast-xml-parser`, `turbo-stream`, `glob`,
+  `send`, `uuid`, `postcss`) — code de build/dev, jamais exécuté en
+  production, mais un vrai risque de supply chain (exécution de code non
+  fiable sur la machine de dev/CI).
+- Une quinzaine venait de `next@14.2.35` lui-même (`apps/web`, dépendance de
+  production réelle).
+
+**Critères d'acceptation**
+- [x] Scan complet documenté (voir ci-dessus et détail par paquet
+      ci-dessous).
+- [x] Toutes les vulnérabilités corrigibles par un bump patch/mineur (même
+      ligne majeure) ont été corrigées via `pnpm.overrides` :
+      `send`, `glob`, `tar`, `postcss`, `@xmldom/xmldom`, `fast-xml-parser`,
+      `uuid`, `turbo-stream`, `js-yaml`, `brace-expansion`, `fast-uri`.
+      **Résultat : 46 → 14 vulnérabilités, le critique éliminé entièrement**
+      (0 critique, 5 hautes, 7 modérées, 2 basses restantes).
+- [x] Vérifié qu'aucune régression n'a été introduite : `pnpm type-check`
+      (4/4 workspaces ✅), `pnpm test` (19/19 ✅), redémarrage du serveur de
+      dev avec succès (`/`, `/login` → 200).
+- [x] Les 14 vulnérabilités restantes sont **toutes** dans `next` et
+      nécessitent un passage à **Next.js ≥15.5.16** — aucun correctif 14.x
+      n'existe pour aucune d'entre elles (vérifié advisory par advisory).
+      C'est un changement majeur (breaking), hors périmètre d'une story S —
+      story dédiée créée : **15.10**.
+- [x] Risque résiduel documenté : `js-yaml` et `brace-expansion` ont été
+      forcés en override "bare" (toutes résolutions, pas seulement la plage
+      vulnérable) car le ciblage par plage de semver n'a pas fonctionné comme
+      attendu pour ces deux paquets (voir tentative dans l'historique git de
+      ce fichier) — risque théorique si du code interne à `@expo/cli`
+      utilisait une API v3 de `js-yaml` (`safeLoad`/`safeDump`, supprimée en
+      v4). `pnpm type-check` ne peut pas détecter ce genre de rupture dans du
+      JS compilé tiers ; seul un vrai `expo start` le révélerait. Non testé
+      ici (pas d'environnement mobile lancé dans cette session).
+
+**Implémentation** : [package.json](../package.json) (`pnpm.overrides`).
+
+**Vérification** : `pnpm audit` avant/après (46 → 14), `pnpm type-check` et
+`pnpm test` rejoués après le changement de dépendances, serveur de dev
+redémarré et testé en direct (`/`, `/login`, `/api/health` — ce dernier
+confirme toujours `db` joignable, l'erreur restante étant Redis, sans lien
+avec ce changement).
+
+### Story 15.10 — Migrer Next.js 14 → 15+ · 🔴 À faire
+
+**Story** : En tant que mainteneur, je veux passer à une version de Next.js
+qui corrige les 14 vulnérabilités restantes du scan SCA (DoS, XSS, SSRF,
+cache poisoning, request smuggling — détail dans [04-tests.md](04-tests.md)),
+afin de fermer le dernier residu de la story 15.5.
+
+**Pourquoi une story séparée** : `next@14 → 15` est un changement majeur —
+API de requête asynchrone (`cookies()`/`headers()` deviennent `async`),
+changements de comportement du cache, exigences de version React à
+revalider. Impacte potentiellement toutes les routes API et pages de
+`apps/web`. Ne rentre pas dans le calibrage S/M d'une story de sécurité
+ponctuelle ; nécessite son propre cycle de test complet (`bmad qa` dédié).
+
+**Non commencée.**
 
 - **Synchronisation mobile money automatique** (Epic 2, story 2.2) — les
   providers `WAVE`/`MTN_MONEY`/`ORANGE_MONEY` existent en tant qu'interfaces
