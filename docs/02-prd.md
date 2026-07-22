@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (2/9)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (4/9)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -157,7 +157,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.3 | Pagination sur `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` | Should | S | 🔴 | Perf (règle Phase 1) |
 | 15.4 | Intégration monitoring d'erreurs (Sentry) | Must | M | 🔴 | PROD-01 |
 | 15.5 | Scan SCA des dépendances + plan de remédiation | Must | S | 🔴 | DEV-02 |
-| 15.6 | Pipeline CI/CD avec protections de branche | Must | M | 🔴 | DEV-03 |
+| 15.6 | Pipeline CI/CD avec protections de branche | Must | M | 🟡 | DEV-03 |
 | 15.7 | Politique de backup/rollback BDD production | Must | S | 🔴 | Gate Phase 6 §9.1 |
 | 15.8 | MFA ou hardening de l'authentification | Should | L | 🔴 | BE-02 |
 | 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
@@ -296,6 +296,45 @@ Native) nécessiterait un preset différent (`jest-expo`) — hors périmètre S
 cette story. `packages/shared`/`packages/api-client` peuvent réutiliser la
 suite `apps/web` sans config propre (déjà démontré par `authSchemas.test.ts`,
 qui teste du code de `packages/shared` depuis `apps/web`).
+
+---
+
+### Story 15.6 — Pipeline CI/CD avec protections de branche · 🟡 Partiel
+
+**Story** : En tant que mainteneur, je veux que chaque push/PR soit vérifié
+automatiquement (types + tests), et qu'aucun code cassé ne puisse être
+fusionné sur `master` sans passer ces contrôles.
+
+**Prérequis résolu** : le dépôt a été poussé sur GitHub
+(`github.com/golden001boy/budget-pocket`, privé) — jusqu'ici tout l'historique
+était local uniquement, un pipeline CI n'a de sens qu'avec un remote.
+
+**Critères d'acceptation**
+- [x] Un workflow GitHub Actions s'exécute sur chaque push et pull request
+      vers `master`.
+- [x] Le workflow exécute `pnpm type-check` et `pnpm test` — les deux gates
+      qui existent réellement à ce jour (voir [04-tests.md](04-tests.md)).
+- [x] Vérifié que `prisma generate` (déclenché par `pnpm install` via son
+      `postinstall`) réussit **sans** `DATABASE_URL` — confirmé en direct en
+      déplaçant temporairement `.env` : succès, code de sortie 0. La CI n'a
+      donc besoin d'aucun secret pour ces deux checks.
+- [x] `pnpm install --frozen-lockfile` (comportement CI) testé en local :
+      lockfile à jour, aucune dérive.
+- [ ] **Protection de branche sur `master`** (exiger le passage du workflow
+      avant fusion) — **non fait**. Configuration côté GitHub uniquement
+      (Settings → Branches → Add rule), hors de portée des outils disponibles
+      ici (pas de `gh` CLI, et l'agent n'a pas d'accès admin au dépôt pour
+      appeler l'API GitHub). Étapes pour vous : Settings → Branches → Add
+      branch ruleset → cibler `master` → cocher "Require status checks to
+      pass" → sélectionner le check `type-check-and-test`.
+
+**Implémentation** : [.github/workflows/ci.yml](../.github/workflows/ci.yml).
+
+**Vérification** : les commandes du workflow ont été rejouées localement
+dans l'ordre exact (`pnpm install --frozen-lockfile` → `pnpm type-check` →
+`pnpm test`), toutes vertes. **Le workflow lui-même n'a pas encore tourné
+sur GitHub** — non observable avant le prochain push vers `origin/master` ;
+premier run à vérifier visuellement dans l'onglet Actions du dépôt.
 
 ---
 

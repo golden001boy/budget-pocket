@@ -1,7 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-22 (story 15.9 — test runner Jest câblé)
+**Dernière mise à jour** : 2026-07-22 (story 15.6 — pipeline CI/CD, partiel ;
+dépôt poussé sur GitHub)
 
 ## Vue d'ensemble des phases
 
@@ -10,7 +11,7 @@
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 3/9 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 4/9 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -32,13 +33,28 @@
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 3/9 stories (15.1, 15.2, 15.9 ✅) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 3/9 ✅ + 1/9 🟡 (15.1, 15.2, 15.9 ✅ ; 15.6 🟡) |
 
 ## Prochaine action recommandée
 
-`bmad dev 15.6` — pipeline CI/CD (DEV-03). Voir
-[04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch) pour
-l'ordre complet.
+`bmad dev 15.5` — remédiation `pnpm audit` (46 vulnérabilités, 1 critique).
+Voir [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
+pour l'ordre complet.
+
+**Note story 15.6** : pipeline GitHub Actions ajouté
+([.github/workflows/ci.yml](../.github/workflows/ci.yml)) — exécute
+`pnpm type-check` + `pnpm test` sur chaque push/PR vers `master`. Toutes les
+commandes ont été rejouées localement dans l'ordre exact du workflow et
+passent. **Reste 🟡, pas ✅** : la protection de branche elle-même (exiger
+le passage du workflow avant fusion) nécessite un accès admin GitHub que
+l'agent n'a pas — action manuelle requise (voir 02-prd.md pour les étapes
+exactes). Le workflow n'a pas non plus encore tourné réellement sur GitHub —
+premier run à vérifier après le prochain push.
+
+**Dépôt distant** : `github.com/golden001boy/budget-pocket` (privé), poussé
+avec succès — 10 commits, `master` suit `origin/master`. Auparavant tout
+l'historique était local uniquement, ce qui bloquait cette story (pas de
+remote = pas de CI possible).
 
 **Note story 15.9** : test runner Jest câblé (`apps/web/jest.config.js`,
 `pnpm test` fonctionne à la racine du monorepo via Turborepo). A résolu au

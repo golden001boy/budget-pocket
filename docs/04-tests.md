@@ -61,7 +61,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 |---|---|---|---|---|
 | DEV-01 | Secrets dans le code/variables | 🔴 | ✅ Couvert | `.env` gitignoré et jamais commité (vérifié) ; aucun secret en dur trouvé dans le code source |
 | DEV-02 | Dépendances vulnérables / supply chain | 🟡 | 🔴 Gap | `pnpm audit` : **46 vulnérabilités (1 critique, 26 hautes, 16 modérées, 3 basses)** — la critique (`node-tar` DoS) est une dépendance transitive de tooling mobile (`expo-cli`/`cacache`), pas dans le chemin runtime prod, mais non traitée → story 15.5 |
-| DEV-03 | Pipeline CI/CD non protégé | 🔴 | 🔴 Gap | **Aucun pipeline CI/CD n'existe** (`.github/workflows` absent) — donc aucune protection de branche à évaluer → story 15.6 |
+| DEV-03 | Pipeline CI/CD non protégé | 🔴 | 🟡 Partiel | Pipeline GitHub Actions ajouté (`type-check` + `test` sur push/PR, story 15.6) ; **la protection de branche elle-même n'est pas configurée** — nécessite un accès admin GitHub que l'agent n'a pas, action manuelle requise |
 
 ## 5. Couche Production (PROD-01 à PROD-03)
 
@@ -102,7 +102,8 @@ Ordre recommandé (Critique → Haute → Moyenne) :
 3. ~~Prérequis §6.1 — test runner Jest câblé (story 15.9)~~ ✅ (fait hors
    ordre — nécessaire pour que les stories suivantes respectent enfin la
    règle "tests écrits avec le code" sans nouvel ADR de report)
-4. DEV-03 — pipeline CI/CD (story 15.6)
+4. 🟡 DEV-03 — pipeline CI/CD (story 15.6) — workflow fait, protection de
+   branche en attente d'action manuelle GitHub (voir 02-prd.md)
 5. PROD-01 — monitoring Sentry (story 15.4)
 6. DEV-02 — remédiation `pnpm audit` (story 15.5)
 7. PROD-03 — politique backup/rollback (story 15.7)
