@@ -30,15 +30,23 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 6/10 (15.1
-rate limiting, 15.2 validation Zod, 15.4 monitoring Sentry, 15.5 scan SCA +
-remédiation, 15.6 pipeline CI/CD + protection de branche, 15.9 test runner
-Jest — tous ✅ ; BDD Neon opérationnelle, Redis encore manquant) et bloque la
-Phase 6. Dépôt distant : `github.com/golden001boy/budget-pocket`
-(**public**). `pnpm test` fonctionne désormais à la racine — toute nouvelle
-story doit inclure ses tests unitaires, plus d'ADR de report type ADR-005.
-Voir [docs/04-tests.md](docs/04-tests.md) pour le détail par item du
-catalogue de failles.
+sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 6 ✅ + 1 🟡
+sur 10 (15.1 rate limiting, 15.2 validation Zod, 15.4 monitoring Sentry, 15.5
+scan SCA + remédiation, 15.6 pipeline CI/CD + protection de branche, 15.9
+test runner Jest — tous ✅ ; 15.7 politique backup/rollback 🟡 documentée
+mais non vérifiée par un test réel ; BDD Neon opérationnelle, Redis encore
+manquant) et bloque la Phase 6. Dépôt distant :
+`github.com/golden001boy/budget-pocket` (**public**). `pnpm test` fonctionne
+désormais à la racine — toute nouvelle story doit inclure ses tests
+unitaires, plus d'ADR de report type ADR-005. Voir
+[docs/04-tests.md](docs/04-tests.md) pour le détail par item du catalogue de
+failles.
+
+**BDD Neon sur plan Free : fenêtre de restauration (PITR) de 6h seulement**,
+plafonnée à 1 Go d'historique — voir
+[docs/03-architecture.md §11](docs/03-architecture.md#11--politique-de-sauvegarde--restauration-story-157).
+Risque assumé pour un projet sans utilisateurs réels ; bloquant avant tout
+lancement en production réelle.
 
 **Sentry est intégré mais sans DSN** (`NEXT_PUBLIC_SENTRY_DSN` vide dans
 `.env`) — SDK actif en no-op, pas d'erreur. Ajouter un DSN réel active la

@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-22 (story 15.4 — monitoring Sentry, ✅
-intégré)
+**Dernière mise à jour** : 2026-07-22 (story 15.7 — politique backup/rollback,
+🟡 documentée, test de restauration réel en attente)
 
 ## Vue d'ensemble des phases
 
@@ -33,14 +33,27 @@ intégré)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 6/10 stories (15.1, 15.2, 15.4, 15.5, 15.6, 15.9 ✅) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 6 ✅ + 1 🟡 sur 10 (15.1, 15.2, 15.4, 15.5, 15.6, 15.9 ✅ ; 15.7 🟡) |
 
 ## Prochaine action recommandée
 
-`bmad dev 15.7` — politique de backup/rollback BDD (bloque directement le
-gate Phase 6 §9.1). Voir
+`bmad dev 15.3` — pagination sur `/api/accounts`, `/api/budgets`,
+`/api/goals`, `/api/portfolio`. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour l'ordre complet.
+
+**Note story 15.7** : 🟡 politique documentée, pas encore vérifiée. Le
+mécanisme de restauration Neon (branchement par LSN, réversible via branche
+de sauvegarde auto-créée, root branches uniquement) est confirmé via la
+documentation officielle Neon — pas supposé. **Fenêtre PITR réelle confirmée
+avec vous : plan Free, 6 heures, plafonné à 1 Go** — documenté comme risque
+assumé, pas minimisé : tout incident de données non détecté sous 6h devient
+irrécupérable via Neon. Stratégie de rollback de schéma Prisma documentée
+(restauration Neon dans la fenêtre, migration inverse manuelle au-delà).
+**Reste 🟡, pas ✅** : aucun test de restauration réel exécuté — nécessite la
+console Neon, à laquelle l'agent n'a pas accès (seule la chaîne de connexion
+a été fournie). Détail complet :
+[03-architecture.md §11](03-architecture.md#11--politique-de-sauvegarde--restauration-story-157).
 
 **Note story 15.4** : ✅ complet. `@sentry/nextjs` intégré aux trois runtimes
 (client/serveur/edge) + frontière d'erreur globale App Router

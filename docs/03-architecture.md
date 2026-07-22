@@ -321,3 +321,72 @@ Détail complet des tests de validation par item : [04-tests.md](04-tests.md).
 [apps/web/vercel.json](../apps/web/vercel.json) (planning des crons) implique
 Vercel pour le web ; aucune config de déploiement mobile (pas d'EAS) n'existe
 encore.
+
+## 11. Politique de sauvegarde & restauration (story 15.7)
+
+**Base** : PostgreSQL hébergé sur Neon (`ep-floral-flower-abimpoyq-pooler.eu-west-2.aws.neon.tech`).
+Neon n'utilise pas un modèle de sauvegarde/restauration classique
+(dump/reload) — la restauration se fait par **branchement** : Neon retrouve le
+LSN (Log Sequence Number) correspondant à l'horodatage demandé dans le WAL
+partagé, crée une nouvelle branche à ce point, y transfère le compute (la
+chaîne de connexion ne change pas), puis renomme l'ancienne branche en backup
+(`{nom}_old_{horodatage}`). La restauration remplace **tout** — données et
+schéma — sur la branche root ciblée ; elle n'est possible que sur les
+branches root (jamais les branches enfants), et **elle est réversible** : la
+branche de sauvegarde automatique permet de revenir en arrière en la
+reprenant comme source d'une nouvelle restauration.
+
+### État réel de la rétention (plan actuel : Free)
+
+| Plan | Fenêtre PITR | Limite |
+|---|---|---|
+| **Free (plan actuel du projet)** | **6 heures** | Plafonnée à 1 Go d'historique de changements |
+| Payant (Launch/Scale) | 1 à 30 jours selon le palier | — |
+
+**Risque réel et assumé** : sur le plan Free, tout incident de données
+(suppression accidentelle, migration défaillante, bug applicatif corrompant
+des lignes) **non détecté sous 6 heures devient irrécupérable** via la
+restauration Neon. Ce risque est documenté, pas résolu — acceptable pour un
+projet en développement sans utilisateurs réels à ce jour, **mais bloquant
+avant tout lancement en production réelle avec des données utilisateur**
+(voir Gate Phase 6 §9.1, qui exige des sauvegardes "vérifiées fonctionnelles").
+
+### Procédure de restauration (à exécuter depuis la console Neon)
+
+1. Console Neon → **Backup & Restore** → sélectionner la branche root ciblée.
+2. Choisir un horodatage ou un LSN dans la fenêtre d'historique disponible
+   (6h sur le plan actuel).
+3. Confirmer — la restauration s'exécute en quelques secondes à minutes ;
+   les connexions existantes sont temporairement coupées puis se
+   reconnectent automatiquement.
+4. En cas d'erreur, restaurer à nouveau en utilisant la branche
+   `{nom}_old_{horodatage}` (créée automatiquement à l'étape précédente)
+   comme source — la restauration Neon est réversible par ce mécanisme.
+
+Équivalent CLI : `neon branches restore <target> <source@timestamp|lsn>`.
+Équivalent API : `POST /projects/{project_id}/branches/{branch_id}/restore`.
+
+### Rollback de schéma (migrations Prisma)
+
+Prisma Migrate ne génère pas de migration "down" automatique. Deux chemins
+de rollback, selon la fraîcheur de l'incident :
+
+- **Dans la fenêtre PITR (≤ 6h)** : une restauration Neon (ci-dessus) annule
+  à la fois les données ET le schéma en un seul geste, puisque la
+  restauration remplace l'intégralité de la branche.
+- **Au-delà de la fenêtre PITR** : aucun filet de sécurité automatique.
+  Écrire une nouvelle migration Prisma qui inverse manuellement les
+  changements de la migration défaillante (jamais de modification directe
+  du schéma en production — règle non-négociable §2.6 du framework).
+
+### Ce qui n'a pas été vérifié dans cette story
+
+- **Aucun test de restauration réel n'a été exécuté** — cette story documente
+  le mécanisme (recherché et confirmé via la documentation officielle Neon)
+  mais ne l'a pas exercé en direct : l'agent n'a accès qu'à la chaîne de
+  connexion Postgres, pas à la console/API Neon (pas de clé API Neon
+  fournie). Un test réel (créer une donnée, la restaurer, vérifier qu'elle
+  disparaît) nécessite une action manuelle dans la console Neon.
+- Pas de sauvegarde **hors Neon** (export périodique vers un stockage tiers,
+  ex. S3) — la restauration Neon ne protège pas contre une suppression du
+  compte/projet Neon lui-même. Non traité ici, hors périmètre d'une story S.

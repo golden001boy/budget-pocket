@@ -158,7 +158,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.4 | Intégration monitoring d'erreurs (Sentry) | Must | M | ✅ | PROD-01 |
 | 15.5 | Scan SCA des dépendances + plan de remédiation | Must | S | ✅ | DEV-02 |
 | 15.6 | Pipeline CI/CD avec protections de branche | Must | M | ✅ | DEV-03 |
-| 15.7 | Politique de backup/rollback BDD production | Must | S | 🔴 | Gate Phase 6 §9.1 |
+| 15.7 | Politique de backup/rollback BDD production | Must | S | 🟡 | Gate Phase 6 §9.1 |
 | 15.8 | MFA ou hardening de l'authentification | Should | L | 🔴 | BE-02 |
 | 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
 | 15.10 | Migrer Next.js 14 → 15+ | Should | L | 🔴 | DEV-02 (résidu de 15.5) |
@@ -477,6 +477,43 @@ server redémarré à froid — aucune erreur ni warning Sentry au boot, `/`,
 DSN réel reçoit effectivement un événement — nécessite un compte Sentry
 (gratuit, sentry.io) et son DSN. À faire dès que vous en avez un :
 `bmad qa 15.4`.
+
+---
+
+### Story 15.7 — Politique de backup/rollback BDD production · 🟡 Partiel
+
+**Story** : En tant qu'opérateur, je veux une politique documentée et
+compréhensible de sauvegarde/restauration pour la base de données de
+production, afin de pouvoir réagir à un incident de données sans improviser
+(Gate Phase 6 §9.1).
+
+**Critères d'acceptation**
+- [x] Mécanisme de restauration Neon documenté avec précision — recherché via
+      la documentation officielle Neon (pas supposé) : restauration par
+      branchement (LSN → nouvelle branche → compute transféré → ancienne
+      branche renommée en sauvegarde), réversible, root branches uniquement.
+- [x] Fenêtre de rétention réelle du plan actuel confirmée avec vous : **Free,
+      6 heures, plafonné à 1 Go d'historique**. Documenté comme risque assumé
+      plutôt que minimisé.
+- [x] Procédure de restauration écrite, étape par étape (console + équivalents
+      CLI/API).
+- [x] Stratégie de rollback de schéma Prisma documentée (restauration Neon
+      dans la fenêtre PITR ; migration inverse manuelle au-delà).
+- [ ] **Test de restauration réel** — non exécuté. Nécessite la console/API
+      Neon, à laquelle l'agent n'a pas accès (seule la chaîne de connexion
+      Postgres a été fournie). C'est la raison pour laquelle cette story
+      reste 🟡 et non ✅ : le Gate Phase 6 §9.1 exige des sauvegardes
+      **vérifiées fonctionnelles**, pas seulement documentées.
+- [ ] Sauvegarde hors Neon (export périodique externe) — non traitée, notée
+      comme hors périmètre d'une story S.
+
+**Implémentation** : [03-architecture.md §11](03-architecture.md#11--politique-de-sauvegarde--restauration-story-157).
+
+**Pour passer à ✅** : exécuter un test de restauration réel dans la console
+Neon (créer une ligne de test, noter l'horodatage, la modifier, restaurer à
+l'horodatage noté, vérifier que la valeur d'origine est revenue) —
+`bmad qa 15.7`. Nécessite un accès à la console Neon (vous), pas seulement à
+la chaîne de connexion (moi).
 
 ---
 
