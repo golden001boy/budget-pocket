@@ -2,6 +2,7 @@ import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
+import { rateLimit, getClientIp, loginRateLimitKey, LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS } from './rateLimit';
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
@@ -17,8 +18,15 @@ export const authOptions: NextAuthOptions = {
         email:    { label: 'Email',         type: 'email'    },
         password: { label: 'Mot de passe',  type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null;
+
+        const ip = getClientIp(req?.headers);
+        const limit = await rateLimit(loginRateLimitKey(credentials.email, ip), LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
+        if (!limit.success) {
+          console.warn(`[auth] rate limited login attempt for ${credentials.email} from ${ip}`);
+          return null;
+        }
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email.toLowerCase().trim() },

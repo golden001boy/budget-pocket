@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🔴 À faire
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (1/9)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -152,7 +152,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 
 | Story | Titre | MoSCoW | Estim. | Statut | Réf. catalogue |
 |---|---|---|---|---|---|
-| 15.1 | Rate limiting sur login + routes API sensibles | Must | M | 🔴 | BE-07, API-04, API-06 |
+| 15.1 | Rate limiting sur login + inscription | Must | M | ✅ | BE-07, API-04, API-06 |
 | 15.2 | Validation Zod sur `/api/auth/mobile` et `/api/goals/[id]` | Must | S | 🔴 | BE-03, FE-08 |
 | 15.3 | Pagination sur `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` | Should | S | 🔴 | Perf (règle Phase 1) |
 | 15.4 | Intégration monitoring d'erreurs (Sentry) | Must | M | 🔴 | PROD-01 |
@@ -160,6 +160,43 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.6 | Pipeline CI/CD avec protections de branche | Must | M | 🔴 | DEV-03 |
 | 15.7 | Politique de backup/rollback BDD production | Must | S | 🔴 | Gate Phase 6 §9.1 |
 | 15.8 | MFA ou hardening de l'authentification | Should | L | 🔴 | BE-02 |
+| 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | 🔴 | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
+
+### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
+
+**Story** : En tant qu'opérateur de la plateforme, je veux limiter le nombre
+de tentatives de connexion/inscription par IP et par compte, afin de réduire
+le risque de brute force et d'abus de ressources (BE-07/API-04/API-06).
+
+**Critères d'acceptation**
+- [x] `POST /api/auth/mobile` refuse avec `429` au-delà de 5 tentatives / 15 min
+      pour la paire (email, IP).
+- [x] Le flux de connexion web (NextAuth `authorize()`) applique la même
+      limite, avec la même clé — un attaquant ne peut pas la contourner en
+      changeant de point d'entrée.
+- [x] `POST /api/auth/register` refuse avec `429` au-delà de 5 tentatives / heure
+      par IP.
+- [x] Le compteur est backé par Redis (`INCR`+`EXPIRE`), pas par la mémoire du
+      processus — reste correct sur des instances serverless multiples.
+- [x] Si Redis est injoignable, la requête est autorisée (fail-open) et
+      l'échec est journalisé côté serveur — pas de panne d'authentification à
+      cause d'un incident Redis (ADR-004).
+- [ ] Test unitaire — reporté à la story 15.9 (aucun test runner câblé), voir ADR-005.
+
+**Implémentation** : [apps/web/src/lib/rateLimit.ts](../apps/web/src/lib/rateLimit.ts),
+[apps/web/src/lib/auth.ts](../apps/web/src/lib/auth.ts),
+[apps/web/src/app/api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts),
+[apps/web/src/app/api/auth/register/route.ts](../apps/web/src/app/api/auth/register/route.ts).
+Détail de la décision : [03-architecture.md ADR-004](03-architecture.md#adr-004--rate-limiting--fenêtre-fixe-redis-fail-open).
+
+**Vérification** : le chemin fail-open est confirmé — sans Redis local
+disponible, `POST /api/auth/register` et `POST /api/auth/mobile` ont été
+exercés en direct et le rate limiter a échoué silencieusement (erreur
+journalisée) sans bloquer ni planter la requête, qui a continué normalement
+jusqu'à l'appel Prisma suivant. Le chemin "bloque après N tentatives"
+**reste non vérifié** — nécessite Redis réellement joignable pour que
+`INCR`/`EXPIRE` s'exécutent. À vérifier dès que Redis est disponible :
+`bmad qa 15.1`.
 
 ---
 

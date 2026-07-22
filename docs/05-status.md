@@ -1,7 +1,7 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-03
+**Dernière mise à jour** : 2026-07-03 (story 15.1 livrée)
 
 ## Vue d'ensemble des phases
 
@@ -10,7 +10,7 @@
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🔴 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 1/9 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🔴 |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -32,18 +32,25 @@
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🔴 0/8 stories |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 1/9 stories (15.1 ✅) |
 
 ## Prochaine action recommandée
 
-`bmad dev 15.1` — rate limiting (le seul item 🔴 Critique du catalogue
-sécurité qui n'est couvert par aucune mitigation existante). Voir
+`bmad dev 15.2` — validation Zod manquante sur `/api/auth/mobile` et
+`/api/goals/[id]` (FE-08/BE-03/API-03). Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch) pour
 l'ordre complet.
 
+**Note story 15.1** : implémentée (rate limiting Redis sur login web/mobile +
+inscription, voir [03-architecture.md ADR-004](03-architecture.md#adr-004--rate-limiting--fenêtre-fixe-redis-fail-open))
+mais **non vérifiée de bout en bout** — Redis n'est pas encore up dans
+l'environnement local. À qualifier (`bmad qa 15.1`) dès que Redis est
+disponible. A aussi produit la story 15.9 (câbler Jest), nécessaire avant que
+toute story suivante puisse respecter la règle "tests écrits avec le code".
+
 ## Gate Phase 6 — non atteignable en l'état
 
-Les 8 stories de l'Epic 15 doivent toutes passer à ✅ avant de pouvoir cocher
+Les 9 stories de l'Epic 15 doivent toutes passer à ✅ avant de pouvoir cocher
 la checklist [Phase 6](BMAD_FRAMEWORK_v2.md#9-phase-6--pre-launch-gate). En
 particulier, deux points de la checklist n'ont **aucune story associée pour
 l'instant** et devront être ajoutés à l'Epic 15 avant le gate :

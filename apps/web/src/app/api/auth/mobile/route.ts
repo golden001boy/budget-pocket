@@ -2,12 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { encode } from 'next-auth/jwt';
+import { rateLimit, getClientIp, loginRateLimitKey, LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS } from '@/lib/rateLimit';
 
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json();
 
   if (!email || !password) {
     return NextResponse.json({ error: 'Email et mot de passe requis' }, { status: 400 });
+  }
+
+  const ip = getClientIp(req.headers);
+  const limit = await rateLimit(loginRateLimitKey(email, ip), LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
+  if (!limit.success) {
+    return NextResponse.json({ error: 'Trop de tentatives, réessayez plus tard' }, { status: 429 });
   }
 
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });

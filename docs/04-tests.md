@@ -23,7 +23,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | BE-04 | Exposition de données sensibles | 🟡 | ✅ Couvert | Aucun secret sous `NEXT_PUBLIC_*` ; `passwordHash` jamais sérialisé dans les réponses API (vérifié sur `auth/mobile`, `admin/users`) |
 | BE-05 | Mauvaise configuration sécurité | 🟡 | 🟡 Partiel | Headers de sécurité déployés (CSP, X-Frame-Options, Referrer-Policy — voir FE-06) ; pas de scan de config automatisé |
 | BE-06 | Défaillance cryptographique | 🟡 | 🟡 Partiel | bcrypt pour les mots de passe (bon) ; TLS dépend de l'hébergeur (Vercel), non vérifié explicitement en code |
-| BE-07 | Conception non sécurisée | 🟡 | 🔴 Gap | **Aucun rate limiting nulle part** (login, API mutatives, cron) → story 15.1 |
+| BE-07 | Conception non sécurisée | 🟡 | 🟡 Partiel | Rate limiting Redis sur login (web+mobile) et inscription (story 15.1, ✅) ; le reste des routes API mutatives n'a toujours aucune limite |
 | BE-08 | Journalisation insuffisante | 🟢 | 🔴 Gap | Logs Prisma par défaut uniquement ; pas de journalisation applicative des actions sensibles (login, changement de rôle, suppression de compte) |
 | BE-09 | Gestion des erreurs inadéquate | 🟢 | 🟡 Partiel | La plupart des routes renvoient `{ error: "message générique" }` ; `/api/health` expose le message Prisma brut (`PrismaClientInitializationError: ...`) — acceptable pour un endpoint de santé interne non public, à surveiller si exposé |
 
@@ -47,9 +47,9 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | API-01 | BOLA | 🔴 | ✅ Couvert | Voir BE-01 |
 | API-02 | Broken Authentication | 🔴 | 🟡 Partiel | Voir BE-02 |
 | API-03 | Broken Object Property Level Auth | 🟡 | 🟡 Partiel | Les schémas Zod whitelistent les champs acceptés sur la plupart des routes ; `goals/[id]` PATCH n'a pas cette protection (même gap que FE-08) |
-| API-04 | Unrestricted Resource Consumption | 🟡 | 🔴 Gap | Pas de quota, pas de limite de taille de payload explicite, pas de rate limiting → story 15.1 |
+| API-04 | Unrestricted Resource Consumption | 🟡 | 🟡 Partiel | Login/inscription limités (story 15.1, ✅) ; pas de limite de taille de payload ni de quota sur les autres routes mutatives |
 | API-05 | Broken Function Level Auth | 🔴 | ✅ Couvert | `middleware.ts` protège `/admin/*` par rôle (`token.role !== 'ADMIN'` → redirect) et toutes les routes API sensibles par le matcher |
-| API-06 | Unrestricted Access to Business Flows | 🟡 | 🔴 Gap | Pas de protection anti-bot ni de limite métier (ex. création de transactions en masse) → story 15.1 |
+| API-06 | Unrestricted Access to Business Flows | 🟡 | 🟡 Partiel | Brute force de connexion/spam d'inscription limités (story 15.1, ✅) ; pas de protection anti-bot ni de limite métier sur les autres flux (ex. création de transactions en masse) |
 | API-07 | SSRF | 🟡 | ✅ Couvert | Les seuls appels sortants (`CoinGecko`, scraper BRVM) ciblent des URLs codées en dur, aucune URL fournie par l'utilisateur n'est fetchée côté serveur |
 | API-08 | Security Misconfiguration | 🟡 | ✅ Couvert | Pas de CORS explicite (donc pas de wildcard `*`), pas d'endpoint de debug trouvé, `ignoreBuildErrors`/`ignoreDuringBuilds` sont un choix de build, pas une brèche |
 | API-09 | Improper Inventory Management | 🟢 | 🟡 Partiel | Pas de doc API formelle (OpenAPI/Swagger) — [03-architecture.md §5](03-architecture.md) sert d'inventaire actuel mais n'est pas généré depuis le code |
@@ -91,7 +91,7 @@ Tous les 🔴 ci-dessus doivent être résolus (Epic 15) avant que la checklist
 [Phase 6](BMAD_FRAMEWORK_v2.md#9-phase-6--pre-launch-gate) puisse être cochée.
 Ordre recommandé (Critique → Haute → Moyenne) :
 
-1. BE-07 / API-04 / API-06 — rate limiting (story 15.1)
+1. ~~BE-07 / API-04 / API-06 — rate limiting login/inscription (story 15.1)~~ ✅
 2. FE-08 / BE-03 / API-03 — validation Zod manquante (story 15.2)
 3. DEV-03 — pipeline CI/CD (story 15.6)
 4. PROD-01 — monitoring Sentry (story 15.4)

@@ -170,6 +170,45 @@ component").
 **Conséquence** : un seul jeu de types React à maintenir ; à revalider si la
 version de React du mobile change.
 
+### ADR-004 — Rate limiting : fenêtre fixe Redis, fail-open
+**Contexte** (story 15.1) : aucun rate limiting n'existait sur les routes
+d'authentification (BE-07/API-04/API-06). Les fonctions serverless de Vercel
+sont sans état entre invocations — un compteur en mémoire ne limiterait rien
+en production (chaque instance a son propre compteur).
+**Décision** :
+- Backend Redis (`ioredis`, déjà utilisé pour le cache) via `INCR` + `EXPIRE`
+  — algorithme *fenêtre fixe*, volontairement simple plutôt qu'une fenêtre
+  glissante ou un token bucket, suffisant pour ce périmètre.
+- **Fail-open** si Redis est injoignable : la requête est autorisée plutôt que
+  bloquée. Un panne Redis qui empêcherait toute connexion serait pire qu'une
+  fenêtre temporairement non limitée. L'échec est journalisé côté serveur
+  (`console.error`).
+- Périmètre limité à l'authentification (login web + mobile + inscription) —
+  pas une limite générique sur toutes les routes API mutatives, pour rester
+  dans l'estimation M de la story. Voir story 15.1 dans
+  [02-prd.md](02-prd.md).
+- Clé de limite de connexion partagée entre le flux web (NextAuth
+  `authorize()`) et mobile (`/api/auth/mobile`) — `login:{email}:{ip}` — pour
+  qu'un compte ciblé soit protégé quel que soit le point d'entrée utilisé par
+  l'attaquant.
+**Conséquence** : nécessite Redis en production pour être effectif (sinon
+fail-open = pas de protection). Redis n'est pas encore configuré dans
+l'environnement local à ce jour — voir [05-status.md](05-status.md).
+
+### ADR-005 — Pas de test unitaire livré avec la story 15.1
+**Contexte** : la règle de développement §6.1 du framework impose des tests
+unitaires écrits avec le code. Aucun test runner n'est cependant câblé dans le
+projet (`jest` est en devDependency mais sans `jest.config.js` ni script
+`test` — gap déjà documenté dans [04-tests.md §6](04-tests.md#6--état-réel-de-la-suite-de-tests-automatisés)
+avant même cette story).
+**Décision** : ne pas câbler l'infrastructure Jest (résolution de path alias
+`@/`, transform TS) *à l'intérieur* de la story de rate limiting — c'est un
+prérequis transverse, pas une fonctionnalité de cette story (règle 2 : une
+seule story à la fois).
+**Conséquence** : story 15.9 ajoutée pour câbler Jest ; une fois faite, elle
+débloque des tests unitaires réels pour `rateLimit.ts` et toutes les stories
+suivantes de l'Epic 15.
+
 ## 7. Mapping Story → Fichiers affectés
 
 Voir chaque fichier `specs/epic-XX-*.md` — chaque story y liste ses fichiers

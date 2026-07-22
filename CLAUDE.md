@@ -30,9 +30,10 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🔴 et bloque la
-Phase 6. Voir [docs/04-tests.md](docs/04-tests.md) pour le détail par item du
-catalogue de failles.
+sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 1/9 (story
+15.1 rate limiting livrée, non encore qualifiée faute de Redis local) et
+bloque la Phase 6. Voir [docs/04-tests.md](docs/04-tests.md) pour le détail
+par item du catalogue de failles.
 
 ## Stack & commandes essentielles
 
