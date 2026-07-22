@@ -1,7 +1,7 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-03 (story 15.2 livrée)
+**Dernière mise à jour** : 2026-07-22 (base de données Neon opérationnelle)
 
 ## Vue d'ensemble des phases
 
@@ -50,10 +50,13 @@ Observation incidente : le fail-open Redis prend ~9-10s (backoff de
 reconnexion par défaut d'ioredis) — latence à corriger si l'epic revient sur
 ce fichier.
 
-**Note story 15.2** : implémentée et partiellement vérifiée (voir
-[02-prd.md](02-prd.md) pour le détail). A révélé un gap d'API hors périmètre :
-les routes protégées par `middleware.ts` renvoient une redirection `307` HTML
-plutôt qu'un `401` JSON pour les clients non authentifiés — noté dans
+**Note story 15.2** : implémentée. Login mobile testé de bout en bout avec le
+compte de démo réel (`demo@budget-pocket.app`) maintenant que la BDD est
+opérationnelle — JWT émis correctement. `goals/[id]` reste à qualifier avec
+une vraie session (bloqué par le gap 307/401 ci-dessous, pas par la BDD).
+A révélé un gap d'API hors périmètre : les routes protégées par
+`middleware.ts` renvoient une redirection `307` HTML plutôt qu'un `401` JSON
+pour les clients non authentifiés — noté dans
 [03-architecture.md §5](03-architecture.md), pas encore transformé en story.
 
 ## Gate Phase 6 — non atteignable en l'état
@@ -67,7 +70,14 @@ l'instant** et devront être ajoutés à l'Epic 15 avant le gate :
 
 ## Environnement local (hors périmètre BMAD, pour mémoire)
 
-- Base de données : en cours de bascule vers Postgres hébergé (Neon) suite à
-  un blocage d'installation locale Windows (reboot en attente).
-- Redis : non configuré localement à ce jour (l'app dégrade proprement sans
-  lui — cache uniquement).
+- **Base de données : ✅ opérationnelle** — bascule vers Postgres hébergé
+  (Neon) effectuée. `prisma migrate dev` et `pnpm db:seed` exécutés avec
+  succès ; `/api/health` confirme `db: connected` ; login mobile testé en
+  direct avec le compte de démo (`demo@budget-pocket.app`) — JWT émis
+  correctement. Débloque la vérification complète de toute story touchant la
+  BDD, y compris une ré-exécution possible de `bmad qa 15.2`.
+- **Redis : toujours non configuré.** `/api/health` renvoie maintenant une
+  erreur Redis (`MaxRetriesPerRequestError`) au lieu d'une erreur Prisma —
+  seul point encore bloquant pour qualifier pleinement la story 15.1
+  (comportement "bloque après N tentatives"). L'app dégrade proprement sans
+  lui (cache uniquement).

@@ -231,14 +231,14 @@ les deux schémas existaient déjà dans `packages/shared/src/schemas/`
 schéma n'a été nécessaire.
 
 **Vérification** : `auth/mobile` testé en direct — email malformé → `400`,
-mot de passe manquant → `400`, body valide → passe la validation et atteint
-l'appel Prisma suivant (confirmé par les logs serveur). `goals/[id]` non
-testable de bout en bout sans session authentifiée fonctionnelle (bloqué par
-le même manque de BDD/Redis locaux que 15.1) — la route est cependant
-protégée en amont par `middleware.ts` (redirection si non authentifié), donc
-le chemin de validation Zod n'est atteignable qu'après une vraie session, ce
-qui n'a pas pu être simulé ici. À vérifier dès que l'environnement est
-opérationnel : `bmad qa 15.2`.
+mot de passe manquant → `400`, body valide → passe la validation, atteint
+Prisma, **et réussit désormais réellement** : login testé de bout en bout
+avec le compte de démo (`demo@budget-pocket.app`) une fois la BDD Neon
+opérationnelle — JWT valide émis. `goals/[id]` reste non vérifié : la route
+est protégée en amont par `middleware.ts` qui redirige (`307`) toute requête
+non authentifiée avant d'atteindre le handler, donc le chemin de validation
+Zod n'est atteignable qu'avec une vraie session cookie — pas simulable via
+`curl` seul. À vérifier via le navigateur ou un test e2e : `bmad qa 15.2`.
 
 **Observation incidente (hors périmètre de cette story)** : en testant
 `goals/[id]` sans session, la requête reçoit une redirection `307` vers
