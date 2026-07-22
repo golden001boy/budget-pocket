@@ -30,16 +30,21 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 3 ✅ + 1 🟡
-sur 9 (15.1 rate limiting, 15.2 validation Zod, 15.9 test runner Jest ✅ ;
-15.6 pipeline CI/CD 🟡 — le workflow existe mais la protection de branche
-attend une action manuelle GitHub ; BDD Neon opérationnelle, Redis encore
-manquant) et bloque la Phase 6. Dépôt distant :
-`github.com/golden001boy/budget-pocket` (privé). `pnpm test` fonctionne
+sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 4/9 (15.1
+rate limiting, 15.2 validation Zod, 15.6 pipeline CI/CD + protection de
+branche, 15.9 test runner Jest — tous ✅ ; BDD Neon opérationnelle, Redis
+encore manquant) et bloque la Phase 6. Dépôt distant :
+`github.com/golden001boy/budget-pocket` (**public**). `pnpm test` fonctionne
 désormais à la racine — toute nouvelle story doit inclure ses tests
 unitaires, plus d'ADR de report type ADR-005. Voir
 [docs/04-tests.md](docs/04-tests.md) pour le détail par item du catalogue de
 failles.
+
+**`master` est protégé** depuis la story 15.6 : PR requise + check
+`type-check-and-test` requis avant fusion. Un push direct sur `master` par
+un propriétaire du dépôt bypasse encore la règle (`enforcement_level:
+non_admins`), mais le flux prévu est désormais branche + PR, pas push
+direct.
 
 ## Stack & commandes essentielles
 

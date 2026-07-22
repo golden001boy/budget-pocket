@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (4/9)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (4/9 ✅)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -157,7 +157,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.3 | Pagination sur `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` | Should | S | 🔴 | Perf (règle Phase 1) |
 | 15.4 | Intégration monitoring d'erreurs (Sentry) | Must | M | 🔴 | PROD-01 |
 | 15.5 | Scan SCA des dépendances + plan de remédiation | Must | S | 🔴 | DEV-02 |
-| 15.6 | Pipeline CI/CD avec protections de branche | Must | M | 🟡 | DEV-03 |
+| 15.6 | Pipeline CI/CD avec protections de branche | Must | M | ✅ | DEV-03 |
 | 15.7 | Politique de backup/rollback BDD production | Must | S | 🔴 | Gate Phase 6 §9.1 |
 | 15.8 | MFA ou hardening de l'authentification | Should | L | 🔴 | BE-02 |
 | 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
@@ -299,15 +299,19 @@ qui teste du code de `packages/shared` depuis `apps/web`).
 
 ---
 
-### Story 15.6 — Pipeline CI/CD avec protections de branche · 🟡 Partiel
+### Story 15.6 — Pipeline CI/CD avec protections de branche · ✅ Done
 
 **Story** : En tant que mainteneur, je veux que chaque push/PR soit vérifié
 automatiquement (types + tests), et qu'aucun code cassé ne puisse être
 fusionné sur `master` sans passer ces contrôles.
 
 **Prérequis résolu** : le dépôt a été poussé sur GitHub
-(`github.com/golden001boy/budget-pocket`, privé) — jusqu'ici tout l'historique
-était local uniquement, un pipeline CI n'a de sens qu'avec un remote.
+(`github.com/golden001boy/budget-pocket`) — jusqu'ici tout l'historique était
+local uniquement, un pipeline CI n'a de sens qu'avec un remote. Le dépôt est
+**public**, pas privé comme prévu initialement : la protection de branche
+(classique *et* Rulesets) n'est pas appliquée sur un dépôt privé en dehors
+d'un compte GitHub Team/Enterprise — changement de visibilité nécessaire pour
+que cette story soit réellement faisable sans coût.
 
 **Critères d'acceptation**
 - [x] Un workflow GitHub Actions s'exécute sur chaque push et pull request
@@ -320,21 +324,30 @@ fusionné sur `master` sans passer ces contrôles.
       donc besoin d'aucun secret pour ces deux checks.
 - [x] `pnpm install --frozen-lockfile` (comportement CI) testé en local :
       lockfile à jour, aucune dérive.
-- [ ] **Protection de branche sur `master`** (exiger le passage du workflow
-      avant fusion) — **non fait**. Configuration côté GitHub uniquement
-      (Settings → Branches → Add rule), hors de portée des outils disponibles
-      ici (pas de `gh` CLI, et l'agent n'a pas d'accès admin au dépôt pour
-      appeler l'API GitHub). Étapes pour vous : Settings → Branches → Add
-      branch ruleset → cibler `master` → cocher "Require status checks to
-      pass" → sélectionner le check `type-check-and-test`.
+- [x] **Le workflow tourne réellement sur GitHub et passe** — confirmé via
+      l'API Actions (`conclusion: "success"` sur les 8 étapes du job
+      `type-check-and-test`, run [29928138512](https://github.com/golden001boy/budget-pocket/actions/runs/29928138512)).
+- [x] **Protection de branche sur `master`** : `Require a pull request before
+      merging` + `Require status checks to pass before merging` (check
+      `type-check-and-test`) actifs — confirmé via
+      `GET /repos/golden001boy/budget-pocket/branches/master` :
+      `"protected": true`, `required_status_checks.contexts: ["type-check-and-test"]`.
+      `enforcement_level: "non_admins"` — le propriétaire du dépôt peut encore
+      bypasser la règle (comportement standard GitHub), à garder en tête.
+
+**Bug trouvé et corrigé en cours de route** : le tout premier run a échoué
+(`pnpm/action-setup@v4` en échec immédiat, toutes les étapes suivantes
+skippées) — le workflow fixait `version: 9` alors que
+`package.json` a déjà `"packageManager": "pnpm@9.0.0"` ; `pnpm/action-setup`
+erreure quand les deux sont présents à la fois. Retiré le `version:` du
+workflow ; deuxième run entièrement vert.
 
 **Implémentation** : [.github/workflows/ci.yml](../.github/workflows/ci.yml).
 
-**Vérification** : les commandes du workflow ont été rejouées localement
-dans l'ordre exact (`pnpm install --frozen-lockfile` → `pnpm type-check` →
-`pnpm test`), toutes vertes. **Le workflow lui-même n'a pas encore tourné
-sur GitHub** — non observable avant le prochain push vers `origin/master` ;
-premier run à vérifier visuellement dans l'onglet Actions du dépôt.
+**Vérification** : commandes rejouées localement dans l'ordre exact du
+workflow (toutes vertes), puis le run réel sur GitHub et l'état de la
+protection de branche confirmés indépendamment via l'API GitHub (lectures
+publiques, sans authentification, le dépôt étant désormais public).
 
 ---
 

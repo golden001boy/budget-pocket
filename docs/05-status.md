@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-22 (story 15.6 — pipeline CI/CD, partiel ;
-dépôt poussé sur GitHub)
+**Dernière mise à jour** : 2026-07-22 (story 15.6 — pipeline CI/CD +
+protection de branche, ✅ complet)
 
 ## Vue d'ensemble des phases
 
@@ -33,7 +33,7 @@ dépôt poussé sur GitHub)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 3/9 ✅ + 1/9 🟡 (15.1, 15.2, 15.9 ✅ ; 15.6 🟡) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 4/9 stories (15.1, 15.2, 15.6, 15.9 ✅) |
 
 ## Prochaine action recommandée
 
@@ -41,17 +41,20 @@ dépôt poussé sur GitHub)
 Voir [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour l'ordre complet.
 
-**Note story 15.6** : pipeline GitHub Actions ajouté
-([.github/workflows/ci.yml](../.github/workflows/ci.yml)) — exécute
-`pnpm type-check` + `pnpm test` sur chaque push/PR vers `master`. Toutes les
-commandes ont été rejouées localement dans l'ordre exact du workflow et
-passent. **Reste 🟡, pas ✅** : la protection de branche elle-même (exiger
-le passage du workflow avant fusion) nécessite un accès admin GitHub que
-l'agent n'a pas — action manuelle requise (voir 02-prd.md pour les étapes
-exactes). Le workflow n'a pas non plus encore tourné réellement sur GitHub —
-premier run à vérifier après le prochain push.
+**Note story 15.6** : ✅ complet. Pipeline GitHub Actions
+([.github/workflows/ci.yml](../.github/workflows/ci.yml)) exécute
+`pnpm type-check` + `pnpm test` sur chaque push/PR vers `master` — confirmé
+en vrai sur GitHub (pas seulement rejoué localement), un premier run ayant
+échoué et été corrigé en route (conflit de version pnpm entre le workflow et
+`packageManager` dans `package.json`, voir 02-prd.md). Protection de branche
+sur `master` (PR requise + check `type-check-and-test` requis) confirmée
+active via l'API GitHub. A nécessité de rendre le dépôt public — la
+protection de branche n'est pas appliquée sur un dépôt privé en dehors d'un
+compte GitHub Team/Enterprise.
 
-**Dépôt distant** : `github.com/golden001boy/budget-pocket` (privé), poussé
+**Dépôt distant** : `github.com/golden001boy/budget-pocket` (public — passé de
+privé à public spécifiquement pour que la protection de branche soit
+applicable gratuitement, voir story 15.6), poussé
 avec succès — 10 commits, `master` suit `origin/master`. Auparavant tout
 l'historique était local uniquement, ce qui bloquait cette story (pas de
 remote = pas de CI possible).
