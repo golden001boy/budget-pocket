@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-22 (story 15.5 — scan SCA + remédiation,
-✅ complet ; story 15.10 créée pour le résidu Next.js)
+**Dernière mise à jour** : 2026-07-22 (story 15.4 — monitoring Sentry, ✅
+intégré)
 
 ## Vue d'ensemble des phases
 
@@ -11,7 +11,7 @@
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 5/10 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 6/10 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -33,13 +33,24 @@
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 5/10 stories (15.1, 15.2, 15.5, 15.6, 15.9 ✅) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 6/10 stories (15.1, 15.2, 15.4, 15.5, 15.6, 15.9 ✅) |
 
 ## Prochaine action recommandée
 
-`bmad dev 15.4` — monitoring d'erreurs Sentry (PROD-01). Voir
+`bmad dev 15.7` — politique de backup/rollback BDD (bloque directement le
+gate Phase 6 §9.1). Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour l'ordre complet.
+
+**Note story 15.4** : ✅ complet. `@sentry/nextjs` intégré aux trois runtimes
+(client/serveur/edge) + frontière d'erreur globale App Router
+([global-error.tsx](../apps/web/src/app/global-error.tsx)). Sans DSN
+configuré, le SDK est un no-op vérifié — aucune erreur/warning au boot, build
+de production propre (43/43 routes). CSP mise à jour pour autoriser les
+domaines d'ingestion Sentry, sinon le navigateur aurait bloqué l'envoi côté
+client. **Non vérifié** : réception réelle d'un événement dans un projet
+Sentry — nécessite un compte/DSN (même situation que Neon/GitHub
+précédemment, à fournir par vous). À faire : `bmad qa 15.4`.
 
 **Note story 15.5** : ✅ complet. `pnpm audit` réduit de **46 → 14**
 vulnérabilités via `pnpm.overrides` — le critique éliminé entièrement, hautes

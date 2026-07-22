@@ -67,7 +67,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 
 | ID | Faiblesse | Priorité | État | Constat |
 |---|---|---|---|---|
-| PROD-01 | Absence de monitoring utile | 🟡 | 🔴 Gap | `NEXT_PUBLIC_SENTRY_DSN` existe dans `.env.example` mais Sentry n'est pas intégré dans le code (aucun `sentry.*.config.ts`) → story 15.4 |
+| PROD-01 | Absence de monitoring utile | 🟡 | 🟡 Partiel | `@sentry/nextjs` intégré (client/serveur/edge + frontière d'erreur globale, story 15.4), vérifié no-op sans DSN et sans régression (build + tests + type-check). **Non vérifié** : réception réelle d'un événement dans un projet Sentry — nécessite un compte/DSN fourni par l'utilisateur |
 | PROD-02 | Exposition d'envs non-prod | 🟡 | 🟡 Partiel | Aucun endpoint `/debug`/`/test` trouvé ; pas d'environnement staging déployé à ce jour donc rien à exposer, mais aucune politique écrite non plus |
 | PROD-03 | Mauvaise gestion des mises à jour | 🟢 | 🔴 Gap | Pas de politique de patching écrite, pas de stratégie de backup/rollback BDD documentée → story 15.7, bloquant Phase 6 §9.1 |
 
@@ -106,7 +106,8 @@ Ordre recommandé (Critique → Haute → Moyenne) :
    branche, tous deux confirmés actifs)
 5. ~~DEV-02 — remédiation `pnpm audit` (story 15.5)~~ ✅ (46 → 14 ; résidu
    `next` = story 15.10)
-6. PROD-01 — monitoring Sentry (story 15.4)
+6. ~~PROD-01 — monitoring Sentry (story 15.4)~~ ✅ (intégré, capture réelle
+   non vérifiée faute de compte Sentry)
 7. PROD-03 — politique backup/rollback (story 15.7)
 8. Perf : pagination manquante (story 15.3)
 9. BE-02 — MFA / hardening auth (story 15.8, non bloquant Must mais recommandé)

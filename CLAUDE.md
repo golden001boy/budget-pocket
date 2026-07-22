@@ -30,15 +30,19 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 5/10 (15.1
-rate limiting, 15.2 validation Zod, 15.5 scan SCA + remédiation, 15.6
-pipeline CI/CD + protection de branche, 15.9 test runner Jest — tous ✅ ; BDD
-Neon opérationnelle, Redis encore manquant) et bloque la Phase 6. Dépôt
-distant : `github.com/golden001boy/budget-pocket` (**public**). `pnpm test`
-fonctionne désormais à la racine — toute nouvelle story doit inclure ses
-tests unitaires, plus d'ADR de report type ADR-005. Voir
-[docs/04-tests.md](docs/04-tests.md) pour le détail par item du catalogue de
-failles.
+sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 6/10 (15.1
+rate limiting, 15.2 validation Zod, 15.4 monitoring Sentry, 15.5 scan SCA +
+remédiation, 15.6 pipeline CI/CD + protection de branche, 15.9 test runner
+Jest — tous ✅ ; BDD Neon opérationnelle, Redis encore manquant) et bloque la
+Phase 6. Dépôt distant : `github.com/golden001boy/budget-pocket`
+(**public**). `pnpm test` fonctionne désormais à la racine — toute nouvelle
+story doit inclure ses tests unitaires, plus d'ADR de report type ADR-005.
+Voir [docs/04-tests.md](docs/04-tests.md) pour le détail par item du
+catalogue de failles.
+
+**Sentry est intégré mais sans DSN** (`NEXT_PUBLIC_SENTRY_DSN` vide dans
+`.env`) — SDK actif en no-op, pas d'erreur. Ajouter un DSN réel active la
+capture sans changement de code.
 
 **`next@14.2.35` reste sur 14 vulnérabilités connues** (aucune corrigible
 sans passer à Next.js ≥15.5.16 — changement majeur) — story **15.10** créée

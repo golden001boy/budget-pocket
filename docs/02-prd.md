@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (5/9 ✅)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (6/10 ✅)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -155,7 +155,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.1 | Rate limiting sur login + inscription | Must | M | ✅ | BE-07, API-04, API-06 |
 | 15.2 | Validation Zod sur `/api/auth/mobile` et `/api/goals/[id]` | Must | S | ✅ | BE-03, FE-08 |
 | 15.3 | Pagination sur `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` | Should | S | 🔴 | Perf (règle Phase 1) |
-| 15.4 | Intégration monitoring d'erreurs (Sentry) | Must | M | 🔴 | PROD-01 |
+| 15.4 | Intégration monitoring d'erreurs (Sentry) | Must | M | ✅ | PROD-01 |
 | 15.5 | Scan SCA des dépendances + plan de remédiation | Must | S | ✅ | DEV-02 |
 | 15.6 | Pipeline CI/CD avec protections de branche | Must | M | ✅ | DEV-03 |
 | 15.7 | Politique de backup/rollback BDD production | Must | S | 🔴 | Gate Phase 6 §9.1 |
@@ -419,6 +419,68 @@ revalider. Impacte potentiellement toutes les routes API et pages de
 ponctuelle ; nécessite son propre cycle de test complet (`bmad qa` dédié).
 
 **Non commencée.**
+
+---
+
+### Story 15.4 — Intégration monitoring d'erreurs (Sentry) · ✅ Done
+
+**Story** : En tant que mainteneur, je veux que les erreurs non gérées côté
+client, serveur et edge soient remontées automatiquement, afin de savoir
+qu'un incident se produit en production sans attendre qu'un utilisateur le
+signale (PROD-01).
+
+**Critères d'acceptation**
+- [x] `@sentry/nextjs` installé et intégré aux trois runtimes Next.js :
+      client ([src/instrumentation-client.ts](../apps/web/src/instrumentation-client.ts)),
+      Node.js et edge (via [src/instrumentation.ts](../apps/web/src/instrumentation.ts) →
+      [sentry.server.config.ts](../apps/web/sentry.server.config.ts) /
+      [sentry.edge.config.ts](../apps/web/sentry.edge.config.ts)).
+- [x] `next.config.mjs` enveloppé avec `withSentryConfig` — upload de source
+      maps configuré mais **dégradé silencieusement** si `SENTRY_ORG` /
+      `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` sont absents (comportement
+      documenté de la lib, pas un correctif ad hoc).
+- [x] Frontière d'erreur globale App Router ajoutée
+      ([src/app/global-error.tsx](../apps/web/src/app/global-error.tsx)) —
+      capture les erreurs de rendu React qui échapperaient autrement à toute
+      remontée.
+- [x] CSP mise à jour (`connect-src`) pour autoriser les domaines d'ingestion
+      Sentry (`*.sentry.io`, `*.ingest.us.sentry.io`) — sans ça, le
+      navigateur aurait bloqué silencieusement l'envoi des events côté
+      client.
+- [x] **Sans DSN configuré, le SDK s'initialise en no-op** (vérifié : aucune
+      erreur, aucun avertissement au boot, dev server + build de production
+      tous deux propres) — pas de risque de casser l'environnement local ou
+      la CI qui n'ont pas de DSN.
+- [x] Deux avertissements de config levés en cours de route (voir
+      ci-dessous) — configuration finale sans aucun warning au boot.
+- [ ] **Capture réelle d'un événement dans un vrai projet Sentry** — non
+      vérifiable sans compte Sentry (même situation que Neon/GitHub
+      précédemment : nécessite une action de votre côté). Voir §Vérification.
+
+**Avertissements de config résolus** :
+- `disableLogger: true` est déprécié dans cette version → remplacé par
+  `webpack.treeshake.removeDebugLogging: true`.
+- Le SDK exigeait l'export `onRouterTransitionStart` depuis
+  `instrumentation-client.ts` pour instrumenter les transitions de route
+  (sinon warning "ACTION REQUIRED" à chaque boot) → ajouté.
+
+**Implémentation** : voir fichiers listés ci-dessus, plus
+[apps/web/.env.example](../apps/web/.env.example) et
+[apps/web/.env](../apps/web/.env) (variables `NEXT_PUBLIC_SENTRY_DSN`,
+`SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` documentées, toutes
+optionnelles).
+
+**Vérification** : `pnpm type-check` (4/4 workspaces), `pnpm test` (19/19),
+`pnpm run build` (production, 43/43 routes compilées avec succès), dev
+server redémarré à froid — aucune erreur ni warning Sentry au boot, `/`,
+`/login`, `/api/health` tous répondent normalement. **Non vérifié** : qu'un
+DSN réel reçoit effectivement un événement — nécessite un compte Sentry
+(gratuit, sentry.io) et son DSN. À faire dès que vous en avez un :
+`bmad qa 15.4`.
+
+---
+
+## Non-goals / gaps explicites
 
 - **Synchronisation mobile money automatique** (Epic 2, story 2.2) — les
   providers `WAVE`/`MTN_MONEY`/`ORANGE_MONEY` existent en tant qu'interfaces

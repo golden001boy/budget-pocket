@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // output: 'standalone',  // re-enable for Docker deployment
@@ -29,7 +31,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self'",
-              "connect-src 'self' https://api.coingecko.com https://www.brvm.org wss:",
+              "connect-src 'self' https://api.coingecko.com https://www.brvm.org https://*.sentry.io https://*.ingest.us.sentry.io wss:",
             ].join('; '),
           },
         ],
@@ -38,4 +40,14 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// authToken/org/project unset in this environment — the plugin skips
+// source-map upload silently rather than failing the build when they're
+// missing, per Sentry's own documented behavior.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  widenClientFileUpload: true,
+  webpack: { treeshake: { removeDebugLogging: true } },
+});
