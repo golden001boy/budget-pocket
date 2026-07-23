@@ -101,7 +101,9 @@ vidé. Détail complet :
 [03-architecture.md ADR-009](03-architecture.md#adr-009--migration-nextjs-15--react-19-story-1510)
 (post-scriptum 1 et 2). `pnpm type-check` (4/4, sans cache) et
 `pnpm test` (34/34) reverifiés localement sur un store totalement froid
-après les deux correctifs, avant nouveau push.
+après les deux correctifs, avant nouveau push. **CI confirmée verte** sur
+le commit `e32c83f` — story 15.10 réellement terminée, pas seulement
+documentée comme telle.
 
 **Note story 15.8** : 🟡 hardening fait, MFA explicitement reporté (décision
 prise avant implémentation, voir
