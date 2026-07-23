@@ -30,16 +30,17 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 8 ✅ + 2 🟡
-sur 10 (15.1 rate limiting, 15.2 validation Zod, 15.3 pagination
-accounts/budgets/goals/portfolio, 15.4 monitoring Sentry, 15.5 scan SCA +
-remédiation, 15.6 pipeline CI/CD + protection de branche, 15.9 test runner
-Jest, 15.10 migration Next.js 15 + React 19 — tous ✅ ; 15.7 politique
-backup/rollback 🟡 documentée mais non vérifiée par un test réel ; 15.8
-hardening authentification 🟡 fait (rate limit compte, session 7j, mot de
-passe renforcé) mais volet MFA explicitement reporté, voir ADR-008 ; BDD
-Neon opérationnelle, Redis encore manquant) et bloque la Phase 6. Dépôt
-distant :
+sécurité/prod) est 🟡 8 ✅ + 2 🟡 + 5 🔴 sur 15 (15.1 rate limiting, 15.2
+validation Zod, 15.3 pagination, 15.4 Sentry, 15.5 scan SCA, 15.6 CI/CD,
+15.9 test runner Jest, 15.10 migration Next.js 15 + React 19 — tous ✅ ;
+15.7 backup/rollback et 15.8 hardening auth 🟡 partiels documentés ; **15.11
+à 15.15 créées suite à `bmad prelaunch` (2026-07-23)**, non commencées :
+reset mot de passe, vérification email, tests de charge, coffre de
+secrets, politique de patching — voir
+[docs/05-status.md §Gate Phase 6](docs/05-status.md#gate-phase-6--évaluation-bmad-prelaunch-2026-07-23)
+pour le détail item par item : **5 ✅ / 8 🟡 / 7 🔴 sur les 20 items de la
+checklist Phase 6** — le projet est une démo solide en local, pas prêt
+pour un lancement réel). Dépôt distant :
 `github.com/golden001boy/budget-pocket` (**public**). `pnpm test` fonctionne
 désormais à la racine — toute nouvelle story doit inclure ses tests
 unitaires, plus d'ADR de report type ADR-005. Voir

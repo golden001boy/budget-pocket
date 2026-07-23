@@ -33,18 +33,17 @@ Gate Phase 6 : 5 ✅ / 8 🟡 / 7 🔴 sur 20, très loin d'être atteignable)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 8 ✅ + 2 🟡 sur 10 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10 ✅ ; 15.7, 15.8 🟡) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 8 ✅ + 2 🟡 + 5 🔴 sur 15 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10 ✅ ; 15.7, 15.8 🟡 ; 15.11–15.15 🔴 créées suite à `bmad prelaunch`, non commencées) |
 
 ## Prochaine action recommandée
 
-Toutes les stories planifiées de l'Epic 15 sont maintenant ✅ ou 🟡 avec un
-résidu explicitement documenté (15.7 : test de restauration Neon réel,
-console requise ; 15.8 : MFA, hors périmètre convenu). Le MFA (volet non
-traité de 15.8, voir ADR-008) n'a pas encore de story dédiée — à créer si un
-lancement avec de vrais utilisateurs est planifié. Sinon, prochaine étape
-naturelle : `bmad prelaunch` pour évaluer l'écart réel à la checklist
-Phase 6 (voir aussi les deux points sans story — vérification email, tests
-de charge — notés plus bas). Voir
+`bmad prelaunch` a été exécuté (2026-07-23, détail dans la section Gate
+Phase 6 plus bas) et a révélé un écart plus large qu'anticipé — 5 nouvelles
+stories créées (15.11–15.15). Priorité suggérée pour `bmad dev` : 15.11
+(reset de mot de passe — le gap le plus visible, un bouton actuellement
+mort) ou 15.12 (vérification email), les deux Must de la checklist Phase
+6 §9.1. Le MFA (volet non traité de 15.8, voir ADR-008) reste sans story
+dédiée. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour le détail complet.
 
@@ -282,11 +281,13 @@ en production avec de vrais utilisateurs". Cohérent avec le risque déjà
 assumé et documenté sur le PITR Neon (6h, plan Free) : ce projet n'est,
 pour l'instant, pas prêt pour un lancement réel.
 
-**Stories à créer avant de pouvoir même viser le gate** :
-- Reset de mot de passe (flux email + token) — actuellement un bouton mort
-- Vérification email (aucun flux de confirmation)
-- Tests de charge
-- Politique de patching + coffre de secrets (peut-être combinables avec 15.7)
+**Stories créées dans le PRD suite à cette évaluation** (voir
+[02-prd.md](02-prd.md), non commencées) :
+- 15.11 — Reset de mot de passe (flux email + token)
+- 15.12 — Vérification email à l'inscription
+- 15.13 — Tests de charge
+- 15.14 — Coffre de secrets pour les variables d'environnement
+- 15.15 — Politique de patching formelle + test de rollback
 
 ## Environnement local (hors périmètre BMAD, pour mémoire)
 

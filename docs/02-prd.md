@@ -162,6 +162,11 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.8 | MFA ou hardening de l'authentification | Should | L | 🟡 | BE-02 |
 | 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
 | 15.10 | Migrer Next.js 14 → 15+ | Should | L | ✅ | DEV-02 (résidu de 15.5) |
+| 15.11 | Reset de mot de passe (flux email + token) | Must | M | 🔴 | Gate Phase 6 §9.1 |
+| 15.12 | Vérification email à l'inscription | Must | M | 🔴 | Gate Phase 6 §9.1 |
+| 15.13 | Tests de charge | Should | M | 🔴 | Gate Phase 6 §9.3 |
+| 15.14 | Coffre de secrets pour les variables d'environnement | Could | S | 🔴 | Gate Phase 6 §9.2 |
+| 15.15 | Politique de patching formelle + test de rollback | Could | S | 🔴 | Gate Phase 6 §9.3 |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -498,6 +503,108 @@ Auth.js v5 beta, pas de saut à Next 16). Voir
 `apps/web/next.config.mjs`, `apps/web/src/lib/rechartsCompat.ts`,
 `apps/web/src/instrumentation.ts`,
 [03-architecture.md ADR-009](03-architecture.md#adr-009--migration-nextjs-15--react-19-story-1510).
+
+---
+
+### Story 15.11 — Reset de mot de passe (flux email + token) · 🔴 À faire
+
+**Story** : En tant qu'utilisateur ayant oublié son mot de passe, je veux
+pouvoir le réinitialiser via un lien envoyé par email, afin de retrouver
+l'accès à mon compte sans intervention manuelle (Gate Phase 6 §9.1).
+
+**Constat qui justifie la story** : ce n'est pas une amélioration d'un flux
+existant — il n'y a **aucun flux du tout**. Le bouton "Mot de passe
+oublié ?" dans
+[LoginForm.tsx](../apps/web/src/app/(auth)/login/LoginForm.tsx) est un
+`<button type="button">` sans `onClick`, purement décoratif.
+
+**Portée envisagée** : `POST /api/auth/forgot-password` (email → génère un
+token à durée limitée, l'envoie via Resend — dépendance déjà présente dans
+`apps/web/package.json` mais jamais câblée, voir `RESEND_API_KEY` commenté
+dans `.env.example`) ; `POST /api/auth/reset-password` (token + nouveau mot
+de passe → invalide le token, applique `registerSchema`'s password policy
+de la story 15.8) ; page `/reset-password?token=...`. Nécessite une colonne
+de stockage de token (migration Prisma — `PasswordResetToken` ou champs sur
+`User`) et un vrai envoi d'email testé (`RESEND_API_KEY` à fournir).
+
+**Non commencée.**
+
+---
+
+### Story 15.12 — Vérification email à l'inscription · 🔴 À faire
+
+**Story** : En tant qu'opérateur, je veux que les nouveaux comptes
+confirment leur adresse email avant de pouvoir utiliser pleinement
+l'application, afin de réduire les inscriptions frauduleuses/erronées
+(Gate Phase 6 §9.1).
+
+**Constat** : `POST /api/auth/register` crée le compte directement sans
+aucune étape de confirmation ; `User.email` n'a pas de champ
+`emailVerified`/équivalent dans le schéma actuel.
+
+**Portée envisagée** : migration Prisma (champ `emailVerified` sur
+`User`), envoi d'un email de confirmation à l'inscription (même
+infrastructure Resend que 15.11), route de confirmation par token, et une
+décision produit à trancher avec vous : bloquer l'usage tant que l'email
+n'est pas confirmé, ou juste l'afficher comme statut (moins strict, plus
+simple).
+
+**Non commencée.**
+
+---
+
+### Story 15.13 — Tests de charge · 🔴 À faire
+
+**Story** : En tant que mainteneur, je veux savoir comment l'application se
+comporte sous charge réaliste (nombre d'utilisateurs concurrents,
+requêtes/seconde sur les routes les plus sollicitées), afin d'identifier
+les goulots d'étranglement avant un vrai lancement (Gate Phase 6 §9.3).
+
+**Constat** : jamais exécuté à ce jour ; pas d'outillage choisi (k6,
+Artillery, autoscan). Risque connu à surveiller en priorité : le retry
+Redis en fail-open ajoute ~9-10s de latence par requête quand Redis est
+injoignable (story 15.1) — un test de charge sans Redis actif donnerait des
+résultats trompeurs, donc cette story suppose Redis opérationnel au moment
+de l'exécution.
+
+**Non commencée.**
+
+---
+
+### Story 15.14 — Coffre de secrets pour les variables d'environnement · 🔴 À faire
+
+**Story** : En tant qu'opérateur, je veux que les secrets de production
+(clés API, `DATABASE_URL`, `NEXTAUTH_SECRET`...) soient gérés via un coffre
+dédié plutôt qu'un fichier `.env` local, afin de réduire le risque de fuite
+et de centraliser la rotation des secrets (Gate Phase 6 §9.2).
+
+**Constat** : `.env` local uniquement à ce jour (gitignoré, jamais commité
+— vérifié story antérieure) ; pas de Vault/AWS Secrets Manager/équivalent.
+**Note de cadrage à trancher avec vous avant de commencer** : si le
+déploiement cible reste Vercel (voir
+[03-architecture.md §10](03-architecture.md#10--cible-de-déploiement)),
+les variables d'environnement chiffrées de Vercel pourraient déjà
+satisfaire cet item sans outillage supplémentaire — à confirmer plutôt que
+de supposer qu'un vrai coffre tiers (Vault, AWS Secrets Manager) est
+nécessaire.
+
+**Non commencée.**
+
+---
+
+### Story 15.15 — Politique de patching formelle + test de rollback · 🔴 À faire
+
+**Story** : En tant qu'opérateur, je veux une politique écrite de mise à
+jour des dépendances/de la plateforme (cadence, qui décide, comment
+tester avant déploiement) et un rollback réellement testé une fois, afin
+de ne pas improviser en cas de régression après une mise à jour (Gate
+Phase 6 §9.3).
+
+**Constat** : aucune politique de patching écrite à ce jour. Chevauche
+partiellement la story 15.7 (rollback BDD documenté, jamais testé en
+pratique) — à cadrer ensemble plutôt qu'en double lors de l'implémentation.
+
+**Non commencée.**
 
 ---
 
