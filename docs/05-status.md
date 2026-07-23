@@ -81,6 +81,16 @@ création + suppression d'une transaction. `pnpm type-check` (4/4) et
 tests échouent avec un timeout de 15s trop court face au retry Redis local
 + compile à froid, déjà documenté story 15.1) — confirmé non lié à cette
 migration, non bloquant (Playwright hors pipeline CI), non corrigé ici.
+**Correctif post-push** : le premier push a fait échouer la CI (jamais
+reproduit en local avant ce moment) — un vrai bug latent, probablement
+présent depuis le début du projet mais jamais rencontré faute d'un store
+pnpm CI froid : sur une installation totalement vierge, le client Prisma
+que `@prisma/client` résout réellement en interne restait le gabarit vide
+(le `postinstall` rapporte pourtant un succès). Reproduit de façon fiable
+en local avec un store pnpm vidé, corrigé par une étape `prisma generate`
+explicite ajoutée en CI après `pnpm install`. Détail complet :
+[03-architecture.md ADR-009](03-architecture.md#adr-009--migration-nextjs-15--react-19-story-1510)
+(post-scriptum). CI re-vérifiée verte sur le nouveau commit.
 
 **Note story 15.8** : 🟡 hardening fait, MFA explicitement reporté (décision
 prise avant implémentation, voir

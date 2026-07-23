@@ -373,6 +373,33 @@ au compile à froid de `next dev`. Confirmé antérieur à cette migration, non
 corrigé ici (changement de timeouts de test, hors périmètre ; Playwright
 n'est de toute façon pas dans le pipeline CI).
 
+**Post-scriptum — CI a détecté un vrai bug non lié à cette migration** : le
+premier push de cette story a fait échouer `pnpm type-check` en CI (jamais
+localement) — des dizaines d'erreurs `TS7006` sur des `.map()`/`.reduce()`
+dans des pages n'ayant rien à voir avec cette story
+(`accounts/page.tsx`, `budgets/page.tsx`, `dashboard/page.tsx`, etc.).
+Cause : sur un store pnpm totalement froid (`pnpm install --frozen-lockfile`
+sans cache — exactement ce que fait CI, et que le dev local n'avait encore
+jamais reproduit dans cette session malgré plusieurs réinstallations,
+faute d'avoir aussi vidé le store pnpm lui-même), le client Prisma généré
+que résout réellement `@prisma/client/index.d.ts` (via
+`export * from '.prisma/client/default'`, un chemin qui se résout depuis
+l'emplacement du paquet dans le store pnpm, pas depuis `apps/web`) reste
+le gabarit vide livré par défaut — aucun type de modèle (confirmé :
+0 occurrence de `LinkedAccount` dans ce fichier juste après l'install, alors
+que le `postinstall` de `prisma generate` rapporte pourtant un succès).
+Reproduit de façon 100% déterministe en local avec un store pnpm vidé ;
+corrigé en relançant `prisma generate` une seconde fois une fois
+l'installation totalement terminée. **Correctif** : étape explicite
+`pnpm --filter web run db:generate` ajoutée dans
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) entre `pnpm install`
+et `pnpm type-check`, en complément (pas en remplacement) du `postinstall`
+existant. Probablement un bug latent présent depuis le début du projet,
+jamais rencontré avant : chaque story précédente (15.1–15.9) avait un cache
+pnpm CI chaud (clé = hash du lockfile, inchangé ou peu changé d'une story à
+l'autre) — cette story est la première à avoir suffisamment modifié
+`pnpm-lock.yaml` pour forcer un vrai store froid en CI.
+
 **Détail complet** : [02-prd.md — Story 15.10](02-prd.md#story-1510--migrer-nextjs-14--15--✅-done).
 
 ## 7. Mapping Story → Fichiers affectés

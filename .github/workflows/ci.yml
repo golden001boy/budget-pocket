@@ -23,6 +23,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Belt-and-suspenders (story 15.10): apps/web's own postinstall already
+      # runs `prisma generate`, but on a fully cold pnpm store the generated
+      # client that lands next to @prisma/client inside the pnpm virtual
+      # store can end up as prisma's shipped stub (no model types) instead
+      # of the real schema output — reproduced locally with a clean
+      # `pnpm install --frozen-lockfile` on an empty store, and confirmed
+      # fixed by re-running generate once install has fully settled. This
+      # step is that explicit re-run so type-check never race the install.
+      - run: pnpm --filter web run db:generate
+
       - run: pnpm type-check
 
       - run: pnpm test
