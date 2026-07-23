@@ -2,7 +2,7 @@
 // /api/goals/[id] in story 15.2 — they existed in @budget-pocket/shared
 // unused before that story; this locks in the validation behavior those
 // routes now depend on.
-import { loginSchema, updateGoalSchema, registerSchema } from '@budget-pocket/shared';
+import { loginSchema, updateGoalSchema, registerSchema, forgotPasswordSchema, resetPasswordSchema } from '@budget-pocket/shared';
 
 describe('loginSchema', () => {
   it('accepts a well-formed email/password pair', () => {
@@ -51,6 +51,35 @@ describe('registerSchema', () => {
     const result = registerSchema.safeParse({ email: 'new@budget-pocket.app', password: 'a1b2c3d4e5' });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.currency).toBe('XOF');
+  });
+});
+
+describe('forgotPasswordSchema', () => {
+  it('accepts a well-formed email', () => {
+    expect(forgotPasswordSchema.safeParse({ email: 'demo@budget-pocket.app' }).success).toBe(true);
+  });
+
+  it('rejects a malformed email', () => {
+    expect(forgotPasswordSchema.safeParse({ email: 'not-an-email' }).success).toBe(false);
+  });
+});
+
+describe('resetPasswordSchema', () => {
+  it('accepts a token with a password meeting story 15.8\'s policy (10+ chars, not common)', () => {
+    const result = resetPasswordSchema.safeParse({ token: 'abc123', password: 'a1b2c3d4e5' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a missing token', () => {
+    expect(resetPasswordSchema.safeParse({ token: '', password: 'a1b2c3d4e5' }).success).toBe(false);
+  });
+
+  it('rejects a password under the 10-character minimum, same policy as registerSchema', () => {
+    expect(resetPasswordSchema.safeParse({ token: 'abc123', password: 'short8ch' }).success).toBe(false);
+  });
+
+  it('rejects a common password, same denylist as registerSchema', () => {
+    expect(resetPasswordSchema.safeParse({ token: 'abc123', password: 'password123' }).success).toBe(false);
   });
 });
 

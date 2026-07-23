@@ -139,6 +139,7 @@ model User {
   updatedAt      DateTime @updatedAt
 
   sessions         Session[]
+  passwordResetTokens PasswordResetToken[]
   subscriptions    Subscription[]
   accounts         LinkedAccount[]
   transactions     Transaction[]
@@ -164,6 +165,18 @@ model Session {
   token     String   @unique
   expiresAt DateTime
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Subscription {

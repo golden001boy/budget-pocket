@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-23 (`bmad prelaunch` — évaluation
-Gate Phase 6 : 5 ✅ / 8 🟡 / 7 🔴 sur 20, très loin d'être atteignable)
+**Dernière mise à jour** : 2026-07-23 (story 15.11 — reset de mot de
+passe, ✅)
 
 ## Vue d'ensemble des phases
 
@@ -11,7 +11,7 @@ Gate Phase 6 : 5 ✅ / 8 🟡 / 7 🔴 sur 20, très loin d'être atteignable)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 8 ✅ + 2 🟡 sur 10 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 9 ✅ + 2 🟡 + 4 🔴 sur 15 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -33,19 +33,42 @@ Gate Phase 6 : 5 ✅ / 8 🟡 / 7 🔴 sur 20, très loin d'être atteignable)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 8 ✅ + 2 🟡 + 5 🔴 sur 15 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10 ✅ ; 15.7, 15.8 🟡 ; 15.11–15.15 🔴 créées suite à `bmad prelaunch`, non commencées) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 9 ✅ + 2 🟡 + 4 🔴 sur 15 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11 ✅ ; 15.7, 15.8 🟡 ; 15.12–15.15 🔴 non commencées) |
 
 ## Prochaine action recommandée
 
-`bmad prelaunch` a été exécuté (2026-07-23, détail dans la section Gate
-Phase 6 plus bas) et a révélé un écart plus large qu'anticipé — 5 nouvelles
-stories créées (15.11–15.15). Priorité suggérée pour `bmad dev` : 15.11
-(reset de mot de passe — le gap le plus visible, un bouton actuellement
-mort) ou 15.12 (vérification email), les deux Must de la checklist Phase
-6 §9.1. Le MFA (volet non traité de 15.8, voir ADR-008) reste sans story
-dédiée. Voir
+Story 15.11 (reset de mot de passe) faite. Il reste 15.12 (vérification
+email — même infrastructure email que 15.11, Must comme 15.11), 15.13
+(tests de charge), 15.14 (coffre de secrets) et 15.15 (politique de
+patching), toutes créées suite à `bmad prelaunch` (2026-07-23, détail dans
+la section Gate Phase 6 plus bas). Priorité suggérée : 15.12, dernier Must
+de la checklist Phase 6 §9.1 encore non traité. Le MFA (volet non traité
+de 15.8, voir ADR-008) reste sans story dédiée. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour le détail complet.
+
+**Note story 15.11** : ✅ complet. Flux reset de mot de passe complet —
+`POST /api/auth/forgot-password` (email → token 256 bits, seul le hash
+SHA-256 stocké, invalide les tokens précédents, réponse identique que le
+compte existe ou non pour ne pas permettre l'énumération) et
+`POST /api/auth/reset-password` (token + nouveau mot de passe, la même
+politique que l'inscription depuis 15.8) ; pages `/forgot-password` et
+`/reset-password?token=...` ; le bouton "Mot de passe oublié ?" de
+`LoginForm.tsx`, jusque-là un `<button>` mort, pointe maintenant vers
+`/forgot-password`. Emails via Resend (dépendance présente depuis le
+début mais jamais câblée) — sans `RESEND_API_KEY` (cas actuel), le lien
+est simplement loggé côté serveur, même pattern que Sentry sans DSN.
+Vérifié en direct contre la vraie BDD Neon avec un compte jetable : cycle
+complet inscription → demande de reset → récupération du lien loggé →
+rejet mot de passe faible (400) → rejet token invalide (400) → reset
+réussi (200) → réutilisation du même token rejetée (400) → connexion avec
+le nouveau mot de passe (succès) → connexion avec l'ancien (401). Compte
+supprimé après test. 12 nouveaux tests unitaires (46/46 au total),
+`pnpm type-check` 4/4. **Non vérifié** : comportement réel du rate
+limiting (fail-open faute de Redis local, même limitation que story
+15.1 — logique testée unitairement, pas bout en bout). Item Gate Phase 6
+§9.1 reste 🔴 : la checklist exige un test en environnement de
+**production réelle**, qui n'existe toujours pas.
 
 **Note story 15.10** : ✅ complet. `next@14.2.35 → 15.5.21` + React
 `18.3.1 → 19.2.8` — décision de scope prise avec vous avant implémentation
@@ -239,7 +262,7 @@ honnête item par item, contre le code réel :
 ### 9.1 Fonctionnelle
 | Item | État | Constat |
 |---|---|---|
-| Login/reset mdp en prod réelle | 🔴 | Aucun environnement de production n'existe (dev local + Neon uniquement). Pire : **le reset de mot de passe n'est même pas implémenté** — le bouton "Mot de passe oublié ?" dans `LoginForm.tsx` n'a pas de handler (`<button type="button">` vide) |
+| Login/reset mdp en prod réelle | 🔴 | Le reset de mot de passe est désormais implémenté et vérifié en dev/Neon (story 15.11). Reste 🔴 uniquement parce qu'aucun environnement de production n'existe encore pour satisfaire le critère exact de la checklist ("testé en production réelle") |
 | Paiements en mode réel | 🔴 | Stripe intégré (Epic 11) mais jamais testé hors mode test |
 | SSL actif en prod | 🔴 | Pas de domaine de production |
 | Environnements dev/staging/prod séparés | 🔴 | Aucun staging, aucune prod — `vercel.json` configure des crons mais rien ne prouve un déploiement réel |
@@ -282,12 +305,12 @@ assumé et documenté sur le PITR Neon (6h, plan Free) : ce projet n'est,
 pour l'instant, pas prêt pour un lancement réel.
 
 **Stories créées dans le PRD suite à cette évaluation** (voir
-[02-prd.md](02-prd.md), non commencées) :
-- 15.11 — Reset de mot de passe (flux email + token)
-- 15.12 — Vérification email à l'inscription
-- 15.13 — Tests de charge
-- 15.14 — Coffre de secrets pour les variables d'environnement
-- 15.15 — Politique de patching formelle + test de rollback
+[02-prd.md](02-prd.md)) :
+- ~~15.11 — Reset de mot de passe (flux email + token)~~ ✅ fait
+- 15.12 — Vérification email à l'inscription (non commencée)
+- 15.13 — Tests de charge (non commencée)
+- 15.14 — Coffre de secrets pour les variables d'environnement (non commencée)
+- 15.15 — Politique de patching formelle + test de rollback (non commencée)
 
 ## Environnement local (hors périmètre BMAD, pour mémoire)
 

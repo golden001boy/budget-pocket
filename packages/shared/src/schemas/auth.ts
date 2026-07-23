@@ -17,15 +17,30 @@ const COMMON_PASSWORDS = new Set([
   'welcome123', 'iloveyou1', 'abc123456', 'motdepasse', 'passwordd',
 ]);
 
+// Shared by registerSchema and resetPasswordSchema (story 15.11) so a
+// password set via reset can't be weaker than one set at signup.
+export const passwordSchema = z.string()
+  .min(10, 'Minimum 10 caractères')
+  .max(72)
+  .refine(pw => !COMMON_PASSWORDS.has(pw.toLowerCase()), 'Mot de passe trop courant, choisissez-en un autre');
+
 export const registerSchema = z.object({
   email: z.string().email('Email invalide'),
-  password: z.string()
-    .min(10, 'Minimum 10 caractères')
-    .max(72)
-    .refine(pw => !COMMON_PASSWORDS.has(pw.toLowerCase()), 'Mot de passe trop courant, choisissez-en un autre'),
+  password: passwordSchema,
   name: z.string().min(2, 'Minimum 2 caractères').max(50).optional(),
   currency: z.enum(['XOF', 'EUR', 'USD', 'GBP']).default('XOF'),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Email invalide'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Jeton requis'),
+  password: passwordSchema,
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

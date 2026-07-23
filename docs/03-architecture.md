@@ -71,11 +71,11 @@ silencieusement — voir [packages/shared/src/types/](../packages/shared/src/typ
 
 ## 3. Modèle de données
 
-PostgreSQL via Prisma, 19 modèles
+PostgreSQL via Prisma, 20 modèles
 ([apps/web/prisma/schema.prisma](../apps/web/prisma/schema.prisma)), groupés
 par domaine :
 
-- **Identité/facturation** : `User`, `Session`, `Subscription`
+- **Identité/facturation** : `User`, `Session`, `PasswordResetToken` (story 15.11), `Subscription`
 - **Mouvement d'argent** : `LinkedAccount`, `Transaction`, `RecurringRule`, `CustomCategory`
 - **Planification** : `Budget`, `FinancialGoal`, `RetirementPlan`, `TaxRecord`, `Scenario`
 - **Investissement** : `PortfolioItem`, `AssetPriceSnapshot`
@@ -117,6 +117,16 @@ pour la couverture exhaustive.
 **Job cron** : Vercel invoque `POST /api/cron/{job}` selon le planning →
 handler vérifie `Authorization: Bearer $CRON_SECRET` → traite → retourne un
 résumé JSON. Pas de session utilisateur impliquée.
+
+**Reset de mot de passe** (story 15.11) : `POST /api/auth/forgot-password`
+(email) → si le compte existe, génère un token aléatoire (256 bits),
+n'en stocke que le hash SHA-256 (`PasswordResetToken.tokenHash`), invalide
+tout token non utilisé précédent, envoie le lien par email (Resend) →
+**réponse identique dans tous les cas** (compte existant ou non) pour ne
+pas permettre l'énumération d'emails. `POST /api/auth/reset-password`
+(token brut + nouveau mot de passe) → hash du token reçu comparé au hash
+stocké → si valide, non expiré (1h) et non utilisé : met à jour
+`passwordHash` et marque le token utilisé, dans une seule transaction.
 
 ## 5. APIs — contrats, formats, erreurs
 

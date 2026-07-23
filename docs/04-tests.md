@@ -18,7 +18,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | ID | Faiblesse | Priorité | État | Constat |
 |---|---|---|---|---|
 | BE-01 | Contrôle d'accès cassé (BOLA/IDOR) | 🔴 | ✅ Couvert | `transactions/[id]` et `goals/[id]` vérifient `userId === session.user.id` avant lecture/écriture/suppression (404 si non-propriétaire, jamais 403 pour ne pas confirmer l'existence) |
-| BE-02 | Authentification défaillante | 🔴 | 🟡 Partiel | Session JWT (7j depuis 15.8, était 30j), bcrypt sur les mots de passe. Rate limiting par (email, IP) **et** par compte toutes IP confondues (story 15.1 + 15.8) ; mot de passe ≥10 caractères + rejet des mots de passe communs (story 15.8). **Toujours pas de MFA** (décision de périmètre ADR-008 — reporté, story dédiée à créer) ; **pas de révocation de session côté serveur** (JWT sans état par design — `maxAge` réduit borne l'exposition mais n'invalide pas un jeton déjà émis) |
+| BE-02 | Authentification défaillante | 🔴 | 🟡 Partiel | Session JWT (7j depuis 15.8, était 30j), bcrypt sur les mots de passe. Rate limiting par (email, IP) **et** par compte toutes IP confondues (story 15.1 + 15.8) ; mot de passe ≥10 caractères + rejet des mots de passe communs (story 15.8). Reset de mot de passe (story 15.11) : token 256 bits, seul le hash stocké, réponse identique que le compte existe ou non (pas d'énumération d'emails), token invalidé après usage ou sur nouvelle demande. **Toujours pas de MFA** (décision de périmètre ADR-008 — reporté, story dédiée à créer) ; **pas de révocation de session côté serveur** (JWT sans état par design — `maxAge` réduit borne l'exposition mais n'invalide pas un jeton déjà émis) |
 | BE-03 | Injection SQL/NoSQL/commande | 🔴 | ✅ Couvert | 100% des requêtes passent par Prisma (requêtes paramétrées) — aucune requête SQL brute (`$queryRawUnsafe`) trouvée dans le code |
 | BE-04 | Exposition de données sensibles | 🟡 | ✅ Couvert | Aucun secret sous `NEXT_PUBLIC_*` ; `passwordHash` jamais sérialisé dans les réponses API (vérifié sur `auth/mobile`, `admin/users`) |
 | BE-05 | Mauvaise configuration sécurité | 🟡 | 🟡 Partiel | Headers de sécurité déployés (CSP, X-Frame-Options, Referrer-Policy — voir FE-06) ; pas de scan de config automatisé |
@@ -86,13 +86,16 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
   simplement après 15s. Diagnostiqué en détail, non corrigé (changement de
   timeouts de test, hors périmètre d'une story de migration de version).
 - **Unitaires** : câblés depuis la story 15.9 (`apps/web/jest.config.js`,
-  `pnpm test`/`pnpm --filter web run test`). 34 tests, 3 fichiers —
+  `pnpm test`/`pnpm --filter web run test`). 46 tests, 4 fichiers —
   [rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts)
   (+ `accountLoginRateLimitKey`, story 15.8),
   [authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts)
-  (+ `registerSchema`, story 15.8) et
+  (+ `registerSchema` story 15.8, + `forgotPasswordSchema`/`resetPasswordSchema`
+  story 15.11),
   [pagination.test.ts](../apps/web/src/lib/__tests__/pagination.test.ts)
-  (story 15.3).
+  (story 15.3) et
+  [passwordReset.test.ts](../apps/web/src/lib/__tests__/passwordReset.test.ts)
+  (story 15.11 — génération/hash de token).
   **Couverture encore très partielle** : les simulateurs (`retirement.ts`,
   `realEstate.ts`, `stockGrowth.ts`), l'analytique (`forecast.ts`,
   `snapshot.ts`) et les handlers de routes API (logique métier au-delà du
@@ -128,3 +131,7 @@ Ordre recommandé (Critique → Haute → Moyenne) :
 10. ~~DEV-02 résidu — migration Next.js 14 → 15.5.21 + React 19
     (story 15.10)~~ ✅ (14 → 0 vulnérabilité au final, y compris une
     nouvelle introduite par `sharp` et corrigée dans la même story)
+11. ~~Gate Phase 6 §9.1 — reset de mot de passe (story 15.11)~~ ✅ (flux
+    complet, testé en direct contre Neon ; reste 🔴 uniquement pour le
+    critère "testé en production réelle" de la checklist, faute
+    d'environnement de production)

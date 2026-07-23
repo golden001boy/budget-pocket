@@ -162,7 +162,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.8 | MFA ou hardening de l'authentification | Should | L | 🟡 | BE-02 |
 | 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
 | 15.10 | Migrer Next.js 14 → 15+ | Should | L | ✅ | DEV-02 (résidu de 15.5) |
-| 15.11 | Reset de mot de passe (flux email + token) | Must | M | 🔴 | Gate Phase 6 §9.1 |
+| 15.11 | Reset de mot de passe (flux email + token) | Must | M | ✅ | Gate Phase 6 §9.1 |
 | 15.12 | Vérification email à l'inscription | Must | M | 🔴 | Gate Phase 6 §9.1 |
 | 15.13 | Tests de charge | Should | M | 🔴 | Gate Phase 6 §9.3 |
 | 15.14 | Coffre de secrets pour les variables d'environnement | Could | S | 🔴 | Gate Phase 6 §9.2 |
@@ -506,28 +506,92 @@ Auth.js v5 beta, pas de saut à Next 16). Voir
 
 ---
 
-### Story 15.11 — Reset de mot de passe (flux email + token) · 🔴 À faire
+### Story 15.11 — Reset de mot de passe (flux email + token) · ✅ Done
 
 **Story** : En tant qu'utilisateur ayant oublié son mot de passe, je veux
 pouvoir le réinitialiser via un lien envoyé par email, afin de retrouver
 l'accès à mon compte sans intervention manuelle (Gate Phase 6 §9.1).
 
-**Constat qui justifie la story** : ce n'est pas une amélioration d'un flux
-existant — il n'y a **aucun flux du tout**. Le bouton "Mot de passe
-oublié ?" dans
-[LoginForm.tsx](../apps/web/src/app/(auth)/login/LoginForm.tsx) est un
+**Constat qui justifiait la story** : ce n'était pas une amélioration d'un
+flux existant — il n'y avait **aucun flux du tout**. Le bouton "Mot de
+passe oublié ?" dans
+[LoginForm.tsx](../apps/web/src/app/(auth)/login/LoginForm.tsx) était un
 `<button type="button">` sans `onClick`, purement décoratif.
 
-**Portée envisagée** : `POST /api/auth/forgot-password` (email → génère un
-token à durée limitée, l'envoie via Resend — dépendance déjà présente dans
-`apps/web/package.json` mais jamais câblée, voir `RESEND_API_KEY` commenté
-dans `.env.example`) ; `POST /api/auth/reset-password` (token + nouveau mot
-de passe → invalide le token, applique `registerSchema`'s password policy
-de la story 15.8) ; page `/reset-password?token=...`. Nécessite une colonne
-de stockage de token (migration Prisma — `PasswordResetToken` ou champs sur
-`User`) et un vrai envoi d'email testé (`RESEND_API_KEY` à fournir).
+**Critères d'acceptation**
+- [x] Migration Prisma — nouveau modèle `PasswordResetToken` (`userId`,
+      `tokenHash` unique, `expiresAt`, `usedAt` nullable) plutôt que des
+      champs directement sur `User` : garde l'historique, permet plusieurs
+      tokens successifs, et suit le même pattern que `Session` (table
+      dédiée liée à `User`). Seul le **hash SHA-256** du token est stocké
+      — le token brut ne vit que dans le lien envoyé par email
+      ([passwordReset.ts](../apps/web/src/lib/passwordReset.ts)), même
+      raisonnement que bcrypt pour les mots de passe : une fuite de la BDD
+      ne permet pas de rejouer un reset.
+- [x] `POST /api/auth/forgot-password` : valide l'email (Zod), limite par
+      IP (5/h) et par compte (3/h, indépendant de l'IP — même pattern que
+      le rate limiting compte de la story 15.8), génère un token à durée
+      de vie 1h, **invalide tout token non utilisé précédent** pour ce
+      compte (un ancien lien transféré/fuité ne doit plus fonctionner une
+      fois un nouveau demandé), envoie l'email via Resend.
+      **Réponse volontairement identique que l'email existe ou non** — pas
+      d'énumération de comptes via cet endpoint (contrairement à
+      `/api/auth/register`, où un 409 est un compromis déjà accepté sur un
+      endpoint différent).
+- [x] `POST /api/auth/reset-password` : valide le token (hashé puis
+      comparé) + le nouveau mot de passe (`passwordSchema`, la même
+      politique que l'inscription depuis la story 15.8 — extraite dans
+      `packages/shared/src/schemas/auth.ts` pour être partagée plutôt que
+      dupliquée) ; rejette si expiré ou déjà utilisé ; met à jour
+      `passwordHash` et marque le token utilisé dans une seule
+      `$transaction` Prisma.
+- [x] Emails via Resend
+      ([lib/email.ts](../apps/web/src/lib/email.ts)) — dépendance déjà
+      présente dans `apps/web/package.json` (`^4.0.0`) mais jamais câblée
+      avant cette story. **Sans `RESEND_API_KEY` configurée (cas actuel) :
+      no-op, le lien est logué côté serveur** — même pattern que Sentry
+      sans DSN (story 15.4), pas d'erreur, flux testable sans compte
+      Resend réel.
+- [x] Pages `/forgot-password` et `/reset-password?token=...` (le token
+      est lu via `searchParams` async, convention Next.js 15 de la story
+      15.10), même style visuel que `/login`/`/register`. Le bouton "Mot
+      de passe oublié ?" de `LoginForm.tsx` pointe maintenant vers
+      `/forgot-password` au lieu d'être un `<button>` mort.
+- [x] Tests unitaires — 12 nouveaux :
+      [passwordReset.test.ts](../apps/web/src/lib/__tests__/passwordReset.test.ts)
+      (génération/hash de token, déterminisme, unicité) et
+      `forgotPasswordSchema`/`resetPasswordSchema` dans
+      [authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts)
+      (réutilisent la politique de mot de passe de 15.8).
+- [x] Vérifié en direct contre la vraie BDD Neon avec un compte jetable :
+      cycle complet inscription → `forgot-password` → récupération du lien
+      loggé (pas de `RESEND_API_KEY`) → `reset-password` avec mot de passe
+      faible (400 attendu) → avec token invalide (400 "Lien invalide ou
+      expiré") → avec token+mot de passe valides (200) → réutilisation du
+      même token (400, correctement invalidé) → connexion avec le nouveau
+      mot de passe (succès) → connexion avec l'ancien (401). Compte de
+      test supprimé après vérification.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (46/46, +12 vs story 15.10)
+      verts.
+- [ ] **Rate limiting non vérifié de bout en bout** — même limitation déjà
+      documentée story 15.1 : pas de Redis local, donc fail-open sur les
+      deux limites (IP et compte) de `forgot-password` en environnement de
+      dev actuel. Logique testée unitairement (mêmes primitives que le
+      rate limiting login déjà couvert), comportement réel "bloque après N
+      tentatives" à qualifier quand Redis sera disponible.
+- [ ] **Item Gate Phase 6 §9.1 reste 🔴** : la checklist exige un test en
+      "environnement de production réelle", qui n'existe toujours pas — le
+      flux fonctionne et est vérifié en dev/Neon, mais ce n'est pas ce que
+      demande explicitement cet item de la checklist.
 
-**Non commencée.**
+**Implémentation** :
+[api/auth/forgot-password/route.ts](../apps/web/src/app/api/auth/forgot-password/route.ts),
+[api/auth/reset-password/route.ts](../apps/web/src/app/api/auth/reset-password/route.ts),
+[lib/passwordReset.ts](../apps/web/src/lib/passwordReset.ts),
+[lib/email.ts](../apps/web/src/lib/email.ts),
+[(auth)/forgot-password/](../apps/web/src/app/(auth)/forgot-password/),
+[(auth)/reset-password/](../apps/web/src/app/(auth)/reset-password/),
+[schemas/auth.ts](../packages/shared/src/schemas/auth.ts).
 
 ---
 

@@ -1,31 +1,32 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { loginSchema } from '@budget-pocket/shared';
-import { Eye, EyeOff, AlertCircle } from 'lucide-react';
-import Link from 'next/link';
+import { resetPasswordSchema } from '@budget-pocket/shared';
+import { Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
 
-export function LoginForm() {
+export function ResetPasswordForm({ token }: { token?: string }) {
   const router   = useRouter();
   const [error,    setError]   = useState('');
   const [loading,  setLoading] = useState(false);
   const [showPwd,  setShowPwd] = useState(false);
+  const [done,     setDone]    = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
+
+    if (!token) {
+      setError('Lien invalide — aucun jeton fourni.');
+      return;
+    }
     setLoading(true);
 
     const fd     = new FormData(e.currentTarget);
-    const parsed = loginSchema.safeParse({
-      email:    fd.get('email'),
-      password: fd.get('password'),
-    });
+    const parsed = resetPasswordSchema.safeParse({ token, password: fd.get('password') });
 
     if (!parsed.success) {
       setError(parsed.error.errors[0].message);
@@ -33,47 +34,53 @@ export function LoginForm() {
       return;
     }
 
-    const result = await signIn('credentials', { ...parsed.data, redirect: false });
+    const res = await fetch('/api/auth/reset-password', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(parsed.data),
+    });
 
-    if (result?.error) {
-      setError('Email ou mot de passe incorrect');
-      setLoading(false);
+    setLoading(false);
+
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error ?? 'Erreur lors de la réinitialisation');
       return;
     }
 
-    router.push('/dashboard');
-    router.refresh();
+    setDone(true);
+    setTimeout(() => router.push('/login'), 2000);
+  }
+
+  if (!token) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2.5">
+        <AlertCircle className="h-4 w-4 flex-shrink-0" />
+        Ce lien est invalide. Redemandez un lien de réinitialisation.
+      </div>
+    );
+  }
+
+  if (done) {
+    return (
+      <div className="flex items-start gap-2 text-sm text-teal-700 bg-teal-50 rounded-lg px-3 py-2.5">
+        <CheckCircle2 className="h-4 w-4 flex-shrink-0 mt-0.5" />
+        <span>Mot de passe mis à jour. Redirection vers la connexion...</span>
+      </div>
+    );
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="space-y-1.5">
-        <Label htmlFor="email" className="text-gray-700 font-medium text-sm">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          placeholder="vous@exemple.com"
-          autoComplete="email"
-          required
-          className="h-11 bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus-visible:ring-teal-500 focus-visible:border-teal-500"
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="password" className="text-gray-700 font-medium text-sm">Mot de passe</Label>
-          <Link href="/forgot-password" className="text-xs text-teal-600 hover:text-teal-700 font-medium">
-            Mot de passe oublié ?
-          </Link>
-        </div>
+        <Label htmlFor="password" className="text-gray-700 font-medium text-sm">Nouveau mot de passe</Label>
         <div className="relative">
           <Input
             id="password"
             name="password"
             type={showPwd ? 'text' : 'password'}
-            placeholder="••••••••"
-            autoComplete="current-password"
+            placeholder="Minimum 10 caractères"
+            autoComplete="new-password"
             required
             className="h-11 bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus-visible:ring-teal-500 focus-visible:border-teal-500 pr-10"
           />
@@ -99,7 +106,7 @@ export function LoginForm() {
         disabled={loading}
         className="w-full h-11 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm shadow-sm shadow-teal-200"
       >
-        {loading ? 'Connexion en cours...' : 'Se connecter'}
+        {loading ? 'Mise à jour...' : 'Réinitialiser le mot de passe'}
       </Button>
     </form>
   );
