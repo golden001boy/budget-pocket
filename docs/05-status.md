@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-23 (story 15.10 — migration Next.js 15 +
-React 19, ✅ — `pnpm audit` à 0 vulnérabilité, voir ADR-009)
+**Dernière mise à jour** : 2026-07-23 (`bmad prelaunch` — évaluation
+Gate Phase 6 : 5 ✅ / 8 🟡 / 7 🔴 sur 20, très loin d'être atteignable)
 
 ## Vue d'ensemble des phases
 
@@ -229,14 +229,64 @@ A révélé un gap d'API hors périmètre : les routes protégées par
 pour les clients non authentifiés — noté dans
 [03-architecture.md §5](03-architecture.md), pas encore transformé en story.
 
-## Gate Phase 6 — non atteignable en l'état
+## Gate Phase 6 — évaluation (`bmad prelaunch`, 2026-07-23)
 
-Les 10 stories de l'Epic 15 doivent toutes passer à ✅ avant de pouvoir cocher
-la checklist [Phase 6](BMAD_FRAMEWORK_v2.md#9-phase-6--pre-launch-gate). En
-particulier, deux points de la checklist n'ont **aucune story associée pour
-l'instant** et devront être ajoutés à l'Epic 15 avant le gate :
-- Vérification email (non implémentée — pas de flux de confirmation d'email)
-- Tests de charge (jamais exécutés)
+**Résultat : très loin d'être atteignable.** Sur les 20 cases de la
+checklist [Phase 6](BMAD_FRAMEWORK_v2.md#9-phase-6--pre-launch-gate), la
+majorité sont 🔴, et plusieurs n'ont **aucune story** dans l'Epic 15 —
+l'écart est plus large que "il reste 15.7 et 15.8 à finir". Évaluation
+honnête item par item, contre le code réel :
+
+### 9.1 Fonctionnelle
+| Item | État | Constat |
+|---|---|---|
+| Login/reset mdp en prod réelle | 🔴 | Aucun environnement de production n'existe (dev local + Neon uniquement). Pire : **le reset de mot de passe n'est même pas implémenté** — le bouton "Mot de passe oublié ?" dans `LoginForm.tsx` n'a pas de handler (`<button type="button">` vide) |
+| Paiements en mode réel | 🔴 | Stripe intégré (Epic 11) mais jamais testé hors mode test |
+| SSL actif en prod | 🔴 | Pas de domaine de production |
+| Environnements dev/staging/prod séparés | 🔴 | Aucun staging, aucune prod — `vercel.json` configure des crons mais rien ne prouve un déploiement réel |
+| Clés API non exposées, secrets scannés | ✅ | `.env` gitignoré, aucun secret en dur (DEV-01) |
+| Backups BDD vérifiés fonctionnels | 🟡 | Story 15.7 — politique documentée, aucun test de restauration réel exécuté |
+| Vérification email activée | 🔴 | **Aucune story, aucun code** — pas de flux de confirmation d'email |
+| Pagination sur toutes les listes | 🟡 | Story 15.3 couvre accounts/budgets/goals/portfolio/transactions ; pas vérifié exhaustivement sur le reste (alerts, scenarios...) |
+
+### 9.2 Sécurité
+| Item | État | Constat |
+|---|---|---|
+| Rate limiting sur tous les endpoints sensibles | 🟡 | Login/inscription couverts (15.1) ; le reste des routes mutatives n'a aucune limite (API-04/API-06) |
+| Protection anti-bot/spam | 🔴 | Aucun captcha, aucune protection anti-bot |
+| Validation inputs testée côté serveur | ✅ | Zod partout (15.2) |
+| CSRF protégé partout | 🟡 | Cookie `SameSite=Lax` par défaut NextAuth ; pas de token CSRF explicite sur les routes API custom (FE-04) |
+| Headers de sécurité présents | ✅ | CSP/X-Frame-Options/etc déployés (FE-06) |
+| Aucun endpoint debug exposé | 🟡 | Aucun `/debug` trouvé, mais `/api/health` expose le message d'erreur Prisma brut (BE-09) |
+| Secrets depuis un coffre dédié | 🔴 | `.env` local uniquement, pas de Vault/AWS Secrets Manager (déjà noté §5.2 item j) |
+| Pipeline CI/CD protégé | ✅ | Story 15.6, confirmé actif |
+| Scan SCA sans vulnérabilité critique | ✅ | `pnpm audit` à **0 vulnérabilité** (story 15.10) |
+
+### 9.3 Observabilité & performance
+| Item | État | Constat |
+|---|---|---|
+| Monitoring d'erreurs actif + alertes | 🟡 | Sentry intégré (15.4) mais **sans DSN configuré = no-op**, donc pas réellement actif |
+| Journalisation actions sensibles centralisée | 🔴 | Aucun log applicatif des actions sensibles (login, changement de rôle...) — BE-08 |
+| Tests de charge effectués | 🔴 | **Aucune story, jamais exécutés** |
+| Politique de patching définie + rollback testé | 🟡 | Rollback BDD documenté (15.7) ; pas de politique de patching formelle, rien testé en pratique |
+
+**Score approximatif** : 5 ✅ / 8 🟡 / 7 🔴 sur 20.
+
+**Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
+faudrait au minimum : un environnement de production réel (domaine, SSL,
+staging séparé), le reset de mot de passe et la vérification email
+(actuellement absents, pas juste incomplets), un coffre de secrets, un vrai
+DSN Sentry, et des tests de charge. Ce n'est pas une liste de finitions —
+c'est l'écart entre "app qui tourne en local avec un compte de démo" et "app
+en production avec de vrais utilisateurs". Cohérent avec le risque déjà
+assumé et documenté sur le PITR Neon (6h, plan Free) : ce projet n'est,
+pour l'instant, pas prêt pour un lancement réel.
+
+**Stories à créer avant de pouvoir même viser le gate** :
+- Reset de mot de passe (flux email + token) — actuellement un bouton mort
+- Vérification email (aucun flux de confirmation)
+- Tests de charge
+- Politique de patching + coffre de secrets (peut-être combinables avec 15.7)
 
 ## Environnement local (hors périmètre BMAD, pour mémoire)
 
