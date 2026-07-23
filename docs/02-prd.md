@@ -159,7 +159,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.5 | Scan SCA des dépendances + plan de remédiation | Must | S | ✅ | DEV-02 |
 | 15.6 | Pipeline CI/CD avec protections de branche | Must | M | ✅ | DEV-03 |
 | 15.7 | Politique de backup/rollback BDD production | Must | S | 🟡 | Gate Phase 6 §9.1 |
-| 15.8 | MFA ou hardening de l'authentification | Should | L | 🔴 | BE-02 |
+| 15.8 | MFA ou hardening de l'authentification | Should | L | 🟡 | BE-02 |
 | 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
 | 15.10 | Migrer Next.js 14 → 15+ | Should | L | 🔴 | DEV-02 (résidu de 15.5) |
 
@@ -570,6 +570,95 @@ que la page 1 (pas de pager/infinite-scroll côté UI) — les routes web
 équivalentes (`accounts`, `budgets`, `goals`, `dashboard`) lisent Prisma
 directement côté serveur (composants serveur), donc ne sont pas concernées
 par ce changement de contrat API.
+
+---
+
+### Story 15.8 — MFA ou hardening de l'authentification · 🟡 Partiel (hardening fait, MFA hors périmètre)
+
+**Story** : En tant qu'opérateur de la plateforme, je veux renforcer
+l'authentification au-delà du rate limiting déjà en place (story 15.1), afin
+de réduire les risques identifiés en BE-02 (pas de MFA, session longue,
+politique de mot de passe faible).
+
+**Décision de périmètre** (vous, avant implémentation) : hardening
+uniquement pour cette story — pas de MFA TOTP. Le MFA complet exige une
+migration de schéma (`mfaSecret`/codes de secours sur `User`), une nouvelle
+dépendance TOTP, une UI d'enrôlement/QR code et une refonte du flux
+`CredentialsProvider` NextAuth en deux étapes (mot de passe puis code) — un
+effort disproportionné pour un projet sans utilisateurs réels. Reste donc 🔴
+pour le volet MFA ; la partie hardening est ✅.
+
+**Critères d'acceptation**
+- [x] **Rate limiting compte, indépendant de l'IP** — la limite existante
+      (story 15.1) est par paire (email, IP) : un attaquant qui fait tourner
+      plusieurs IP reçoit une nouvelle fenêtre de 5 tentatives à chaque
+      changement. Nouvelle couche `accountLoginRateLimitKey(email)` dans
+      [rateLimit.ts](../apps/web/src/lib/rateLimit.ts) : 10
+      tentatives/15 min cumulées sur le compte, toutes IP confondues,
+      appliquée en plus de la limite par IP (jamais à la place) sur les deux
+      points d'entrée (`authorize()` web, `POST /api/auth/mobile`). Seuil
+      volontairement plus haut que la limite par IP (5) pour qu'un
+      utilisateur légitime qui se trompe de mot de passe depuis une seule IP
+      ne la déclenche jamais.
+- [x] **Durée de session réduite** : `maxAge` JWT passé de 30 à 7 jours, côté
+      web (`authOptions.session.maxAge`) et côté mobile (token émis par
+      `/api/auth/mobile`, gardés synchronisés). Réduit la fenêtre
+      d'exposition d'un jeton volé/oublié sur un appareil inactif — un
+      utilisateur actif ne le remarque pas (NextAuth réémet silencieusement
+      le jeton en fonction de l'activité, `updateAge` par défaut). Contrepartie
+      assumée côté mobile : pas de flux de refresh token existant, donc un
+      utilisateur mobile inactif 7 jours doit se reconnecter (au lieu de 30).
+- [x] **Politique de mot de passe renforcée** sur `registerSchema`
+      (`packages/shared/src/schemas/auth.ts`) : longueur minimale passée de 8
+      à 10 caractères, rejet d'une liste de mots de passe communs/compromis
+      connus (`password123`, `12345678`, etc.), insensible à la casse.
+      Délibérément **pas** de règle de complexité par classe de caractères
+      (majuscule/chiffre/symbole imposés) — NIST 800-63B déconseille cette
+      approche, qui pousse vers des substitutions prévisibles
+      (`Password1!`) sans gain réel de résistance aux attaques. `loginSchema`
+      n'est pas touché : les comptes existants avec un mot de passe plus
+      court (ex. `demo@budget-pocket.app`, 8 caractères) continuent de se
+      connecter normalement — aucune migration de données, pas de
+      réinitialisation forcée.
+- [x] Placeholder du formulaire d'inscription web mis à jour ("Minimum 10
+      caractères") — l'indicateur de force du mot de passe déjà présent
+      classait ≥10 caractères comme "Fort", donc déjà aligné avec la
+      nouvelle politique sans modification.
+- [x] Tests unitaires — 8 nouveaux tests : 5 sur `registerSchema`
+      ([authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts),
+      longueur minimale, rejet mot de passe commun insensible à la casse,
+      défaut de devise) et 3 sur `accountLoginRateLimitKey`
+      ([rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts),
+      normalisation email, indépendance vis-à-vis de l'IP, seuil supérieur à
+      la limite par IP).
+- [x] Vérifié en direct contre la vraie BDD Neon : inscription avec mot de
+      passe commun → `400` (`"Mot de passe trop courant..."`) ; inscription
+      avec 9 caractères → `400` (`"Minimum 10 caractères"`) ; inscription
+      avec un mot de passe fort valide → `201`, compte créé puis supprimé
+      après vérification ; connexion du compte de démo (mot de passe
+      8 caractères, antérieur à cette story) toujours fonctionnelle ; jeton
+      mobile décodé (`next-auth/jwt` `decode()`) confirme `exp - iat = 7
+      jours` exactement.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (34/34, +8 vs story 15.3) verts.
+- [ ] **MFA (TOTP)** — non traité, périmètre explicitement exclu de cette
+      story (voir décision ci-dessus). À planifier comme story dédiée si
+      souhaité avant un lancement avec de vrais utilisateurs.
+- [ ] **Révocation de session côté serveur** — non traitée. La stratégie JWT
+      est sans état par design : réduire `maxAge` borne la fenêtre
+      d'exposition mais ne permet pas d'invalider un jeton déjà émis avant
+      son expiration (ex. compte compromis, déconnexion forcée à distance).
+      Le modèle Prisma `Session` existe dans le schéma mais n'est pas utilisé
+      par la stratégie `jwt` actuelle — implémenter une vraie révocation
+      nécessiterait soit de passer à la stratégie `database` de NextAuth,
+      soit une liste de révocation Redis vérifiée à chaque requête (coût de
+      latence sur *chaque* appel authentifié). Non traité ici — changement de
+      stratégie d'authentification plus large que le périmètre "hardening"
+      convenu.
+
+**Implémentation** : [rateLimit.ts](../apps/web/src/lib/rateLimit.ts),
+[auth.ts](../apps/web/src/lib/auth.ts),
+[api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts),
+[schemas/auth.ts](../packages/shared/src/schemas/auth.ts).
 
 ---
 

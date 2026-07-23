@@ -1,4 +1,4 @@
-import { rateLimit, getClientIp, loginRateLimitKey } from '../rateLimit';
+import { rateLimit, getClientIp, loginRateLimitKey, accountLoginRateLimitKey, ACCOUNT_LOGIN_ATTEMPT_LIMIT, LOGIN_ATTEMPT_LIMIT } from '../rateLimit';
 import { redis } from '../redis';
 
 jest.mock('../redis', () => ({
@@ -71,6 +71,25 @@ describe('getClientIp', () => {
   it('returns "unknown" when no IP header or headers object is present', () => {
     expect(getClientIp(undefined)).toBe('unknown');
     expect(getClientIp({})).toBe('unknown');
+  });
+});
+
+describe('accountLoginRateLimitKey', () => {
+  it('normalizes email casing/whitespace the same way loginRateLimitKey does', () => {
+    expect(accountLoginRateLimitKey(' Demo@Budget-Pocket.App '))
+      .toBe(accountLoginRateLimitKey('demo@budget-pocket.app'));
+  });
+
+  it('does not incorporate an IP, unlike loginRateLimitKey (story 15.8: catches brute force spread across IPs)', () => {
+    const account = accountLoginRateLimitKey('demo@budget-pocket.app');
+    const perIpA  = loginRateLimitKey('demo@budget-pocket.app', '203.0.113.1');
+    const perIpB  = loginRateLimitKey('demo@budget-pocket.app', '203.0.113.2');
+    expect(account).not.toBe(perIpA);
+    expect(account).not.toBe(perIpB);
+  });
+
+  it('is set higher than the per-IP limit so a single-IP login mistake never trips it first', () => {
+    expect(ACCOUNT_LOGIN_ATTEMPT_LIMIT).toBeGreaterThan(LOGIN_ATTEMPT_LIMIT);
   });
 });
 

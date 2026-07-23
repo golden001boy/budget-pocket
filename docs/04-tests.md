@@ -18,7 +18,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | ID | Faiblesse | Priorité | État | Constat |
 |---|---|---|---|---|
 | BE-01 | Contrôle d'accès cassé (BOLA/IDOR) | 🔴 | ✅ Couvert | `transactions/[id]` et `goals/[id]` vérifient `userId === session.user.id` avant lecture/écriture/suppression (404 si non-propriétaire, jamais 403 pour ne pas confirmer l'existence) |
-| BE-02 | Authentification défaillante | 🔴 | 🟡 Partiel | Session JWT (30j), bcrypt sur les mots de passe, invalidation via NextAuth ; **pas de MFA**, **pas de rate limiting sur le login** (brute force possible) → story 15.1, 15.8 |
+| BE-02 | Authentification défaillante | 🔴 | 🟡 Partiel | Session JWT (7j depuis 15.8, était 30j), bcrypt sur les mots de passe. Rate limiting par (email, IP) **et** par compte toutes IP confondues (story 15.1 + 15.8) ; mot de passe ≥10 caractères + rejet des mots de passe communs (story 15.8). **Toujours pas de MFA** (décision de périmètre ADR-008 — reporté, story dédiée à créer) ; **pas de révocation de session côté serveur** (JWT sans état par design — `maxAge` réduit borne l'exposition mais n'invalide pas un jeton déjà émis) |
 | BE-03 | Injection SQL/NoSQL/commande | 🔴 | ✅ Couvert | 100% des requêtes passent par Prisma (requêtes paramétrées) — aucune requête SQL brute (`$queryRawUnsafe`) trouvée dans le code |
 | BE-04 | Exposition de données sensibles | 🟡 | ✅ Couvert | Aucun secret sous `NEXT_PUBLIC_*` ; `passwordHash` jamais sérialisé dans les réponses API (vérifié sur `auth/mobile`, `admin/users`) |
 | BE-05 | Mauvaise configuration sécurité | 🟡 | 🟡 Partiel | Headers de sécurité déployés (CSP, X-Frame-Options, Referrer-Policy — voir FE-06) ; pas de scan de config automatisé |
@@ -79,9 +79,11 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
   `apps/web/tests/golden-path.spec.ts` (config :
   [apps/web/playwright.config.ts](../apps/web/playwright.config.ts)).
 - **Unitaires** : câblés depuis la story 15.9 (`apps/web/jest.config.js`,
-  `pnpm test`/`pnpm --filter web run test`). 26 tests, 3 fichiers —
-  [rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts),
-  [authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts) et
+  `pnpm test`/`pnpm --filter web run test`). 34 tests, 3 fichiers —
+  [rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts)
+  (+ `accountLoginRateLimitKey`, story 15.8),
+  [authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts)
+  (+ `registerSchema`, story 15.8) et
   [pagination.test.ts](../apps/web/src/lib/__tests__/pagination.test.ts)
   (story 15.3).
   **Couverture encore très partielle** : les simulateurs (`retirement.ts`,
@@ -113,4 +115,6 @@ Ordre recommandé (Critique → Haute → Moyenne) :
    restauration réel en attente (accès console Neon requis)
 8. ~~Perf : pagination manquante (story 15.3)~~ ✅ (`accounts`/`budgets`/
    `goals`/`portfolio`/`transactions`, contrat `{ data, meta }` commun)
-9. BE-02 — MFA / hardening auth (story 15.8, non bloquant Must mais recommandé)
+9. 🟡 BE-02 — hardening auth (story 15.8) ✅ (rate limit compte, session 7j,
+   politique mot de passe) ; volet MFA explicitement reporté (ADR-008,
+   non bloquant Must mais recommandé avant de vrais utilisateurs)

@@ -90,7 +90,7 @@ export function RegisterForm() {
             id="password"
             name="password"
             type={showPwd ? 'text' : 'password'}
-            placeholder="Minimum 8 caractères"
+            placeholder="Minimum 10 caractères"
             autoComplete="new-password"
             required
             value={pwdValue}

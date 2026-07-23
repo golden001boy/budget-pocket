@@ -273,6 +273,25 @@ détecte pas ce genre de rupture dans du JS compilé tiers (`@expo/cli`) — seu
 un `expo start` réel le révélerait, non exécuté dans cette session. À
 surveiller à la prochaine utilisation réelle de l'outillage mobile.
 
+### ADR-008 — Story 15.8 scoping : hardening seul, MFA reporté
+
+**Contexte** : la story 15.8 ("MFA ou hardening de l'authentification")
+couvrait explicitement les deux options — un choix délibéré au moment de la
+rédaction du PRD, pas une ambiguïté à trancher unilatéralement.
+**Décision** (vous, confirmée avant implémentation) : traiter uniquement le
+volet hardening dans cette story. Le MFA TOTP complet exigerait une
+migration de schéma (`mfaSecret`/codes de secours sur `User`), une nouvelle
+dépendance (bibliothèque TOTP), une UI d'enrôlement/QR code et une refonte du
+`CredentialsProvider` NextAuth en flux à deux étapes — un effort disproportionné
+tant que le projet n'a pas d'utilisateurs réels à protéger.
+**Conséquence** : BE-02 reste 🟡 Partiel dans [04-tests.md](04-tests.md) — le
+hardening (rate limiting compte, session raccourcie, politique de mot de
+passe) réduit le risque de brute force et l'exposition d'un jeton volé, mais
+ne couvre pas le vol de mot de passe lui-même (un attaquant avec le bon mot
+de passe reste authentifié sans second facteur). Une story MFA dédiée reste à
+créer si un lancement avec de vrais utilisateurs est planifié.
+**Détail complet** : [02-prd.md — Story 15.8](02-prd.md#story-158--mfa-ou-hardening-de-lauthentification--🟡-partiel-hardening-fait-mfa-hors-périmètre).
+
 ## 7. Mapping Story → Fichiers affectés
 
 Voir chaque fichier `specs/epic-XX-*.md` — chaque story y liste ses fichiers

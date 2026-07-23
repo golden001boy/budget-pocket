@@ -3,7 +3,15 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { encode } from 'next-auth/jwt';
 import { loginSchema } from '@budget-pocket/shared';
-import { rateLimit, getClientIp, loginRateLimitKey, LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS } from '@/lib/rateLimit';
+import {
+  rateLimit, getClientIp, loginRateLimitKey, accountLoginRateLimitKey,
+  LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS, ACCOUNT_LOGIN_ATTEMPT_LIMIT,
+} from '@/lib/rateLimit';
+
+// Kept in sync with SESSION_MAX_AGE_SECONDS in lib/auth.ts (story 15.8) — the
+// mobile client stores this token directly and has no refresh flow, so it
+// simply expires and the user re-logs in weekly instead of monthly.
+const MOBILE_TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 export async function POST(req: NextRequest) {
   const body   = await req.json();
@@ -16,6 +24,11 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req.headers);
   const limit = await rateLimit(loginRateLimitKey(email, ip), LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
   if (!limit.success) {
+    return NextResponse.json({ error: 'Trop de tentatives, réessayez plus tard' }, { status: 429 });
+  }
+
+  const accountLimit = await rateLimit(accountLoginRateLimitKey(email), ACCOUNT_LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
+  if (!accountLimit.success) {
     return NextResponse.json({ error: 'Trop de tentatives, réessayez plus tard' }, { status: 429 });
   }
 
@@ -40,7 +53,7 @@ export async function POST(req: NextRequest) {
       onboardingDone: user.onboardingDone,
     },
     secret:  process.env.NEXTAUTH_SECRET!,
-    maxAge:  30 * 24 * 60 * 60, // 30 jours
+    maxAge:  MOBILE_TOKEN_MAX_AGE_SECONDS,
   });
 
   return NextResponse.json({

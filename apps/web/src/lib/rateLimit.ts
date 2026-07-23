@@ -44,6 +44,19 @@ export function loginRateLimitKey(email: string, ip: string): string {
   return `login:${email.toLowerCase().trim()}:${ip}`;
 }
 
+// Second, account-wide layer (story 15.8): the (email, IP) limit above resets
+// for every new IP an attacker rotates through, so a distributed brute force
+// against one account is otherwise unthrottled. This key ignores IP entirely
+// and caps total attempts against the account across all sources. Set higher
+// than LOGIN_ATTEMPT_LIMIT so a legitimate user mistyping their password from
+// one IP never trips it — it only matters once attempts are spread across
+// several IPs.
+export const ACCOUNT_LOGIN_ATTEMPT_LIMIT = 10;
+
+export function accountLoginRateLimitKey(email: string): string {
+  return `login-account:${email.toLowerCase().trim()}`;
+}
+
 export function getClientIp(headers: Headers | Record<string, any> | undefined): string {
   if (!headers) return 'unknown';
   const get = (name: string): string | undefined =>

@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-23 (story 15.3 — pagination
-`accounts`/`budgets`/`goals`/`portfolio`, ✅)
+**Dernière mise à jour** : 2026-07-23 (story 15.8 — hardening
+authentification, 🟡 — volet MFA reporté, voir ADR-008)
 
 ## Vue d'ensemble des phases
 
@@ -11,7 +11,7 @@
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 7/10 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 7 ✅ + 2 🟡 sur 10 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -33,14 +33,37 @@
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 7 ✅ + 1 🟡 sur 10 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9 ✅ ; 15.7 🟡) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 7 ✅ + 2 🟡 sur 10 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9 ✅ ; 15.7, 15.8 🟡) |
 
 ## Prochaine action recommandée
 
-`bmad dev 15.8` — MFA / hardening de l'authentification (Should, non
-bloquant Must) ou `bmad dev 15.10` — migration Next.js 14 → 15+. Voir
+`bmad dev 15.10` — migration Next.js 14 → 15+ (dernière story planifiée de
+l'Epic 15 hors volet MFA). Le MFA (volet non traité de 15.8, voir ADR-008)
+n'a pas encore de story dédiée — à créer si un lancement avec de vrais
+utilisateurs est planifié. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour l'ordre complet.
+
+**Note story 15.8** : 🟡 hardening fait, MFA explicitement reporté (décision
+prise avant implémentation, voir
+[03-architecture.md ADR-008](03-architecture.md#adr-008--story-158-scoping--hardening-seul-mfa-reporté)).
+Trois changements livrés : (1) rate limiting compte (10 tentatives/15 min,
+toutes IP confondues) en plus du rate limiting par (email, IP) existant
+depuis 15.1 — ferme le contournement par rotation d'IP ; (2) durée de session
+JWT réduite de 30 à 7 jours (web + mobile) — borne la fenêtre d'exposition
+d'un jeton volé sur un appareil inactif, sans impact perceptible pour un
+utilisateur actif ; (3) politique de mot de passe renforcée sur
+l'inscription (10 caractères minimum, rejet des mots de passe communs) —
+n'affecte pas les comptes existants, `loginSchema` inchangé. Vérifié en
+direct contre la vraie BDD Neon : rejets `400` corrects sur mot de passe
+commun/trop court, inscription `201` réussie avec mot de passe fort (compte
+supprimé après test), connexion démo toujours fonctionnelle, jeton mobile
+décodé confirme `exp - iat = 7 jours`. 8 nouveaux tests unitaires (34/34
+au total), `pnpm type-check` 4/4. **Non traité** : MFA (TOTP) — nécessiterait
+migration de schéma + nouvelle dépendance + refonte du flux
+`CredentialsProvider`, hors périmètre convenu ; révocation de session
+côté serveur — la stratégie JWT est sans état par design, réduire `maxAge`
+ne permet pas d'invalider un jeton déjà émis avant expiration.
 
 **Note story 15.3** : ✅ complet. `GET /api/accounts`, `/api/budgets`,
 `/api/goals`, `/api/portfolio` acceptent désormais `?page=&pageSize=` et

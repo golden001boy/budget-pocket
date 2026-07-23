@@ -2,10 +2,19 @@ import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
-import { rateLimit, getClientIp, loginRateLimitKey, LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS } from './rateLimit';
+import {
+  rateLimit, getClientIp, loginRateLimitKey, accountLoginRateLimitKey,
+  LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS, ACCOUNT_LOGIN_ATTEMPT_LIMIT,
+} from './rateLimit';
+
+// 7 days rather than 30 (story 15.8, auth hardening): bounds how long a
+// stolen/leaked session token stays valid if the device goes unused. Active
+// users don't notice — NextAuth silently re-issues the token on activity
+// (default updateAge), so this only shortens the *idle* exposure window.
+const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 export const authOptions: NextAuthOptions = {
-  session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
+  session: { strategy: 'jwt', maxAge: SESSION_MAX_AGE_SECONDS },
   pages: {
     signIn:  '/login',
     signOut: '/login',
@@ -25,6 +34,12 @@ export const authOptions: NextAuthOptions = {
         const limit = await rateLimit(loginRateLimitKey(credentials.email, ip), LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
         if (!limit.success) {
           console.warn(`[auth] rate limited login attempt for ${credentials.email} from ${ip}`);
+          return null;
+        }
+
+        const accountLimit = await rateLimit(accountLoginRateLimitKey(credentials.email), ACCOUNT_LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
+        if (!accountLimit.success) {
+          console.warn(`[auth] account-wide rate limit hit for ${credentials.email} (last attempt from ${ip})`);
           return null;
         }
 
