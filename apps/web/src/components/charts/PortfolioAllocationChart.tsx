@@ -1,6 +1,7 @@
 'use client';
 
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Cell, ResponsiveContainer } from 'recharts';
+import { PieC as Pie, TooltipC as Tooltip, LegendC as Legend } from '@/lib/rechartsCompat';
 
 interface DataPoint {
   name: string;

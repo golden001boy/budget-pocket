@@ -1,6 +1,7 @@
 'use client';
 
-import { AreaChart, Area, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { AreaChart, ResponsiveContainer } from 'recharts';
+import { AreaC as Area, XAxisC as XAxis, TooltipC as Tooltip } from '@/lib/rechartsCompat';
 import { TrendingUp, ArrowUpRight } from 'lucide-react';
 import { NET_WORTH_DEMO, PORTFOLIO_DEMO } from './demoData';
 

@@ -6,13 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 export default async function AdminUsersPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { page?: string; role?: string; q?: string };
+  searchParams: Promise<{ page?: string; role?: string; q?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') redirect('/dashboard');
 
+  const searchParams = await searchParamsPromise;
   const page  = Math.max(1, parseInt(searchParams.page ?? '1', 10));
   const limit = 20;
   const skip  = (page - 1) * limit;

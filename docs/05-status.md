@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-23 (story 15.8 — hardening
-authentification, 🟡 — volet MFA reporté, voir ADR-008)
+**Dernière mise à jour** : 2026-07-23 (story 15.10 — migration Next.js 15 +
+React 19, ✅ — `pnpm audit` à 0 vulnérabilité, voir ADR-009)
 
 ## Vue d'ensemble des phases
 
@@ -11,7 +11,7 @@ authentification, 🟡 — volet MFA reporté, voir ADR-008)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 7 ✅ + 2 🟡 sur 10 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 8 ✅ + 2 🟡 sur 10 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -33,16 +33,54 @@ authentification, 🟡 — volet MFA reporté, voir ADR-008)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 7 ✅ + 2 🟡 sur 10 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9 ✅ ; 15.7, 15.8 🟡) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 8 ✅ + 2 🟡 sur 10 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10 ✅ ; 15.7, 15.8 🟡) |
 
 ## Prochaine action recommandée
 
-`bmad dev 15.10` — migration Next.js 14 → 15+ (dernière story planifiée de
-l'Epic 15 hors volet MFA). Le MFA (volet non traité de 15.8, voir ADR-008)
-n'a pas encore de story dédiée — à créer si un lancement avec de vrais
-utilisateurs est planifié. Voir
+Toutes les stories planifiées de l'Epic 15 sont maintenant ✅ ou 🟡 avec un
+résidu explicitement documenté (15.7 : test de restauration Neon réel,
+console requise ; 15.8 : MFA, hors périmètre convenu). Le MFA (volet non
+traité de 15.8, voir ADR-008) n'a pas encore de story dédiée — à créer si un
+lancement avec de vrais utilisateurs est planifié. Sinon, prochaine étape
+naturelle : `bmad prelaunch` pour évaluer l'écart réel à la checklist
+Phase 6 (voir aussi les deux points sans story — vérification email, tests
+de charge — notés plus bas). Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
-pour l'ordre complet.
+pour le détail complet.
+
+**Note story 15.10** : ✅ complet. `next@14.2.35 → 15.5.21` + React
+`18.3.1 → 19.2.8` — décision de scope prise avec vous avant implémentation
+après une recherche qui a montré que le monde avait bougé depuis la
+rédaction de la story (Next 15 App Router impose React 19 en pratique, le
+vrai `latest` npm de `next` est désormais 16.x, NextAuth v4 a des soucis
+documentés sur Next 15 App Router et son successeur Auth.js v5 est resté
+en beta plus d'un an) : `next@15.5.21` + React 19 en gardant NextAuth v4,
+sans aller jusqu'à Next 16 ni Auth.js v5. Détail complet :
+[03-architecture.md ADR-009](03-architecture.md#adr-009--migration-nextjs-15--react-19-story-1510).
+Le plus gros du travail n'avait rien à voir avec Next.js lui-même : faire
+coexister React 19 (web) et React 18 (mobile, Expo SDK 51) dans le même
+workspace pnpm cassait le type-check (`TS2786` sur tout composant
+`forwardRef`) à cause de `resolve-peers-from-workspace-root=true` dans
+`.npmrc` — présent depuis le commit initial, jamais documenté — qui faisait
+résoudre les peers `@types/react` de `apps/web` contre la version
+d'`apps/mobile`. Supprimé, plus deux couches de hoisting pnpm exclues
+explicitement pour `@types/react`/`@types/react-dom`. Deuxième gap sans
+rapport : `recharts` (2.13.3 puis 2.15.4) expose des primitives encore
+typées comme composants classe, incompatibles avec le typage React 19 plus
+strict — contourné via un cast centralisé
+([rechartsCompat.ts](../apps/web/src/lib/rechartsCompat.ts)), vérifié au
+runtime par rendu réel de graphiques SVG. `pnpm audit` : **14 → 0
+vulnérabilité** (mieux que l'objectif initial), grâce à une nouvelle
+vulnérabilité `sharp` (dépendance transitive de `next@15.5.21`) détectée et
+corrigée dans la même story. Vérifié en direct contre la vraie BDD Neon :
+connexion navigateur réelle (flux CSRF/callback NextAuth reproduit en
+HTTP), connexion mobile, routes paginées, route dynamique avec `params`
+async, pages serveur avec `searchParams` async, rendu du dashboard,
+création + suppression d'une transaction. `pnpm type-check` (4/4) et
+`pnpm test` (34/34) verts. **Non corrigé** : la suite Playwright (8/10
+tests échouent avec un timeout de 15s trop court face au retry Redis local
++ compile à froid, déjà documenté story 15.1) — confirmé non lié à cette
+migration, non bloquant (Playwright hors pipeline CI), non corrigé ici.
 
 **Note story 15.8** : 🟡 hardening fait, MFA explicitement reporté (décision
 prise avant implémentation, voir

@@ -1,8 +1,7 @@
 'use client';
 
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts';
+import { BarChart, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { BarC as Bar, XAxisC as XAxis, YAxisC as YAxis, TooltipC as Tooltip, LegendC as Legend } from '@/lib/rechartsCompat';
 import { formatCurrency, type Currency } from '@budget-pocket/shared';
 
 interface DataPoint {
@@ -29,7 +28,7 @@ export function SpendingTrendChart({ data, currency = 'XOF' }: Props) {
           formatter={(value: number, name: string) => [fmt(value), name === 'revenus' ? 'Revenus' : 'Dépenses']}
           contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '6px', fontSize: 13 }}
         />
-        <Legend formatter={(v) => (v === 'revenus' ? 'Revenus' : 'Dépenses')} />
+        <Legend formatter={(v: string) => (v === 'revenus' ? 'Revenus' : 'Dépenses')} />
         <Bar dataKey="revenus" fill="#10b981" radius={[4, 4, 0, 0]} />
         <Bar dataKey="depenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
       </BarChart>

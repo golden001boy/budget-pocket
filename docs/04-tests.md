@@ -60,7 +60,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | ID | Faiblesse | Priorité | État | Constat |
 |---|---|---|---|---|
 | DEV-01 | Secrets dans le code/variables | 🔴 | ✅ Couvert | `.env` gitignoré et jamais commité (vérifié) ; aucun secret en dur trouvé dans le code source |
-| DEV-02 | Dépendances vulnérables / supply chain | 🟡 | 🟡 Partiel | `pnpm audit` réduit de **46 → 14** vulnérabilités via `pnpm.overrides` (story 15.5) — critique éliminé (0 restant), hautes 26→5, modérées 16→7, basses 3→2. **Les 14 restantes sont toutes `next@14.2.35`**, nécessitent Next.js ≥15.5.16 (changement majeur, hors périmètre de 15.5) → story 15.10 |
+| DEV-02 | Dépendances vulnérables / supply chain | 🟡 | ✅ Couvert | `pnpm audit` réduit de **46 → 0** vulnérabilité. Story 15.5 : 46 → 14 via `pnpm.overrides`. Story 15.10 (migration Next.js 14 → 15.5.21 + React 19) : les 14 dernières (toutes `next@14.2.35`) fermées ; une nouvelle vulnérabilité HIGH introduite par `sharp` (dépendance transitive de `next@15.5.21`) corrigée dans la même story via override (`sharp@^0.35.3`) |
 | DEV-03 | Pipeline CI/CD non protégé | 🔴 | ✅ Couvert | Pipeline GitHub Actions (`type-check` + `test` sur push/PR, story 15.6) et protection de branche sur `master` (PR requise + check `type-check-and-test` requis) — les deux confirmés actifs via l'API GitHub |
 
 ## 5. Couche Production (PROD-01 à PROD-03)
@@ -75,9 +75,16 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 
 ## 6. État réel de la suite de tests automatisés
 
-- **E2E** : 2 specs Playwright — `apps/web/tests/auth.spec.ts`,
+- **E2E** : 2 specs Playwright (10 tests) — `apps/web/tests/auth.spec.ts`,
   `apps/web/tests/golden-path.spec.ts` (config :
-  [apps/web/playwright.config.ts](../apps/web/playwright.config.ts)).
+  [apps/web/playwright.config.ts](../apps/web/playwright.config.ts)). Pas
+  dans le pipeline CI ([.github/workflows/ci.yml](../.github/workflows/ci.yml)
+  ne lance que `type-check`/`test`). **Connu instable en local sans Redis**
+  (story 15.10) : `page.waitForURL(..., { timeout: 15000 })` est plus court
+  que le retry Redis (~9-10s, story 15.1) combiné au compile à froid de
+  `next dev` — la connexion et la navigation aboutissent réellement,
+  simplement après 15s. Diagnostiqué en détail, non corrigé (changement de
+  timeouts de test, hors périmètre d'une story de migration de version).
 - **Unitaires** : câblés depuis la story 15.9 (`apps/web/jest.config.js`,
   `pnpm test`/`pnpm --filter web run test`). 34 tests, 3 fichiers —
   [rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts)
@@ -108,7 +115,7 @@ Ordre recommandé (Critique → Haute → Moyenne) :
 4. ~~DEV-03 — pipeline CI/CD (story 15.6)~~ ✅ (workflow + protection de
    branche, tous deux confirmés actifs)
 5. ~~DEV-02 — remédiation `pnpm audit` (story 15.5)~~ ✅ (46 → 14 ; résidu
-   `next` = story 15.10)
+   `next` fermé par la story 15.10 — 14 → 0)
 6. ~~PROD-01 — monitoring Sentry (story 15.4)~~ ✅ (intégré, capture réelle
    non vérifiée faute de compte Sentry)
 7. 🟡 PROD-03 — politique backup/rollback (story 15.7) — documentée, test de
@@ -118,3 +125,6 @@ Ordre recommandé (Critique → Haute → Moyenne) :
 9. 🟡 BE-02 — hardening auth (story 15.8) ✅ (rate limit compte, session 7j,
    politique mot de passe) ; volet MFA explicitement reporté (ADR-008,
    non bloquant Must mais recommandé avant de vrais utilisateurs)
+10. ~~DEV-02 résidu — migration Next.js 14 → 15.5.21 + React 19
+    (story 15.10)~~ ✅ (14 → 0 vulnérabilité au final, y compris une
+    nouvelle introduite par `sharp` et corrigée dans la même story)

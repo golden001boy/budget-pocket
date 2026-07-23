@@ -161,7 +161,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.7 | Politique de backup/rollback BDD production | Must | S | 🟡 | Gate Phase 6 §9.1 |
 | 15.8 | MFA ou hardening de l'authentification | Should | L | 🟡 | BE-02 |
 | 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
-| 15.10 | Migrer Next.js 14 → 15+ | Should | L | 🔴 | DEV-02 (résidu de 15.5) |
+| 15.10 | Migrer Next.js 14 → 15+ | Should | L | ✅ | DEV-02 (résidu de 15.5) |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -404,21 +404,100 @@ redémarré et testé en direct (`/`, `/login`, `/api/health` — ce dernier
 confirme toujours `db` joignable, l'erreur restante étant Redis, sans lien
 avec ce changement).
 
-### Story 15.10 — Migrer Next.js 14 → 15+ · 🔴 À faire
+### Story 15.10 — Migrer Next.js 14 → 15+ · ✅ Done
 
 **Story** : En tant que mainteneur, je veux passer à une version de Next.js
 qui corrige les 14 vulnérabilités restantes du scan SCA (DoS, XSS, SSRF,
 cache poisoning, request smuggling — détail dans [04-tests.md](04-tests.md)),
 afin de fermer le dernier residu de la story 15.5.
 
-**Pourquoi une story séparée** : `next@14 → 15` est un changement majeur —
-API de requête asynchrone (`cookies()`/`headers()` deviennent `async`),
-changements de comportement du cache, exigences de version React à
-revalider. Impacte potentiellement toutes les routes API et pages de
-`apps/web`. Ne rentre pas dans le calibrage S/M d'une story de sécurité
-ponctuelle ; nécessite son propre cycle de test complet (`bmad qa` dédié).
+**Recherche préalable (avant tout code)** : le monde a bougé depuis la
+rédaction de cette story. Next.js 15 impose React 19 comme minimum réel pour
+l'App Router (le `peerDependencies` npm accepte encore `^18.2.0`, mais c'est
+un vestige de compatibilité Pages Router — confirmé faux en pratique pour
+l'App Router). NextAuth v4 a des soucis documentés sur Next 15 App Router ;
+Auth.js v5 (son successeur) est encore en beta après plus d'un an
+(`5.0.0-beta.32` au moment de cette story). Le vrai `latest` npm de `next`
+est désormais 16.x, 15.x étant maintenu via un tag `backport` (`15.5.21` —
+exactement la version déjà citée dans nos docs comme corrigeant les 14
+vulnérabilités). **Décision prise avec vous avant implémentation** :
+`next@15.5.21` + React 19, en gardant NextAuth v4 (pas de réécriture vers
+Auth.js v5 beta, pas de saut à Next 16). Voir
+[03-architecture.md ADR-009](03-architecture.md#adr-009--migration-nextjs-15--react-19-story-1510).
 
-**Non commencée.**
+**Critères d'acceptation**
+- [x] `next` 14.2.35 → 15.5.21, `react`/`react-dom` 18.3.1 → 19.2.8,
+      `@types/react`/`@types/react-dom` → 19.2.17/19.2.3,
+      `eslint-config-next` → 15.5.21. `apps/mobile` reste sur React 18.2.0
+      (Expo SDK 51) — non touché par cette story.
+- [x] APIs asynchrones (breaking change Next 15) : `params` sur les routes
+      dynamiques (`api/goals/[id]`, `api/transactions/[id]`) et
+      `searchParams` sur les pages serveur (`expenses`,
+      `settings/billing`, `admin/users`) convertis en `Promise` + `await`.
+      Aucun usage de `cookies()`/`headers()`/`draftMode()` trouvé dans le
+      code applicatif (NextAuth gère ça en interne).
+- [x] `next.config.mjs` : `experimental.serverComponentsExternalPackages`
+      renommé en `serverExternalPackages` (stable depuis 15).
+- [x] **Bug de résolution de types découvert et corrigé** (le plus gros du
+      travail de cette story, sans rapport avec Next.js lui-même) : élever
+      `apps/web` vers React 19 tout en gardant `apps/mobile` sur React 18
+      dans le même workspace pnpm cassait le type-check (`TS2786`,
+      composants shadcn/Radix inutilisables comme JSX) — causé par
+      `resolve-peers-from-workspace-root=true` dans `.npmrc` (présent
+      depuis le commit initial), qui faisait résoudre les peers `@types/react`
+      des paquets de `apps/web` contre la version 18.3.1 d'`apps/mobile`.
+      Supprimé, plus deux couches de hoisting pnpm (racine ET la couche
+      cachée `.pnpm/node_modules/`) explicitement exclues pour
+      `@types/react`/`@types/react-dom`. Détail complet : ADR-009.
+- [x] **`recharts` incompatible React 19** : `recharts@2.13.3` (puis
+      `2.15.4`, qui ajoute React 19 aux `peerDependencies` sans corriger
+      tous les types) expose plusieurs primitives (`XAxis`, `YAxis`,
+      `Tooltip`, `Legend`, `Bar`, `Area`, `Pie`, `Line`, `ReferenceLine`)
+      encore typées comme composants classe à un seul argument, incompatible
+      avec le `JSX.ElementType` plus strict de React 19. Contournement
+      centralisé dans
+      [apps/web/src/lib/rechartsCompat.ts](../apps/web/src/lib/rechartsCompat.ts)
+      (cast vers `ComponentType<any>`, aucun changement de comportement au
+      runtime) plutôt qu'un saut vers `recharts@3` (breaking API, hors
+      périmètre). Utilisé dans les 5 composants `charts/` + les 2 composants
+      `marketing/` (landing page).
+- [x] `sharp@0.34.5` (dépendance transitive de `next@15.5.21` lui-même, via
+      l'optimisation d'images) introduisait une nouvelle vulnérabilité
+      HIGH (CVE-2026-33327 et 3 autres, libvips). Corrigée via
+      `pnpm.overrides` (`sharp@^0.35.3`).
+- [x] Hook `onRequestError` ajouté à `instrumentation.ts` — Next 15 le
+      réclame explicitement pour capturer les erreurs de Server Components
+      imbriqués (Sentry log un avertissement au boot sans lui).
+- [x] `pnpm type-check` (4/4) et `pnpm test` (34/34) verts.
+- [x] `pnpm audit` : **14 → 0 vulnérabilité** — meilleur que l'objectif
+      initial de cette story (qui visait seulement les 14 de `next`).
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo :
+      connexion mobile (`/api/auth/mobile`), connexion navigateur réelle
+      (flux CSRF + callback NextAuth reproduit directement en HTTP),
+      routes paginées (`accounts`, `goals`), route dynamique
+      `transactions/[id]` (GET), pages serveur avec `searchParams` async
+      (`/expenses`, `/settings/billing`), rendu du dashboard (17 éléments
+      `<svg>` confirmant que les graphiques recharts s'affichent
+      réellement), création + suppression d'une transaction (201 puis 204).
+      CSP toujours correctement appliquée.
+- [ ] **Suite Playwright** — 8/10 specs échouent avec le délai `next dev`
+      froid + latence de retry Redis déjà documentée (~9-10s, story 15.1) :
+      `page.waitForURL(/dashboard/, { timeout: 15_000 })` est trop court
+      dans cet environnement local sans Redis. Diagnostiqué en détail avec
+      un script Playwright ad hoc : la connexion NextAuth aboutit
+      réellement (cookie de session valide, `/api/auth/session` renvoie
+      l'utilisateur), la navigation vers `/dashboard` aboutit aussi (RSC
+      200, chunks JS chargés) — juste après le délai de 15s. Confirmé non
+      lié à cette migration (le délai Redis est antérieur, non bloquant
+      pour la Phase 6 vu que Playwright n'est pas dans le pipeline CI).
+      Non corrigé ici — augmenter les timeouts des specs est un changement
+      de test, hors périmètre d'une story de migration de version.
+
+**Implémentation** : `apps/web/package.json`, `package.json` (racine,
+`pnpm.overrides`), `.npmrc`, `apps/web/tsconfig.json`,
+`apps/web/next.config.mjs`, `apps/web/src/lib/rechartsCompat.ts`,
+`apps/web/src/instrumentation.ts`,
+[03-architecture.md ADR-009](03-architecture.md#adr-009--migration-nextjs-15--react-19-story-1510).
 
 ---
 

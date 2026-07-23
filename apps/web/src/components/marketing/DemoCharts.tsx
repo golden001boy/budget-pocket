@@ -1,10 +1,7 @@
 'use client';
 
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-  BarChart, Bar,
-} from 'recharts';
+import { AreaChart, CartesianGrid, ResponsiveContainer, PieChart, Cell, BarChart } from 'recharts';
+import { AreaC as Area, XAxisC as XAxis, YAxisC as YAxis, TooltipC as Tooltip, PieC as Pie, LegendC as Legend, BarC as Bar } from '@/lib/rechartsCompat';
 import { NET_WORTH_DEMO, PORTFOLIO_DEMO, CASHFLOW_DEMO } from './demoData';
 
 const fmtCompact = (n: number) =>
@@ -88,7 +85,7 @@ export function DemoCharts() {
             <Tooltip formatter={(v: number, name: string) => [`${v}%`, name]} contentStyle={tooltipStyle} />
             <Legend
               iconType="circle"
-              formatter={(v) => <span className="text-xs text-slate-300">{v}</span>}
+              formatter={(v: string) => <span className="text-xs text-slate-300">{v}</span>}
             />
           </PieChart>
         </ResponsiveContainer>
@@ -104,7 +101,7 @@ export function DemoCharts() {
               formatter={(v: number, name: string) => [fmtCompact(v), name === 'revenus' ? 'Revenus' : 'Dépenses']}
               contentStyle={tooltipStyle}
             />
-            <Legend formatter={(v) => <span className="text-xs text-slate-300">{v === 'revenus' ? 'Revenus' : 'Dépenses'}</span>} />
+            <Legend formatter={(v: string) => <span className="text-xs text-slate-300">{v === 'revenus' ? 'Revenus' : 'Dépenses'}</span>} />
             <Bar dataKey="revenus" fill="#059669" radius={[4, 4, 0, 0]} maxBarSize={24} />
             <Bar dataKey="depenses" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={24} />
           </BarChart>

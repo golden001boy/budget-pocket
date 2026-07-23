@@ -1,8 +1,7 @@
 'use client';
 
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend,
-} from 'recharts';
+import { LineChart, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { LineC as Line, XAxisC as XAxis, YAxisC as YAxis, TooltipC as Tooltip, ReferenceLineC as ReferenceLine, LegendC as Legend } from '@/lib/rechartsCompat';
 import { formatCurrency, type Currency } from '@budget-pocket/shared';
 
 interface DataPoint {
@@ -30,7 +29,7 @@ export function ForecastChart({ data, currency = 'XOF', splitIndex }: Props) {
           formatter={(v: number, name: string) => [formatCurrency(v, currency), name === 'actual' ? 'Réel' : 'Prévision']}
           contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '6px', fontSize: 13 }}
         />
-        <Legend formatter={(v) => (v === 'actual' ? 'Réel' : 'Prévision')} />
+        <Legend formatter={(v: string) => (v === 'actual' ? 'Réel' : 'Prévision')} />
         {splitLabel && <ReferenceLine x={splitLabel} stroke="#6b7280" strokeDasharray="4 4" label={{ value: "Aujourd'hui", position: 'top', fontSize: 11 }} />}
         <Line type="monotone" dataKey="actual"   stroke="#10b981" strokeWidth={2} dot={false} connectNulls />
         <Line type="monotone" dataKey="forecast" stroke="#3b82f6" strokeWidth={2} dot={false} strokeDasharray="5 5" connectNulls />

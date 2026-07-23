@@ -16,10 +16,11 @@ interface SearchParams {
   month?:    string;
 }
 
-export default async function ExpensesPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function ExpensesPage({ searchParams: searchParamsPromise }: { searchParams: Promise<SearchParams> }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
+  const searchParams = await searchParamsPromise;
   const page     = Math.max(1, Number(searchParams.page ?? 1));
   const pageSize = 20;
   const fmt      = (n: number) => formatCurrency(n, session.user.currency);

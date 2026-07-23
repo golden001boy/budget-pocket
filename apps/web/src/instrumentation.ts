@@ -1,3 +1,5 @@
+import * as Sentry from '@sentry/nextjs';
+
 // Next.js instrumentation hook — runs once per server/edge runtime at boot,
 // before any route handler. This is where Sentry needs to be initialized
 // for anything that isn't the browser (see instrumentation-client.ts for
@@ -11,3 +13,8 @@ export async function register() {
     await import('../sentry.edge.config');
   }
 }
+
+// Next.js 15 dedicated hook for errors thrown in nested React Server
+// Components, which never reach a route handler's own try/catch. Without
+// this, those errors are silently swallowed instead of reaching Sentry.
+export const onRequestError = Sentry.captureRequestError;

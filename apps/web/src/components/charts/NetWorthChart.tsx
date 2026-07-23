@@ -1,8 +1,7 @@
 'use client';
 
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts';
+import { AreaChart, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { AreaC as Area, XAxisC as XAxis, YAxisC as YAxis, TooltipC as Tooltip } from '@/lib/rechartsCompat';
 import { formatCurrency, type Currency } from '@budget-pocket/shared';
 
 interface DataPoint {

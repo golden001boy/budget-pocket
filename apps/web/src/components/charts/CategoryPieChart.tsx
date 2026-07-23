@@ -1,6 +1,7 @@
 'use client';
 
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Cell, ResponsiveContainer } from 'recharts';
+import { PieC as Pie, TooltipC as Tooltip, LegendC as Legend } from '@/lib/rechartsCompat';
 import { EXPENSE_CATEGORIES } from '@budget-pocket/shared';
 
 interface DataPoint {
@@ -39,7 +40,7 @@ export function CategoryPieChart({ data }: Props) {
           formatter={(v: number) => [new Intl.NumberFormat('fr-FR').format(v) + ' FCFA', '']}
           contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '6px', fontSize: 13 }}
         />
-        <Legend formatter={(v) => <span className="text-xs">{v}</span>} />
+        <Legend formatter={(v: string) => <span className="text-xs">{v}</span>} />
       </PieChart>
     </ResponsiveContainer>
   );

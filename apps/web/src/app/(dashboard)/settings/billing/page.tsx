@@ -17,13 +17,14 @@ const PREMIUM_FEATURES = [
 ];
 
 export default async function BillingPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { success?: string; canceled?: string };
+  searchParams: Promise<{ success?: string; canceled?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
+  const searchParams = await searchParamsPromise;
   const [user, subscription] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.user.id } }),
     prisma.subscription.findFirst({

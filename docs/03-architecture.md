@@ -12,7 +12,7 @@ qu'il était prévu. Voir [01-brainstorming.md](01-brainstorming.md) et
 | Composant | Choix | Justification |
 |---|---|---|
 | Monorepo | pnpm workspaces + Turborepo | Un seul dépôt pour web + mobile + packages partagés, avec cache de build par tâche |
-| Web | Next.js 14 (App Router), TypeScript | Route Handlers = API + pages dans un seul framework ; SSR pour les pages authentifiées |
+| Web | Next.js 15 (App Router), TypeScript | Route Handlers = API + pages dans un seul framework ; SSR pour les pages authentifiées |
 | Mobile | Expo SDK 51 (Expo Router), React Native 0.74 | Développement iOS/Android unifié sans code natif séparé ; consomme la même API que le web |
 | BDD | PostgreSQL via Prisma ORM | Types générés depuis le schéma, migrations versionnées, `Decimal` natif pour les montants |
 | Cache | Redis (`ioredis`) | Fronts les lectures lentes/répétées (prix de marché) |
@@ -25,7 +25,7 @@ qu'il était prévu. Voir [01-brainstorming.md](01-brainstorming.md) et
 
 ```
 apps/
-  web/      Next.js 14 (App Router) — surface produit principale
+  web/      Next.js 15 (App Router) — surface produit principale
   mobile/   Expo / React Native (Expo Router) — app mobile compagnon
 packages/
   shared/       Schémas Zod, types DTO, constantes (catégories, devises, thème,
@@ -248,7 +248,10 @@ alignement avec le transform de build de Next.js). `@types/jest` a été ajouté
 (absent malgré `jest` en devDependency depuis le début).
 **Conséquence** : si le projet migre vers Next.js 15+ à l'avenir, revalider
 si `jest@30` (ou plus récent) redevient compatible et si le pin peut être
-levé.
+levé. **Mise à jour (story 15.10)** : migration faite, `next/jest` sous
+`next@15.5.21` fonctionne toujours avec `jest@29.x` sans changement
+nécessaire (34/34 tests verts) — le pin reste justifié tel quel, non
+revalidé plus loin par manque de signal contraire.
 
 ### ADR-007 — Overrides `pnpm` pour la remédiation SCA (story 15.5)
 **Contexte** : `pnpm audit` remontait 46 vulnérabilités, presque toutes dans
@@ -291,6 +294,86 @@ ne couvre pas le vol de mot de passe lui-même (un attaquant avec le bon mot
 de passe reste authentifié sans second facteur). Une story MFA dédiée reste à
 créer si un lancement avec de vrais utilisateurs est planifié.
 **Détail complet** : [02-prd.md — Story 15.8](02-prd.md#story-158--mfa-ou-hardening-de-lauthentification--🟡-partiel-hardening-fait-mfa-hors-périmètre).
+
+### ADR-009 — Migration Next.js 15 + React 19 (story 15.10)
+
+**Contexte** : `next@14.2.35` portait les 14 dernières vulnérabilités
+résiduelles du scan SCA (story 15.5), toutes sans correctif dans la branche
+14.x. Recherche préalable : Next 15 App Router impose React 19 en pratique
+(le `peerDependencies` npm accepte encore `^18.2.0`, mais c'est un vestige
+Pages Router — confirmé faux pour l'App Router) ; NextAuth v4 a des
+problèmes documentés sur Next 15 App Router, et son successeur Auth.js v5
+est resté en beta plus d'un an ; le vrai `latest` npm de `next` est
+désormais 16.x, 15.x étant maintenu via un tag `backport` (`15.5.21`).
+**Décision** (vous, avant implémentation) : `next@15.5.21` + React 19, sans
+réécrire l'auth vers Auth.js v5 beta ni sauter à Next 16 — le scope minimal
+qui ferme les 14 vulnérabilités sans absorber un risque supplémentaire non
+nécessaire.
+
+**Changements de code** :
+- `params`/`searchParams` convertis en `Promise` + `await` (2 route
+  handlers dynamiques, 3 pages serveur).
+- `next.config.mjs` : `experimental.serverComponentsExternalPackages` →
+  `serverExternalPackages` (stable en 15).
+- `instrumentation.ts` : ajout du hook `onRequestError` (Sentry le réclame
+  explicitement sous Next 15 pour les erreurs de Server Components imbriqués).
+
+**Le vrai coût de cette story — un bug de résolution `@types/react` sans
+rapport avec Next.js** : élever `apps/web` vers React 19 en gardant
+`apps/mobile` sur React 18 (Expo SDK 51, qui ne supporte pas React 19) dans
+le même workspace pnpm a fait ressurgir une variante du problème qu'ADR-003
+avait déjà résolu une fois — sauf que cette fois les deux apps ont
+*légitimement* besoin de majors différentes, donc un pin unique
+(la solution d'ADR-003) n'est plus applicable. Diagnostic (`tsc
+--traceResolution`, inspection directe de `node_modules/.pnpm`) :
+- `resolve-peers-from-workspace-root=true` dans `.npmrc` (présent depuis le
+  commit initial, jamais documenté par une ADR) faisait résoudre les peers
+  `@types/react` des paquets de `apps/web` (ex. `@radix-ui/react-select`,
+  peer `"@types/react": "*"`) contre `apps/mobile` — **supprimé**.
+- `shamefully-hoist=true` hoistait `@types/react` vers la racine du
+  workspace ET vers une seconde couche cachée (`node_modules/.pnpm/node_modules/`,
+  gouvernée séparément par `hoist-pattern`, pas par `public-hoist-pattern`) —
+  **remplacé** par `public-hoist-pattern`/`hoist-pattern` explicites avec
+  négation (`!@types/react`, `!@types/react-dom`) sur les deux couches.
+- `apps/web/tsconfig.json` référençait aussi `../../node_modules/@types`
+  dans `typeRoots` (ADR-003, inoffensif quand racine et web pointaient vers
+  la même version) — retiré par hygiène, même si la vraie cause était les
+  deux points ci-dessus.
+
+Symptôme observé avant correctif : `TS2786` sur tout composant utilisant
+`forwardRef` (shadcn/Radix) — `bigint` (ajouté à `ReactNode` par React 19)
+non assignable au `ReactNode` d'une copie fantôme de `@types/react@18.3.1`
+toujours chargée en parallèle de la 19.2.17 réellement utilisée.
+
+**`recharts` — deuxième incompatibilité React 19, sans rapport avec le
+bug ci-dessus** : `recharts@2.13.3` (puis `2.15.4`, qui ajoute React 19 aux
+`peerDependencies` sans corriger tous ses types) expose des primitives
+(`XAxis`, `YAxis`, `Tooltip`, `Legend`, `Bar`, `Area`, `Pie`, `Line`,
+`ReferenceLine`) encore typées comme composants classe à un seul argument
+constructeur, incompatibles avec le `JSX.ElementType` plus strict de React
+19 — vrai gap de types tiers, fonctionne correctement au runtime (confirmé
+par `peerDependencies` et par le rendu réel de graphiques SVG en direct).
+Contourné via un cast centralisé
+([apps/web/src/lib/rechartsCompat.ts](../apps/web/src/lib/rechartsCompat.ts))
+plutôt qu'un saut vers `recharts@3` (breaking API, hors périmètre).
+
+**Résidu découvert au passage** : `sharp@0.34.5` (dépendance transitive de
+`next@15.5.21` pour l'optimisation d'images) portait une nouvelle
+vulnérabilité HIGH (CVE-2026-33327 + 3 autres, libvips) — corrigée via
+`pnpm.overrides` (`sharp@^0.35.3`). `pnpm audit` final : **0 vulnérabilité**
+(objectif initial : seulement les 14 de `next`).
+
+**Non résolu, documenté plutôt que masqué** : la suite Playwright (2
+specs, 10 tests) échoue à 8/10 avec `page.waitForURL(..., { timeout: 15000 })`
+— diagnostiqué avec un script Playwright ad hoc reproduisant le flux
+NextAuth (CSRF + callback) : la connexion aboutit réellement, la navigation
+vers `/dashboard` aboutit aussi, simplement après le délai de 15s à cause du
+retry Redis (~9-10s, déjà documenté story 15.1, pas de Redis local) combiné
+au compile à froid de `next dev`. Confirmé antérieur à cette migration, non
+corrigé ici (changement de timeouts de test, hors périmètre ; Playwright
+n'est de toute façon pas dans le pipeline CI).
+
+**Détail complet** : [02-prd.md — Story 15.10](02-prd.md#story-1510--migrer-nextjs-14--15--✅-done).
 
 ## 7. Mapping Story → Fichiers affectés
 

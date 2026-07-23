@@ -30,15 +30,16 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 7 ✅ + 2 🟡
+sécurité/prod — rate limiting, CI/CD, monitoring, backup) est 🟡 8 ✅ + 2 🟡
 sur 10 (15.1 rate limiting, 15.2 validation Zod, 15.3 pagination
 accounts/budgets/goals/portfolio, 15.4 monitoring Sentry, 15.5 scan SCA +
 remédiation, 15.6 pipeline CI/CD + protection de branche, 15.9 test runner
-Jest — tous ✅ ; 15.7 politique backup/rollback 🟡 documentée mais non
-vérifiée par un test réel ; 15.8 hardening authentification 🟡 fait
-(rate limit compte, session 7j, mot de passe renforcé) mais volet MFA
-explicitement reporté, voir ADR-008 ; BDD Neon opérationnelle, Redis encore
-manquant) et bloque la Phase 6. Dépôt distant :
+Jest, 15.10 migration Next.js 15 + React 19 — tous ✅ ; 15.7 politique
+backup/rollback 🟡 documentée mais non vérifiée par un test réel ; 15.8
+hardening authentification 🟡 fait (rate limit compte, session 7j, mot de
+passe renforcé) mais volet MFA explicitement reporté, voir ADR-008 ; BDD
+Neon opérationnelle, Redis encore manquant) et bloque la Phase 6. Dépôt
+distant :
 `github.com/golden001boy/budget-pocket` (**public**). `pnpm test` fonctionne
 désormais à la racine — toute nouvelle story doit inclure ses tests
 unitaires, plus d'ADR de report type ADR-005. Voir
@@ -55,10 +56,14 @@ lancement en production réelle.
 `.env`) — SDK actif en no-op, pas d'erreur. Ajouter un DSN réel active la
 capture sans changement de code.
 
-**`next@14.2.35` reste sur 14 vulnérabilités connues** (aucune corrigible
-sans passer à Next.js ≥15.5.16 — changement majeur) — story **15.10** créée
-pour cette migration, non commencée. Toutes les autres dépendances
-vulnérables ont été patchées via `pnpm.overrides` (story 15.5).
+**`pnpm audit` est à 0 vulnérabilité** depuis la story 15.10 (migration
+`next@14.2.35 → 15.5.21` + React 18 → 19 sur `apps/web` uniquement ;
+`apps/mobile` reste sur React 18/Expo SDK 51). Voir
+[docs/03-architecture.md ADR-009](docs/03-architecture.md#adr-009--migration-nextjs-15--react-19-story-1510)
+pour le détail — notamment un bug de résolution `@types/react` sans rapport
+avec Next.js (`.npmrc` avait `resolve-peers-from-workspace-root=true`
+depuis le commit initial, jamais documenté) qui a fait le plus gros du
+travail de cette story.
 
 **`master` est protégé** depuis la story 15.6 : PR requise + check
 `type-check-and-test` requis avant fusion. Un push direct sur `master` par
@@ -68,8 +73,9 @@ direct.
 
 ## Stack & commandes essentielles
 
-Monorepo pnpm/Turborepo — Next.js 14 (web) + Expo/React Native (mobile) +
-Prisma/PostgreSQL. Détail complet : [docs/03-architecture.md](docs/03-architecture.md).
+Monorepo pnpm/Turborepo — Next.js 15 (web, React 19) + Expo/React Native
+(mobile, React 18) + Prisma/PostgreSQL. Détail complet :
+[docs/03-architecture.md](docs/03-architecture.md).
 
 ```bash
 pnpm install          # installe + génère le client Prisma (postinstall)
