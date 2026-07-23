@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
 import { createBudgetSchema } from '@budget-pocket/shared';
 
 export async function GET(req: Request) {
@@ -11,11 +12,13 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const month = parseInt(searchParams.get('month') ?? String(new Date().getMonth() + 1), 10);
   const year  = parseInt(searchParams.get('year')  ?? String(new Date().getFullYear()),  10);
+  const { skip, take, page, pageSize } = parsePagination(searchParams);
+  const where = { userId: session.user.id, month, year };
 
-  const budgets = await prisma.budget.findMany({
-    where:   { userId: session.user.id, month, year },
-    orderBy: { category: 'asc' },
-  });
+  const [budgets, total] = await Promise.all([
+    prisma.budget.findMany({ where, orderBy: { category: 'asc' }, skip, take }),
+    prisma.budget.count({ where }),
+  ]);
 
   return NextResponse.json({
     data: budgets.map(b => ({
@@ -24,6 +27,7 @@ export async function GET(req: Request) {
       spent:    Number(b.spent),
       alertAt:  b.alertAt ? Number(b.alertAt) : null,
     })),
+    meta: buildPaginationMeta(total, page, pageSize),
   });
 }
 

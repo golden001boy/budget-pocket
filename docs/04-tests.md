@@ -47,7 +47,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | API-01 | BOLA | 🔴 | ✅ Couvert | Voir BE-01 |
 | API-02 | Broken Authentication | 🔴 | 🟡 Partiel | Voir BE-02 |
 | API-03 | Broken Object Property Level Auth | 🟡 | ✅ Couvert | Les schémas Zod whitelistent les champs acceptés sur toutes les routes mutatives connues, y compris `goals/[id]` PATCH depuis la story 15.2 |
-| API-04 | Unrestricted Resource Consumption | 🟡 | 🟡 Partiel | Login/inscription limités (story 15.1, ✅) ; pas de limite de taille de payload ni de quota sur les autres routes mutatives |
+| API-04 | Unrestricted Resource Consumption | 🟡 | 🟡 Partiel | Login/inscription limités (story 15.1, ✅) ; listes paginées et `pageSize` plafonné à 100 sur `accounts`/`budgets`/`goals`/`portfolio`/`transactions` (story 15.3, ✅) ; pas de limite de taille de payload sur les routes mutatives |
 | API-05 | Broken Function Level Auth | 🔴 | ✅ Couvert | `middleware.ts` protège `/admin/*` par rôle (`token.role !== 'ADMIN'` → redirect) et toutes les routes API sensibles par le matcher |
 | API-06 | Unrestricted Access to Business Flows | 🟡 | 🟡 Partiel | Brute force de connexion/spam d'inscription limités (story 15.1, ✅) ; pas de protection anti-bot ni de limite métier sur les autres flux (ex. création de transactions en masse) |
 | API-07 | SSRF | 🟡 | ✅ Couvert | Les seuls appels sortants (`CoinGecko`, scraper BRVM) ciblent des URLs codées en dur, aucune URL fournie par l'utilisateur n'est fetchée côté serveur |
@@ -79,15 +79,16 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
   `apps/web/tests/golden-path.spec.ts` (config :
   [apps/web/playwright.config.ts](../apps/web/playwright.config.ts)).
 - **Unitaires** : câblés depuis la story 15.9 (`apps/web/jest.config.js`,
-  `pnpm test`/`pnpm --filter web run test`). 19 tests, 2 fichiers —
-  [rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts) et
-  [authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts).
+  `pnpm test`/`pnpm --filter web run test`). 26 tests, 3 fichiers —
+  [rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts),
+  [authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts) et
+  [pagination.test.ts](../apps/web/src/lib/__tests__/pagination.test.ts)
+  (story 15.3).
   **Couverture encore très partielle** : les simulateurs (`retirement.ts`,
   `realEstate.ts`, `stockGrowth.ts`), l'analytique (`forecast.ts`,
-  `snapshot.ts`) et les handlers de routes API n'ont toujours aucun test —
-  seuls `rateLimit.ts` et les schémas Zod d'auth/goals sont couverts à ce
-  jour. `apps/mobile` n'a pas de runner (nécessiterait `jest-expo`, hors
-  périmètre de 15.9).
+  `snapshot.ts`) et les handlers de routes API (logique métier au-delà du
+  parsing de pagination) n'ont toujours aucun test. `apps/mobile` n'a pas de
+  runner (nécessiterait `jest-expo`, hors périmètre de 15.9).
 - **Sécurité** : aucun test automatisé des items du catalogue §8 — cet audit
   est une revue de code manuelle, pas une exécution de suite de tests.
 
@@ -110,5 +111,6 @@ Ordre recommandé (Critique → Haute → Moyenne) :
    non vérifiée faute de compte Sentry)
 7. 🟡 PROD-03 — politique backup/rollback (story 15.7) — documentée, test de
    restauration réel en attente (accès console Neon requis)
-8. Perf : pagination manquante (story 15.3)
+8. ~~Perf : pagination manquante (story 15.3)~~ ✅ (`accounts`/`budgets`/
+   `goals`/`portfolio`/`transactions`, contrat `{ data, meta }` commun)
 9. BE-02 — MFA / hardening auth (story 15.8, non bloquant Must mais recommandé)

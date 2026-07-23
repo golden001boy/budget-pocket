@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-22 (story 15.7 — politique backup/rollback,
-🟡 documentée, test de restauration réel en attente)
+**Dernière mise à jour** : 2026-07-23 (story 15.3 — pagination
+`accounts`/`budgets`/`goals`/`portfolio`, ✅)
 
 ## Vue d'ensemble des phases
 
@@ -11,7 +11,7 @@
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 6/10 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 7/10 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -33,14 +33,36 @@
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 6 ✅ + 1 🟡 sur 10 (15.1, 15.2, 15.4, 15.5, 15.6, 15.9 ✅ ; 15.7 🟡) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 7 ✅ + 1 🟡 sur 10 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9 ✅ ; 15.7 🟡) |
 
 ## Prochaine action recommandée
 
-`bmad dev 15.3` — pagination sur `/api/accounts`, `/api/budgets`,
-`/api/goals`, `/api/portfolio`. Voir
+`bmad dev 15.8` — MFA / hardening de l'authentification (Should, non
+bloquant Must) ou `bmad dev 15.10` — migration Next.js 14 → 15+. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour l'ordre complet.
+
+**Note story 15.3** : ✅ complet. `GET /api/accounts`, `/api/budgets`,
+`/api/goals`, `/api/portfolio` acceptent désormais `?page=&pageSize=` et
+renvoient `{ data, meta }` (`meta.pageSize` plafonné à 100), même contrat que
+`/api/transactions` — parsing centralisé et testé dans
+[apps/web/src/lib/pagination.ts](../apps/web/src/lib/pagination.ts) (7 tests,
+couvrant notamment le repli sur les valeurs par défaut pour des paramètres
+invalides plutôt qu'un crash). `/api/transactions`, qui paginait déjà mais
+sans plafond ni validation d'entrée, réutilise maintenant le même helper.
+Vérifié en direct contre la vraie BDD Neon avec le compte de démo
+(PREMIUM — limites `Infinity`, donc le cas d'usage réel de cette story) :
+les 4 nouvelles routes + `/api/transactions` renvoient les bons
+`total`/`totalPages`, `pageSize=999999` est bien plafonné à 100, et
+`page=abc&pageSize=xyz` retombe sur les défauts sans erreur 500. Bug
+découvert et corrigé au passage : l'écran mobile Investissements lisait
+`data.items` sur une réponse qui était en réalité un tableau brut — la liste
+était donc **toujours vide** sur mobile ; corrigé (`data.data`, cohérent avec
+le nouveau contrat). `pnpm type-check` (4/4) et `pnpm test` (26/26) verts.
+**Non couvert** : pas de pager/infinite-scroll côté UI mobile (charge
+toujours seulement la page 1) — les pages web équivalentes lisent Prisma
+côté serveur directement, donc hors périmètre de ce changement de contrat
+API.
 
 **Note story 15.7** : 🟡 politique documentée, pas encore vérifiée. Le
 mécanisme de restauration Neon (branchement par LSN, réversible via branche

@@ -120,12 +120,23 @@ résumé JSON. Pas de session utilisateur impliquée.
 
 ## 5. APIs — contrats, formats, erreurs
 
-- **Format de succès** : soit l'objet/la liste directement
-  (`NextResponse.json(items)`), soit enveloppé `{ data: ... }` selon la route
-  — **incohérent d'une route à l'autre** (ex. `/api/portfolio` renvoie un
-  tableau brut, `/api/transactions` renvoie `{ transactions, total }`). Non
-  documenté formellement à ce jour — à corriger avant d'ouvrir l'API à des
-  consommateurs externes.
+- **Format de succès (listes)** : depuis la story 15.3, `GET
+  /api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` et
+  `/api/transactions` renvoient toutes `{ data: T[], meta: PaginationMeta }`
+  (`PaginationMeta = { total, page, pageSize, totalPages }`, type partagé
+  `packages/shared/src/types/api.ts`, jusque-là défini mais jamais utilisé).
+  Pagination via `?page=&pageSize=`, parsing centralisé et testé dans
+  [apps/web/src/lib/pagination.ts](../apps/web/src/lib/pagination.ts)
+  (`pageSize` plafonné à 100, entrées non numériques/négatives retombent sur
+  les valeurs par défaut au lieu de produire un `NaN` Prisma). Avant cette
+  story, `/api/portfolio`/`/api/accounts`/`/api/goals` renvoyaient un tableau
+  brut non borné — un compte Premium (`maxPortfolioItems`/`maxGoals`/
+  `maxLinkedAccounts` = `Infinity`, voir `packages/shared/src/constants/limits.ts`)
+  pouvait donc déclencher une requête `findMany` non paginée (API-04).
+- **Format de succès (item unique / création)** : enveloppé `{ data: ... }`
+  sur les routes migrées vers le contrat `ApiResponse<T>` ; encore variable
+  (objet nu) sur certaines routes non touchées par 15.2/15.3 — non documenté
+  formellement au-delà de ce fichier à ce jour.
 - **Format d'erreur** : `{ error: string }` avec status HTTP approprié (401
   non authentifié, 404 non trouvé/non autorisé, 400 validation échouée). Pas
   de code d'erreur structuré (`code: "..."`) sur la plupart des routes, sauf
@@ -281,7 +292,7 @@ Utilisés dans [02-prd.md](02-prd.md) et [05-status.md](05-status.md) :
 |---|---|---|---|
 | a | **Index BDD** | Index sur colonnes filtrées/triées | 🟡 `Budget`/`RecurringRule` indexés ; `Transaction.userId`/`date` non indexés explicitement (à mesurer avant montée en charge) |
 | b | **Background jobs** | Pas de tâche lente dans la requête HTTP | ✅ 4 jobs cron sortent le travail lourd (prix, snapshots, alertes, récurrences) |
-| c | **Pagination** | Obligatoire sur toutes les listes | 🔴 Présente sur `/api/transactions` uniquement — absente sur accounts/budgets/goals/portfolio (story 15.3) |
+| c | **Pagination** | Obligatoire sur toutes les listes | ✅ `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio`, `/api/transactions` — contrat commun `{ data, meta }`, `pageSize` plafonné à 100 (story 15.3) |
 | d | **Secrets** | Clés API côté serveur uniquement | ✅ Toutes les clés (Stripe, Anthropic, CoinGecko...) sont lues côté serveur (`process.env`) — aucune n'est préfixée `NEXT_PUBLIC_` |
 | e | **Migrations** | Tout changement de schéma via migration | ✅ `prisma migrate dev` est le seul chemin documenté (`pnpm db:migrate`) |
 | f | **N+1** | Protections documentées | ✅ voir §3 — aucun risque identifié à ce jour |

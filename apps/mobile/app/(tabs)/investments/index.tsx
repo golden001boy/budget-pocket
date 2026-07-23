@@ -21,8 +21,8 @@ export default function InvestmentsScreen() {
 
   const load = useCallback(async () => {
     try {
-      const data = await mfetchJson<{ items: PortfolioItemDTO[] }>('/api/portfolio');
-      setItems(data.items ?? []);
+      const data = await mfetchJson<{ data: PortfolioItemDTO[] }>('/api/portfolio');
+      setItems(data.data ?? []);
     } catch {
       // stale
     } finally {

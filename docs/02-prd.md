@@ -154,7 +154,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 |---|---|---|---|---|---|
 | 15.1 | Rate limiting sur login + inscription | Must | M | ✅ | BE-07, API-04, API-06 |
 | 15.2 | Validation Zod sur `/api/auth/mobile` et `/api/goals/[id]` | Must | S | ✅ | BE-03, FE-08 |
-| 15.3 | Pagination sur `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` | Should | S | 🔴 | Perf (règle Phase 1) |
+| 15.3 | Pagination sur `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` | Should | S | ✅ | Perf (règle Phase 1) |
 | 15.4 | Intégration monitoring d'erreurs (Sentry) | Must | M | ✅ | PROD-01 |
 | 15.5 | Scan SCA des dépendances + plan de remédiation | Must | S | ✅ | DEV-02 |
 | 15.6 | Pipeline CI/CD avec protections de branche | Must | M | ✅ | DEV-03 |
@@ -514,6 +514,62 @@ Neon (créer une ligne de test, noter l'horodatage, la modifier, restaurer à
 l'horodatage noté, vérifier que la valeur d'origine est revenue) —
 `bmad qa 15.7`. Nécessite un accès à la console Neon (vous), pas seulement à
 la chaîne de connexion (moi).
+
+---
+
+### Story 15.3 — Pagination sur `/api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio` · ✅ Done
+
+**Story** : En tant qu'opérateur de la plateforme, je veux que les listes
+retournées par les routes API mutatives limitent et paginent leurs résultats,
+afin d'éviter qu'un compte Premium (limites `Infinity` sur
+`maxGoals`/`maxPortfolioItems`/`maxLinkedAccounts`, voir
+`packages/shared/src/constants/limits.ts`) ne déclenche une requête non
+bornée (API-04 — Unrestricted Resource Consumption).
+
+**Critères d'acceptation**
+- [x] `GET /api/accounts`, `/api/budgets`, `/api/goals`, `/api/portfolio`
+      acceptent `?page=&pageSize=` et renvoient `{ data, meta }` avec
+      `meta: { total, page, pageSize, totalPages }` — même contrat que
+      `GET /api/transactions` et le type partagé `ApiResponse<T>` déjà défini
+      dans `packages/shared/src/types/api.ts` (jamais utilisé jusqu'ici).
+- [x] `pageSize` est plafonné (`MAX_PAGE_SIZE = 100`) — un client ne peut pas
+      demander une page arbitrairement grande.
+- [x] Des paramètres non numériques ou négatifs (`page=abc`, `pageSize=-10`)
+      retombent sur les valeurs par défaut au lieu de produire un `NaN` côté
+      Prisma (`skip`/`take`) ou un 500.
+- [x] Logique de parsing centralisée dans `apps/web/src/lib/pagination.ts`
+      (`parsePagination`, `buildPaginationMeta`), réutilisée par les 4
+      nouvelles routes **et** par `GET /api/transactions`, qui faisait déjà de
+      la pagination mais sans plafond ni validation — corrigé au passage sans
+      changer son contrat externe (toujours `{ data, meta }`).
+- [x] `/api/budgets` conserve son filtre `month`/`year` existant en plus de la
+      pagination (comportement par défaut inchangé pour un appelant qui ne
+      passe pas `page`/`pageSize`).
+- [x] Bug découvert en implémentant : l'écran mobile
+      `apps/mobile/app/(tabs)/investments/index.tsx` lisait `data.items` alors
+      que `GET /api/portfolio` renvoyait un tableau brut — la liste
+      d'investissements était donc **toujours vide** sur mobile. Corrigé au
+      passage (`data.data`, cohérent avec le nouveau contrat) — c'est le même
+      endpoint que celui modifié par cette story, pas un ajout de périmètre.
+- [x] Tests unitaires —
+      `apps/web/src/lib/__tests__/pagination.test.ts` : défauts, calcul
+      skip/take, plafonnement `pageSize`, retombée sur défaut pour entrées
+      invalides (`NaN`, zéro, négatif), calcul `totalPages` (y compris le cas
+      `total = 0` → `totalPages = 1`, pas `0`).
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo
+      (`demo@budget-pocket.app`, PREMIUM) via le serveur de dev : les 4 routes
+      renvoient bien `{ data, meta }` avec les bons `total`/`totalPages` ;
+      `pageSize=999999` sur `/api/transactions` est bien plafonné à 100 (84
+      résultats renvoyés, pas plus) ; `page=abc&pageSize=xyz` renvoie `200`
+      avec les valeurs par défaut, pas un crash.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (26/26, +7 vs avant) verts après
+      les changements.
+
+**Non couvert par cette story** : l'écran mobile Investissements ne charge
+que la page 1 (pas de pager/infinite-scroll côté UI) — les routes web
+équivalentes (`accounts`, `budgets`, `goals`, `dashboard`) lisent Prisma
+directement côté serveur (composants serveur), donc ne sont pas concernées
+par ce changement de contrat API.
 
 ---
 

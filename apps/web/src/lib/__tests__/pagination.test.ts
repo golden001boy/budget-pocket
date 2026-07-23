@@ -1,0 +1,41 @@
+import { parsePagination, buildPaginationMeta, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '../pagination';
+
+describe('parsePagination', () => {
+  it('defaults to page 1 and the default page size when no params are given', () => {
+    const result = parsePagination(new URLSearchParams());
+    expect(result).toEqual({ page: 1, pageSize: DEFAULT_PAGE_SIZE, skip: 0, take: DEFAULT_PAGE_SIZE });
+  });
+
+  it('computes skip/take from valid page and pageSize params', () => {
+    const result = parsePagination(new URLSearchParams({ page: '3', pageSize: '10' }));
+    expect(result).toEqual({ page: 3, pageSize: 10, skip: 20, take: 10 });
+  });
+
+  it('clamps pageSize to MAX_PAGE_SIZE to prevent unbounded queries', () => {
+    const result = parsePagination(new URLSearchParams({ pageSize: '99999' }));
+    expect(result.pageSize).toBe(MAX_PAGE_SIZE);
+    expect(result.take).toBe(MAX_PAGE_SIZE);
+  });
+
+  it('falls back to defaults for non-numeric page/pageSize instead of producing NaN', () => {
+    const result = parsePagination(new URLSearchParams({ page: 'abc', pageSize: 'xyz' }));
+    expect(result).toEqual({ page: 1, pageSize: DEFAULT_PAGE_SIZE, skip: 0, take: DEFAULT_PAGE_SIZE });
+  });
+
+  it('falls back to defaults for zero or negative page/pageSize', () => {
+    expect(parsePagination(new URLSearchParams({ page: '0' })).page).toBe(1);
+    expect(parsePagination(new URLSearchParams({ page: '-5' })).page).toBe(1);
+    expect(parsePagination(new URLSearchParams({ pageSize: '0' })).pageSize).toBe(DEFAULT_PAGE_SIZE);
+    expect(parsePagination(new URLSearchParams({ pageSize: '-10' })).pageSize).toBe(DEFAULT_PAGE_SIZE);
+  });
+});
+
+describe('buildPaginationMeta', () => {
+  it('computes totalPages by rounding up', () => {
+    expect(buildPaginationMeta(45, 1, 20)).toEqual({ total: 45, page: 1, pageSize: 20, totalPages: 3 });
+  });
+
+  it('returns totalPages of 1 (not 0) when there are no results', () => {
+    expect(buildPaginationMeta(0, 1, 20)).toEqual({ total: 0, page: 1, pageSize: 20, totalPages: 1 });
+  });
+});

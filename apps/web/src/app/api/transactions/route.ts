@@ -4,14 +4,14 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createTransactionSchema } from '@budget-pocket/shared';
 import { cacheDel } from '@/lib/cache';
+import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const page     = parseInt(searchParams.get('page')     ?? '1',  10);
-  const pageSize = parseInt(searchParams.get('pageSize') ?? '20', 10);
+  const { skip, take, page, pageSize } = parsePagination(searchParams);
   const category = searchParams.get('category') as any;
   const type     = searchParams.get('type')     as any;
   const from     = searchParams.get('from');
@@ -26,18 +26,13 @@ export async function GET(req: Request) {
   };
 
   const [transactions, total] = await Promise.all([
-    prisma.transaction.findMany({
-      where,
-      orderBy: { date: 'desc' },
-      skip:  (page - 1) * pageSize,
-      take:  pageSize,
-    }),
+    prisma.transaction.findMany({ where, orderBy: { date: 'desc' }, skip, take }),
     prisma.transaction.count({ where }),
   ]);
 
   return NextResponse.json({
     data: transactions.map(serializeTransaction),
-    meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
+    meta: buildPaginationMeta(total, page, pageSize),
   });
 }
 

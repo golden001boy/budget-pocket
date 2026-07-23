@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -13,15 +14,20 @@ const createSchema = z.object({
   notes:         z.string().optional(),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const goals = await prisma.financialGoal.findMany({
-    where:   { userId: session.user.id },
-    orderBy: { createdAt: 'desc' },
-  });
-  return NextResponse.json(goals);
+  const { searchParams } = new URL(req.url);
+  const { skip, take, page, pageSize } = parsePagination(searchParams);
+  const where = { userId: session.user.id };
+
+  const [goals, total] = await Promise.all([
+    prisma.financialGoal.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
+    prisma.financialGoal.count({ where }),
+  ]);
+
+  return NextResponse.json({ data: goals, meta: buildPaginationMeta(total, page, pageSize) });
 }
 
 export async function POST(req: NextRequest) {
