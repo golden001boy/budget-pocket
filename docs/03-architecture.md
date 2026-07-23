@@ -400,6 +400,37 @@ pnpm CI chaud (clé = hash du lockfile, inchangé ou peu changé d'une story à
 l'autre) — cette story est la première à avoir suffisamment modifié
 `pnpm-lock.yaml` pour forcer un vrai store froid en CI.
 
+**Post-scriptum 2 — le correctif de hoisting `@types/react` (ci-dessus)
+cassait `apps/mobile`** : le 2ᵉ push a de nouveau fait échouer la CI,
+cette fois dans `apps/mobile/app/(tabs)/_layout.tsx` (fichier jamais
+touché par cette story) — `tabBarIcon: ({ color, size }) => ...` sur les 5
+`Tabs.Screen`, `TS7031` implicit-any sur `color`/`size`. Cause : exclure
+`@types/react` des deux couches de hoisting pnpm (post-scriptum 1 plus
+haut) répare `apps/web` mais retire aussi le filet de sécurité dont
+dépendaient plusieurs paquets de l'écosystème Expo/React Navigation
+(`@react-navigation/bottom-tabs`, `core`, `native`, `native-stack`,
+`elements`, `expo-router`) — aucun ne déclare `@types/react` comme peer
+dependency formelle (juste `react`/`react-native` en `"*"`), une
+convention d'avant l'adoption large des peers `@types/*` par l'écosystème
+React Native. Sans déclaration formelle, pnpm ne peut pas créer de
+symlink local correct pour eux ; ils comptaient entièrement sur le
+hoisting classique pour "trouver" `@types/react` par hasard — exactement
+le mécanisme que le correctif web a supprimé. Confirmé isolément :
+`shamefully-hoist=true` seul (sans l'exclusion) → `apps/mobile` passe mais
+`apps/web` recasse (retour du `TS2786`) ; avec l'exclusion seule →
+`apps/web` passe mais `apps/mobile` casse. Les deux besoins sont en
+tension sur le même mécanisme pnpm, pas résolubles par un seul réglage
+`.npmrc`. **Correctif** : `pnpm.packageExtensions` dans `package.json`
+déclare explicitement `"@types/react": "*"` en peer dependency pour ces 6
+paquets — force pnpm à leur créer un symlink local correct (résolu vers
+la version d'`apps/mobile`, seul consommateur de ces paquets), sans
+dépendre du hoisting partagé. `pnpm-lock.yaml` régénéré en conséquence
+(le hash de config `packageExtensions` fait partie du lockfile).
+Découvert et corrigé par itération : chaque paquet manquant produisait
+une nouvelle vague d'erreurs une fois le précédent corrigé — pas de
+méthode plus directe trouvée pour énumérer tous les paquets concernés à
+l'avance.
+
 **Détail complet** : [02-prd.md — Story 15.10](02-prd.md#story-1510--migrer-nextjs-14--15--✅-done).
 
 ## 7. Mapping Story → Fichiers affectés

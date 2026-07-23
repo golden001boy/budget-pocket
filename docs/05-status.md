@@ -81,16 +81,27 @@ création + suppression d'une transaction. `pnpm type-check` (4/4) et
 tests échouent avec un timeout de 15s trop court face au retry Redis local
 + compile à froid, déjà documenté story 15.1) — confirmé non lié à cette
 migration, non bloquant (Playwright hors pipeline CI), non corrigé ici.
-**Correctif post-push** : le premier push a fait échouer la CI (jamais
-reproduit en local avant ce moment) — un vrai bug latent, probablement
-présent depuis le début du projet mais jamais rencontré faute d'un store
-pnpm CI froid : sur une installation totalement vierge, le client Prisma
-que `@prisma/client` résout réellement en interne restait le gabarit vide
-(le `postinstall` rapporte pourtant un succès). Reproduit de façon fiable
-en local avec un store pnpm vidé, corrigé par une étape `prisma generate`
-explicite ajoutée en CI après `pnpm install`. Détail complet :
+**Deux correctifs post-push** (aucun des deux reproduit en local avant que
+la CI les révèle) :
+1. Client Prisma mal généré sur un store pnpm totalement froid (le
+   `postinstall` rapportait pourtant un succès) — probablement un bug
+   latent présent depuis le début du projet, jamais rencontré faute d'un
+   store pnpm CI froid avant cette story. Corrigé par une étape
+   `prisma generate` explicite ajoutée en CI après `pnpm install`.
+2. Le correctif de hoisting `@types/react` qui répare `apps/web` cassait
+   `apps/mobile` (`_layout.tsx`, `tabBarIcon`) — plusieurs paquets
+   `@react-navigation/*`/`expo-router` ne déclarent pas `@types/react`
+   comme peer formelle et comptaient sur le hoisting classique pour le
+   trouver. Corrigé via `pnpm.packageExtensions` (6 paquets), au prix
+   d'une itération manuelle package par package faute de méthode plus
+   directe pour tous les identifier d'avance.
+
+Les deux reproduits de façon fiable en local une fois le store pnpm
+vidé. Détail complet :
 [03-architecture.md ADR-009](03-architecture.md#adr-009--migration-nextjs-15--react-19-story-1510)
-(post-scriptum). CI re-vérifiée verte sur le nouveau commit.
+(post-scriptum 1 et 2). `pnpm type-check` (4/4, sans cache) et
+`pnpm test` (34/34) reverifiés localement sur un store totalement froid
+après les deux correctifs, avant nouveau push.
 
 **Note story 15.8** : 🟡 hardening fait, MFA explicitement reporté (décision
 prise avant implémentation, voir
