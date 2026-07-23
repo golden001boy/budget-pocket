@@ -12,6 +12,7 @@ declare module 'next-auth' {
       role: Role;
       currency: Currency;
       onboardingDone: boolean;
+      emailVerified: boolean;
     };
   }
 }
@@ -22,5 +23,6 @@ declare module 'next-auth/jwt' {
     role: Role;
     currency: Currency;
     onboardingDone: boolean;
+    emailVerified: boolean;
   }
 }

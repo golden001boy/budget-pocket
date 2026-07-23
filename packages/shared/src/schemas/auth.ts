@@ -40,7 +40,12 @@ export const resetPasswordSchema = z.object({
   password: passwordSchema,
 });
 
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1, 'Jeton requis'),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;

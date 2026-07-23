@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       role:           user.role,
       currency:       user.currency,
       onboardingDone: user.onboardingDone,
+      emailVerified:  !!user.emailVerified,
     },
     secret:  process.env.NEXTAUTH_SECRET!,
     maxAge:  MOBILE_TOKEN_MAX_AGE_SECONDS,

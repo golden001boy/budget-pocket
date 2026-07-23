@@ -1,33 +1,12 @@
+// Deep coverage of the underlying crypto (randomness, determinism,
+// hash-matching) lives in tokens.test.ts, story 15.12's refactor target —
+// these just confirm the domain-specific wrapper delegates correctly.
 import { generatePasswordResetToken, hashPasswordResetToken, PASSWORD_RESET_TOKEN_TTL_SECONDS } from '../passwordReset';
 
 describe('generatePasswordResetToken', () => {
-  it('returns a raw token and a hash that are different from each other', () => {
-    const { rawToken, tokenHash } = generatePasswordResetToken();
-    expect(rawToken).not.toBe(tokenHash);
-    expect(rawToken).toHaveLength(64); // 32 bytes, hex-encoded
-    expect(tokenHash).toHaveLength(64); // sha256, hex-encoded
-  });
-
-  it('produces a different token on every call', () => {
-    const a = generatePasswordResetToken();
-    const b = generatePasswordResetToken();
-    expect(a.rawToken).not.toBe(b.rawToken);
-    expect(a.tokenHash).not.toBe(b.tokenHash);
-  });
-
-  it('the returned tokenHash matches hashing the raw token independently', () => {
+  it('returns a raw token whose hash matches hashPasswordResetToken', () => {
     const { rawToken, tokenHash } = generatePasswordResetToken();
     expect(hashPasswordResetToken(rawToken)).toBe(tokenHash);
-  });
-});
-
-describe('hashPasswordResetToken', () => {
-  it('is deterministic — the same input always hashes the same way', () => {
-    expect(hashPasswordResetToken('same-token')).toBe(hashPasswordResetToken('same-token'));
-  });
-
-  it('different inputs hash differently', () => {
-    expect(hashPasswordResetToken('token-a')).not.toBe(hashPasswordResetToken('token-b'));
   });
 });
 

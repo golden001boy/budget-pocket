@@ -71,11 +71,11 @@ silencieusement — voir [packages/shared/src/types/](../packages/shared/src/typ
 
 ## 3. Modèle de données
 
-PostgreSQL via Prisma, 20 modèles
+PostgreSQL via Prisma, 21 modèles
 ([apps/web/prisma/schema.prisma](../apps/web/prisma/schema.prisma)), groupés
 par domaine :
 
-- **Identité/facturation** : `User`, `Session`, `PasswordResetToken` (story 15.11), `Subscription`
+- **Identité/facturation** : `User`, `Session`, `PasswordResetToken` (story 15.11), `EmailVerificationToken` (story 15.12), `Subscription`
 - **Mouvement d'argent** : `LinkedAccount`, `Transaction`, `RecurringRule`, `CustomCategory`
 - **Planification** : `Budget`, `FinancialGoal`, `RetirementPlan`, `TaxRecord`, `Scenario`
 - **Investissement** : `PortfolioItem`, `AssetPriceSnapshot`
@@ -127,6 +127,22 @@ pas permettre l'énumération d'emails. `POST /api/auth/reset-password`
 (token brut + nouveau mot de passe) → hash du token reçu comparé au hash
 stocké → si valide, non expiré (1h) et non utilisé : met à jour
 `passwordHash` et marque le token utilisé, dans une seule transaction.
+La génération/hash de token (`lib/tokens.ts`) est partagée avec la
+vérification email ci-dessous plutôt que dupliquée.
+
+**Vérification email** (story 15.12, **non-bloquant** — décision produit
+prise avec vous) : `POST /api/auth/register` génère un token (24h) et
+envoie l'email en plus de créer le compte, qui reste utilisable
+immédiatement. `POST /api/auth/verify-email` (token) marque
+`User.emailVerified` et le token utilisé. `POST /api/auth/resend-verification`
+est gaté par la **session** plutôt que par un email dans le body (contraste
+avec `forgot-password`) — l'appelant est déjà prouvé propriétaire du
+compte, donc pas de risque d'énumération à gérer ici. Le statut
+`emailVerified` est propagé dans la session/JWT ; comme un JWT est sans
+état, une vérification survenant après la connexion initiale ne s'y
+reflète pas automatiquement — la page `/verify-email` appelle
+`useSession().update()` côté client pour forcer le rafraîchissement
+(callback `jwt()`, branche `trigger === 'update'`, relit la BDD).
 
 ## 5. APIs — contrats, formats, erreurs
 

@@ -2,7 +2,7 @@
 // /api/goals/[id] in story 15.2 — they existed in @budget-pocket/shared
 // unused before that story; this locks in the validation behavior those
 // routes now depend on.
-import { loginSchema, updateGoalSchema, registerSchema, forgotPasswordSchema, resetPasswordSchema } from '@budget-pocket/shared';
+import { loginSchema, updateGoalSchema, registerSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema } from '@budget-pocket/shared';
 
 describe('loginSchema', () => {
   it('accepts a well-formed email/password pair', () => {
@@ -80,6 +80,20 @@ describe('resetPasswordSchema', () => {
 
   it('rejects a common password, same denylist as registerSchema', () => {
     expect(resetPasswordSchema.safeParse({ token: 'abc123', password: 'password123' }).success).toBe(false);
+  });
+});
+
+describe('verifyEmailSchema', () => {
+  it('accepts a non-empty token', () => {
+    expect(verifyEmailSchema.safeParse({ token: 'abc123' }).success).toBe(true);
+  });
+
+  it('rejects an empty token', () => {
+    expect(verifyEmailSchema.safeParse({ token: '' }).success).toBe(false);
+  });
+
+  it('rejects a missing token field', () => {
+    expect(verifyEmailSchema.safeParse({}).success).toBe(false);
   });
 });
 

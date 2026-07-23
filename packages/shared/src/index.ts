@@ -11,8 +11,8 @@ export * from './types/alerts';
 export * from './types/accounts';
 
 // Schemas (export Zod schemas + inferred Input types — avoid re-exporting names already in types/)
-export { loginSchema, registerSchema, forgotPasswordSchema, resetPasswordSchema } from './schemas/auth';
-export type { LoginInput, RegisterInput, ForgotPasswordInput, ResetPasswordInput } from './schemas/auth';
+export { loginSchema, registerSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema } from './schemas/auth';
+export type { LoginInput, RegisterInput, ForgotPasswordInput, ResetPasswordInput, VerifyEmailInput } from './schemas/auth';
 export { createTransactionSchema, updateTransactionSchema } from './schemas/transaction';
 export { createBudgetSchema, updateBudgetSchema } from './schemas/budget';
 export { createGoalSchema, updateGoalSchema } from './schemas/goal';

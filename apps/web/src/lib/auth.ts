@@ -58,17 +58,28 @@ export const authOptions: NextAuthOptions = {
           role:          user.role,
           currency:      user.currency,
           onboardingDone: user.onboardingDone,
+          emailVerified: !!user.emailVerified,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id             = user.id;
         token.role           = (user as any).role;
         token.currency       = (user as any).currency;
         token.onboardingDone = (user as any).onboardingDone;
+        token.emailVerified  = (user as any).emailVerified;
+      }
+      // The JWT is stateless and only refreshed from `user` on sign-in — a
+      // verification that happens later in the same session (story 15.12)
+      // wouldn't otherwise be reflected until the token naturally expires.
+      // The verify-email page calls the client `update()` hook after a
+      // successful verification specifically to hit this branch.
+      if (trigger === 'update') {
+        const current = await prisma.user.findUnique({ where: { id: token.id as string } });
+        if (current) token.emailVerified = !!current.emailVerified;
       }
       return token;
     },
@@ -78,6 +89,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role           = token.role as any;
         session.user.currency       = token.currency as any;
         session.user.onboardingDone = token.onboardingDone as boolean;
+        session.user.emailVerified  = token.emailVerified as boolean;
       }
       return session;
     },

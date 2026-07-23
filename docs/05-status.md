@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-23 (story 15.11 — reset de mot de
-passe, ✅)
+**Dernière mise à jour** : 2026-07-23 (story 15.12 — vérification email
+non-bloquante, ✅)
 
 ## Vue d'ensemble des phases
 
@@ -11,7 +11,7 @@ passe, ✅)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 9 ✅ + 2 🟡 + 4 🔴 sur 15 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 10 ✅ + 2 🟡 + 3 🔴 sur 15 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -33,19 +33,47 @@ passe, ✅)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 9 ✅ + 2 🟡 + 4 🔴 sur 15 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11 ✅ ; 15.7, 15.8 🟡 ; 15.12–15.15 🔴 non commencées) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 10 ✅ + 2 🟡 + 3 🔴 sur 15 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12 ✅ ; 15.7, 15.8 🟡 ; 15.13–15.15 🔴 non commencées) |
 
 ## Prochaine action recommandée
 
-Story 15.11 (reset de mot de passe) faite. Il reste 15.12 (vérification
-email — même infrastructure email que 15.11, Must comme 15.11), 15.13
-(tests de charge), 15.14 (coffre de secrets) et 15.15 (politique de
-patching), toutes créées suite à `bmad prelaunch` (2026-07-23, détail dans
-la section Gate Phase 6 plus bas). Priorité suggérée : 15.12, dernier Must
-de la checklist Phase 6 §9.1 encore non traité. Le MFA (volet non traité
-de 15.8, voir ADR-008) reste sans story dédiée. Voir
+15.11 (reset de mot de passe) et 15.12 (vérification email) faites — les
+deux derniers Must de la checklist Phase 6 §9.1 sont traités. Il reste
+15.13 (tests de charge), 15.14 (coffre de secrets) et 15.15 (politique de
+patching), toutes Should/Could, créées suite à `bmad prelaunch`
+(2026-07-23, détail dans la section Gate Phase 6 plus bas). Le MFA (volet
+non traité de 15.8, voir ADR-008) reste sans story dédiée. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour le détail complet.
+
+**Note story 15.12** : ✅ complet. Vérification email **non-bloquante**
+(décision produit prise avec vous avant implémentation) : le compte reste
+utilisable normalement dès l'inscription, un email de confirmation part en
+parallèle et une bannière discrète l'indique tant que le statut
+`emailVerified` n'est pas vrai. `User.emailVerified` (`DateTime?`,
+convention NextAuth standard) + nouveau modèle `EmailVerificationToken`,
+même forme que `PasswordResetToken` (story 15.11). Refactorisation DRY au
+passage : la génération/hash de token, identique entre les deux stories,
+extraite dans `lib/tokens.ts` partagé — `passwordReset.ts` garde son API
+publique inchangée. `resend-verification` est gaté par la **session**
+plutôt que par un email dans le body, à la différence de
+`forgot-password` : l'appelant est déjà prouvé propriétaire du compte,
+donc pas de risque d'énumération à gérer ici. Subtilité JWT gérée
+correctement : un token étant sans état, une vérification survenant après
+la connexion initiale ne s'y reflète pas automatiquement — la page
+`/verify-email` appelle `useSession().update()` pour forcer le
+rafraîchissement depuis la BDD. Vérifié en direct contre la vraie BDD
+Neon avec deux comptes jetables : cycle complet inscription → lien loggé
+→ token invalide (400) → vérification réussie (200) → réutilisation
+rejetée (400) → `emailVerified` confirmé en BDD **et** dans le JWT décodé
+après une connexion post-vérification ; `resend-verification` testé à la
+fois sur un compte déjà vérifié (message dédié, pas de nouveau token) et
+sur un compte non vérifié (invalide l'ancien, émet un nouveau qui
+vérifie correctement à son tour). Comptes supprimés après test. 9
+nouveaux tests unitaires (52/52 au total, dont 3 déplacés depuis
+`passwordReset.test.ts` vers `tokens.test.ts`), `pnpm type-check` 4/4.
+**Non vérifié** : comportement réel du rate limiting (même limitation que
+toutes les routes rate-limitées depuis 15.1, pas de Redis local).
 
 **Note story 15.11** : ✅ complet. Flux reset de mot de passe complet —
 `POST /api/auth/forgot-password` (email → token 256 bits, seul le hash
@@ -268,7 +296,7 @@ honnête item par item, contre le code réel :
 | Environnements dev/staging/prod séparés | 🔴 | Aucun staging, aucune prod — `vercel.json` configure des crons mais rien ne prouve un déploiement réel |
 | Clés API non exposées, secrets scannés | ✅ | `.env` gitignoré, aucun secret en dur (DEV-01) |
 | Backups BDD vérifiés fonctionnels | 🟡 | Story 15.7 — politique documentée, aucun test de restauration réel exécuté |
-| Vérification email activée | 🔴 | **Aucune story, aucun code** — pas de flux de confirmation d'email |
+| Vérification email activée | ✅ | Implémentée et vérifiée en direct contre Neon depuis la story 15.12 — email envoyé à l'inscription, lien de confirmation fonctionnel, statut suivi en BDD/session. **Non-bloquante** par décision produit (un compte non confirmé reste pleinement utilisable) : à revoir si le mode bloquant devient un jour requis, mais le système de vérification lui-même est bien actif |
 | Pagination sur toutes les listes | 🟡 | Story 15.3 couvre accounts/budgets/goals/portfolio/transactions ; pas vérifié exhaustivement sur le reste (alerts, scenarios...) |
 
 ### 9.2 Sécurité
@@ -292,7 +320,9 @@ honnête item par item, contre le code réel :
 | Tests de charge effectués | 🔴 | **Aucune story, jamais exécutés** |
 | Politique de patching définie + rollback testé | 🟡 | Rollback BDD documenté (15.7) ; pas de politique de patching formelle, rien testé en pratique |
 
-**Score approximatif** : 5 ✅ / 8 🟡 / 7 🔴 sur 20.
+**Score approximatif** : 6 ✅ / 8 🟡 / 6 🔴 sur 20 (évaluation initiale du
+23/07 : 5/8/7 — mis à jour après la story 15.12, qui active la
+vérification email).
 
 **Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
 faudrait au minimum : un environnement de production réel (domaine, SSL,
@@ -307,7 +337,7 @@ pour l'instant, pas prêt pour un lancement réel.
 **Stories créées dans le PRD suite à cette évaluation** (voir
 [02-prd.md](02-prd.md)) :
 - ~~15.11 — Reset de mot de passe (flux email + token)~~ ✅ fait
-- 15.12 — Vérification email à l'inscription (non commencée)
+- ~~15.12 — Vérification email à l'inscription~~ ✅ fait
 - 15.13 — Tests de charge (non commencée)
 - 15.14 — Coffre de secrets pour les variables d'environnement (non commencée)
 - 15.15 — Politique de patching formelle + test de rollback (non commencée)

@@ -163,7 +163,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.9 | Câbler un test runner (Jest) pour le monorepo | Must | S | ✅ | prérequis §6.1 (tests écrits avec le code) — voir ADR-005 |
 | 15.10 | Migrer Next.js 14 → 15+ | Should | L | ✅ | DEV-02 (résidu de 15.5) |
 | 15.11 | Reset de mot de passe (flux email + token) | Must | M | ✅ | Gate Phase 6 §9.1 |
-| 15.12 | Vérification email à l'inscription | Must | M | 🔴 | Gate Phase 6 §9.1 |
+| 15.12 | Vérification email à l'inscription | Must | M | ✅ | Gate Phase 6 §9.1 |
 | 15.13 | Tests de charge | Should | M | 🔴 | Gate Phase 6 §9.3 |
 | 15.14 | Coffre de secrets pour les variables d'environnement | Could | S | 🔴 | Gate Phase 6 §9.2 |
 | 15.15 | Politique de patching formelle + test de rollback | Could | S | 🔴 | Gate Phase 6 §9.3 |
@@ -595,25 +595,90 @@ passe oublié ?" dans
 
 ---
 
-### Story 15.12 — Vérification email à l'inscription · 🔴 À faire
+### Story 15.12 — Vérification email à l'inscription · ✅ Done
 
 **Story** : En tant qu'opérateur, je veux que les nouveaux comptes
-confirment leur adresse email avant de pouvoir utiliser pleinement
-l'application, afin de réduire les inscriptions frauduleuses/erronées
-(Gate Phase 6 §9.1).
+confirment leur adresse email, afin de réduire les inscriptions
+frauduleuses/erronées (Gate Phase 6 §9.1).
 
-**Constat** : `POST /api/auth/register` crée le compte directement sans
-aucune étape de confirmation ; `User.email` n'a pas de champ
-`emailVerified`/équivalent dans le schéma actuel.
+**Décision de périmètre** (vous, avant implémentation) : **non-bloquant**.
+Le compte est utilisable normalement dès l'inscription ; le statut
+`emailVerified` est suivi en base et affiché via une bannière tant qu'il
+n'est pas confirmé, mais rien n'est bloqué. Plus simple, moins de friction
+sur l'onboarding, cohérent avec un projet sans vrais utilisateurs pour
+l'instant.
 
-**Portée envisagée** : migration Prisma (champ `emailVerified` sur
-`User`), envoi d'un email de confirmation à l'inscription (même
-infrastructure Resend que 15.11), route de confirmation par token, et une
-décision produit à trancher avec vous : bloquer l'usage tant que l'email
-n'est pas confirmé, ou juste l'afficher comme statut (moins strict, plus
-simple).
+**Critères d'acceptation**
+- [x] Migration Prisma — `User.emailVerified` (`DateTime?`, convention
+      NextAuth standard : `null` = non vérifié, timestamp = date de
+      vérification) + nouveau modèle `EmailVerificationToken`, même forme
+      que `PasswordResetToken` de la story 15.11.
+- [x] **Refactorisation DRY** : la génération/hash de token (identique
+      entre reset de mot de passe et vérification email) extraite de
+      `passwordReset.ts` vers
+      [lib/tokens.ts](../apps/web/src/lib/tokens.ts) partagé —
+      `passwordReset.ts` garde son API publique inchangée (délègue
+      simplement), `emailVerification.ts` l'utilise aussi. Aucune story
+      existante affectée.
+- [x] `POST /api/auth/register` génère désormais un token de vérification
+      (durée de vie 24h — plus généreuse que le reset de mot de passe 1h,
+      car moins critique et l'utilisateur ne consulte pas forcément sa
+      boîte mail immédiatement) et envoie l'email de confirmation
+      (Resend, même infrastructure que 15.11 — no-op loggé sans
+      `RESEND_API_KEY`). Un échec d'envoi ne fait pas échouer
+      l'inscription elle-même.
+- [x] `POST /api/auth/verify-email` (token) : hash comparé, rejette si
+      expiré/déjà utilisé/invalide, sinon marque `User.emailVerified` et
+      le token utilisé dans une transaction.
+- [x] `POST /api/auth/resend-verification` : contrairement à
+      `forgot-password`, gaté par la **session** (pas par un email dans le
+      body) — l'appelant est déjà prouvé propriétaire du compte, donc pas
+      de risque d'énumération à concevoir ici. Invalide les tokens
+      précédents, limite 3/h par compte.
+- [x] `emailVerified` propagé dans la session/JWT NextAuth (web) et le
+      jeton mobile (`/api/auth/mobile`, pour la cohérence de forme même
+      si le mobile n'affiche pas de bannière). **Subtilité JWT gérée** :
+      un JWT est sans état et ne se rafraîchit depuis la BDD qu'à la
+      connexion initiale — une vérification survenant plus tard dans la
+      même session ne serait pas reflétée avant l'expiration naturelle du
+      token. La page `/verify-email` appelle `useSession().update()`
+      côté client après une vérification réussie, ce qui déclenche la
+      branche `trigger === 'update'` du callback `jwt()` et relit
+      `emailVerified` depuis la BDD.
+- [x] Page `/verify-email?token=...` (vérifie automatiquement au montage,
+      affiche succès/erreur) et bannière non-bloquante
+      ([EmailVerificationBanner.tsx](../apps/web/src/components/dashboard/EmailVerificationBanner.tsx))
+      dans le layout dashboard — masquée si vérifié, avec bouton "Renvoyer
+      le lien" et fermeture manuelle.
+- [x] Tests unitaires — 9 nouveaux :
+      [tokens.test.ts](../apps/web/src/lib/__tests__/tokens.test.ts)
+      (couverture profonde du crypto partagé, déplacée depuis
+      `passwordReset.test.ts` lors de la refactorisation),
+      [emailVerification.test.ts](../apps/web/src/lib/__tests__/emailVerification.test.ts),
+      `verifyEmailSchema` dans
+      [authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts).
+- [x] Vérifié en direct contre la vraie BDD Neon avec deux comptes
+      jetables : cycle complet inscription → récupération du lien loggé →
+      token invalide (400) → vérification réussie (200) → réutilisation
+      du même token (400) → `emailVerified` confirmé en BDD ET dans le
+      JWT décodé (`true`) après une connexion post-vérification ;
+      `resend-verification` sur un compte déjà vérifié (message dédié,
+      pas de nouveau token) et sur un compte non vérifié (invalide
+      l'ancien token, en émet un nouveau, celui-ci vérifie correctement
+      à son tour). Comptes supprimés après test.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (52/52, +9 vs story 15.11
+      + 3 tests déplacés) verts.
+- [ ] **Rate limiting non vérifié de bout en bout** — même limitation
+      déjà documentée depuis story 15.1 : pas de Redis local.
 
-**Non commencée.**
+**Implémentation** :
+[api/auth/verify-email/route.ts](../apps/web/src/app/api/auth/verify-email/route.ts),
+[api/auth/resend-verification/route.ts](../apps/web/src/app/api/auth/resend-verification/route.ts),
+[lib/tokens.ts](../apps/web/src/lib/tokens.ts),
+[lib/emailVerification.ts](../apps/web/src/lib/emailVerification.ts),
+[lib/auth.ts](../apps/web/src/lib/auth.ts),
+[(auth)/verify-email/](../apps/web/src/app/(auth)/verify-email/),
+[components/dashboard/EmailVerificationBanner.tsx](../apps/web/src/components/dashboard/EmailVerificationBanner.tsx).
 
 ---
 
