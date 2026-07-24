@@ -71,6 +71,9 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | PROD-02 | Exposition d'envs non-prod | 🟡 | 🟡 Partiel | Aucun endpoint `/debug`/`/test` trouvé ; pas d'environnement staging déployé à ce jour donc rien à exposer, mais aucune politique écrite non plus |
 | PROD-03 | Mauvaise gestion des mises à jour | 🟢 | 🟡 Partiel | Politique de backup/rollback BDD documentée avec précision (mécanisme Neon confirmé via doc officielle, fenêtre PITR réelle 6h sur le plan Free) — story 15.7 ; **test de restauration réel non exécuté** (accès console Neon requis, non disponible pour l'agent) ; pas de politique de patching écrite |
 
+*Tests de charge (Gate Phase 6 §9.3, hors catalogue PROD-01/03 ci-dessus,*
+*pas de gap dédié dans BMAD_FRAMEWORK_v2.md §8.5) : voir §6 ci-dessous.*
+
 ---
 
 ## 6. État réel de la suite de tests automatisés
@@ -108,6 +111,22 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
   runner (nécessiterait `jest-expo`, hors périmètre de 15.9).
 - **Sécurité** : aucun test automatisé des items du catalogue §8 — cet audit
   est une revue de code manuelle, pas une exécution de suite de tests.
+- **Charge** : Artillery (story 15.13), scénarios dans
+  [apps/web/loadtests/](../apps/web/loadtests/), exécutés une fois contre un
+  build de production (`pnpm build && pnpm start`) + BDD Neon réelle, hors
+  CI. Routes API paginées (`accounts`/`goals`/`portfolio`/`transactions`) :
+  saines, 0 % d'échec, p95 596ms sur 240 requêtes. `/dashboard` : goulot
+  distinct trouvé — 100 % d'échec (`ERR_SOCKET_TIMEOUT`) à seulement 3 req/s
+  en isolation, 20 % quand dilué parmi les autres routes ; tracé jusqu'à un
+  `upsert` Prisma non protégé sur la clé composite de `MonthlySnapshot`
+  (contention probable quand plusieurs requêtes concurrentes du même compte
+  ciblent la même ligne), **non corrigé** — voir
+  [02-prd.md, story 15.13](02-prd.md#story-1513--tests-de-charge--fait-avec-distorsion-documentée)
+  pour le diagnostic complet et la tentative de correctif invalidée. Test
+  réalisé **sans Redis local** (distorsion assumée et documentée) : le coût
+  du rate limiting fail-open (~5,4s moyenne mesurée sur `/api/auth/mobile`,
+  p95/p99 6838ms) est réel dans cet environnement mais ne reflète pas un
+  déploiement avec Redis opérationnel.
 
 ## 7. Synthèse — priorités avant `bmad prelaunch`
 
@@ -143,3 +162,7 @@ Ordre recommandé (Critique → Haute → Moyenne) :
 12. ~~Gate Phase 6 §9.1 — vérification email (story 15.12)~~ ✅
     (non-bloquant par décision produit ; même nuance que 15.11 sur le
     critère "production réelle")
+13. ~~Gate Phase 6 §9.3 — tests de charge (story 15.13)~~ 🟡 (exécutés,
+    routes API saines, goulot `/dashboard` diagnostiqué mais non corrigé,
+    test réalisé sans Redis local — distorsion documentée plutôt que
+    reportée ; correctif du goulot recommandé en story de suivi)

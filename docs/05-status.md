@@ -1,8 +1,8 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-23 (story 15.12 — vérification email
-non-bloquante, ✅)
+**Dernière mise à jour** : 2026-07-24 (story 15.13 — tests de charge,
+✅ avec distorsion documentée)
 
 ## Vue d'ensemble des phases
 
@@ -11,7 +11,7 @@ non-bloquante, ✅)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 10 ✅ + 2 🟡 + 3 🔴 sur 15 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 11 ✅ + 2 🟡 + 2 🔴 sur 15 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -33,18 +33,35 @@ non-bloquante, ✅)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 10 ✅ + 2 🟡 + 3 🔴 sur 15 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12 ✅ ; 15.7, 15.8 🟡 ; 15.13–15.15 🔴 non commencées) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 11 ✅ + 2 🟡 + 2 🔴 sur 15 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13 ✅ ; 15.7, 15.8 🟡 ; 15.14–15.15 🔴 non commencées) |
 
 ## Prochaine action recommandée
 
-15.11 (reset de mot de passe) et 15.12 (vérification email) faites — les
-deux derniers Must de la checklist Phase 6 §9.1 sont traités. Il reste
-15.13 (tests de charge), 15.14 (coffre de secrets) et 15.15 (politique de
-patching), toutes Should/Could, créées suite à `bmad prelaunch`
+15.11 (reset de mot de passe), 15.12 (vérification email) et 15.13 (tests
+de charge) faites. Les deux derniers Must de la checklist Phase 6 §9.1 sont
+traités ; il reste 15.14 (coffre de secrets) et 15.15 (politique de
+patching), toutes deux Could, créées suite à `bmad prelaunch`
 (2026-07-23, détail dans la section Gate Phase 6 plus bas). Le MFA (volet
-non traité de 15.8, voir ADR-008) reste sans story dédiée. Voir
+non traité de 15.8, voir ADR-008) reste sans story dédiée. Une story de
+suivi pour corriger le goulot `/dashboard` trouvé en 15.13 (contention
+Postgres sur `MonthlySnapshot`) n'est pas encore créée — à cadrer avec
+vous si vous voulez la prioriser. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour le détail complet.
+
+**Note story 15.13** : ✅ complet, avec une distorsion assumée et
+documentée (pas de Redis local — installation Chocolatey refusée avec
+vous). Artillery contre un build de production réel + Neon réelle. Routes
+API paginées saines (0 % d'échec, p95 596ms). Goulot distinct découvert
+sur `/dashboard`, indépendant de Redis : tracé jusqu'à
+`computeMonthlySnapshot()` (`lib/analytics/snapshot.ts`), hypothèse de
+contention de verrou Postgres sur la clé composite `userId_year_month` de
+`MonthlySnapshot` quand toutes les requêtes concurrentes viennent du même
+compte de démo. Une tentative de correctif (`connectTimeout` sur Redis) a
+été testée, invalidée par re-test, et **annulée** plutôt que laissée en
+place. Correctif réel non fait dans cette story — voir
+[02-prd.md](02-prd.md#story-1513--tests-de-charge--fait-avec-distorsion-documentée)
+pour le détail complet des chiffres et du diagnostic.
 
 **Note story 15.12** : ✅ complet. Vérification email **non-bloquante**
 (décision produit prise avec vous avant implémentation) : le compte reste
@@ -317,12 +334,13 @@ honnête item par item, contre le code réel :
 |---|---|---|
 | Monitoring d'erreurs actif + alertes | 🟡 | Sentry intégré (15.4) mais **sans DSN configuré = no-op**, donc pas réellement actif |
 | Journalisation actions sensibles centralisée | 🔴 | Aucun log applicatif des actions sensibles (login, changement de rôle...) — BE-08 |
-| Tests de charge effectués | 🔴 | **Aucune story, jamais exécutés** |
+| Tests de charge effectués | 🟡 | Exécutés (story 15.13, Artillery) contre un build de production réel + Neon réelle. Routes API paginées : saines (0 % d'échec, p95 596ms). Goulot distinct identifié et diagnostiqué sur `/dashboard` (contention Postgres probable sur `MonthlySnapshot`), **non corrigé**. Test réalisé **sans Redis local** (installation refusée) — distorsion documentée, coût du fail-open chiffré plutôt que masqué |
 | Politique de patching définie + rollback testé | 🟡 | Rollback BDD documenté (15.7) ; pas de politique de patching formelle, rien testé en pratique |
 
-**Score approximatif** : 6 ✅ / 8 🟡 / 6 🔴 sur 20 (évaluation initiale du
+**Score approximatif** : 6 ✅ / 9 🟡 / 5 🔴 sur 20 (évaluation initiale du
 23/07 : 5/8/7 — mis à jour après la story 15.12, qui active la
-vérification email).
+vérification email ; puis après la story 15.13, tests de charge exécutés
+avec distorsion documentée).
 
 **Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
 faudrait au minimum : un environnement de production réel (domaine, SSL,
@@ -338,7 +356,7 @@ pour l'instant, pas prêt pour un lancement réel.
 [02-prd.md](02-prd.md)) :
 - ~~15.11 — Reset de mot de passe (flux email + token)~~ ✅ fait
 - ~~15.12 — Vérification email à l'inscription~~ ✅ fait
-- 15.13 — Tests de charge (non commencée)
+- ~~15.13 — Tests de charge~~ ✅ fait (avec distorsion documentée, sans Redis)
 - 15.14 — Coffre de secrets pour les variables d'environnement (non commencée)
 - 15.15 — Politique de patching formelle + test de rollback (non commencée)
 

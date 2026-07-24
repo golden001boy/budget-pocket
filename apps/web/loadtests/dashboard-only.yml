@@ -1,0 +1,15 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 20
+      arrivalRate: 3
+  variables:
+    sessionToken: ["PLACEHOLDER"]
+
+scenarios:
+  - name: "Dashboard only"
+    flow:
+      - get:
+          url: "/dashboard"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"

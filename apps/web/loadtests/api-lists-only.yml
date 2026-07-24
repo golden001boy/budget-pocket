@@ -1,0 +1,27 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 20
+      arrivalRate: 3
+  variables:
+    sessionToken: ["PLACEHOLDER"]
+
+scenarios:
+  - name: "Paginated API list routes only, no dashboard"
+    flow:
+      - get:
+          url: "/api/accounts"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/api/goals"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/api/portfolio"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/api/transactions?pageSize=20"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"

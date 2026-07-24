@@ -18,7 +18,9 @@
     "test:watch": "jest --watch",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "test:load": "artillery run loadtests/read-routes.yml",
+    "test:load:auth": "artillery run loadtests/login-latency.yml"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.26.0",
@@ -57,6 +59,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
+    "artillery": "^2.0.33",
     "@types/bcryptjs": "^2.4.6",
     "@types/jest": "^29.5.14",
     "@types/node": "^20.0.0",

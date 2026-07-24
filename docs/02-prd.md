@@ -164,7 +164,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.10 | Migrer Next.js 14 → 15+ | Should | L | ✅ | DEV-02 (résidu de 15.5) |
 | 15.11 | Reset de mot de passe (flux email + token) | Must | M | ✅ | Gate Phase 6 §9.1 |
 | 15.12 | Vérification email à l'inscription | Must | M | ✅ | Gate Phase 6 §9.1 |
-| 15.13 | Tests de charge | Should | M | 🔴 | Gate Phase 6 §9.3 |
+| 15.13 | Tests de charge | Should | M | ✅ | Gate Phase 6 §9.3 |
 | 15.14 | Coffre de secrets pour les variables d'environnement | Could | S | 🔴 | Gate Phase 6 §9.2 |
 | 15.15 | Politique de patching formelle + test de rollback | Could | S | 🔴 | Gate Phase 6 §9.3 |
 
@@ -682,21 +682,115 @@ l'instant.
 
 ---
 
-### Story 15.13 — Tests de charge · 🔴 À faire
+### Story 15.13 — Tests de charge · ✅ Fait (avec distorsion documentée)
 
 **Story** : En tant que mainteneur, je veux savoir comment l'application se
 comporte sous charge réaliste (nombre d'utilisateurs concurrents,
 requêtes/seconde sur les routes les plus sollicitées), afin d'identifier
 les goulots d'étranglement avant un vrai lancement (Gate Phase 6 §9.3).
 
-**Constat** : jamais exécuté à ce jour ; pas d'outillage choisi (k6,
-Artillery, autoscan). Risque connu à surveiller en priorité : le retry
-Redis en fail-open ajoute ~9-10s de latence par requête quand Redis est
-injoignable (story 15.1) — un test de charge sans Redis actif donnerait des
-résultats trompeurs, donc cette story suppose Redis opérationnel au moment
-de l'exécution.
+**Décision de cadrage** : pas de Redis local disponible sur ce poste
+(installation Chocolatey refusée par vous — cf. story 15.1/15.12, risque déjà
+documenté). Choix assumé : **tester sans Redis et documenter la distorsion**
+plutôt que reporter la story. Conséquence directe : toute latence côté
+rate-limiting est gonflée par le comportement fail-open (retries avant échec
+silencieux, ~9-10s/requête — story 15.1) ; les chiffres de charge sur les
+routes d'API pures (hors login) restent, eux, représentatifs.
 
-**Non commencée.**
+**Outillage** : [Artillery](https://www.artillery.io/) 2.0.33, choisi contre
+k6 pour ne rien installer au niveau système (k6 nécessite un binaire natif ;
+Artillery est un package npm pur). Ajout du override `artillery>js-yaml:
+^3.14.1` — Artillery dépend en interne de l'API `yaml.safeLoad` retirée en
+js-yaml v4, alors que le projet impose js-yaml v4 partout ailleurs
+(ADR-007, story 15.5) ; exception scopée à Artillery uniquement, revérifiée
+`pnpm audit` = 0 vulnérabilité après coup (les CVE historiques de js-yaml
+visaient `load()`, pas `safeLoad()`, et 3.14.1 ne porte aucun advisory
+ouvert).
+
+**Méthodologie** : build de production réel (`pnpm build && pnpm start`),
+contre la vraie BDD Neon, avec le compte de démo
+(`demo@budget-pocket.app`). Scénarios dans
+[apps/web/loadtests/](../apps/web/loadtests/), du plus large au plus ciblé,
+pour isoler la source de chaque échec plutôt que de rapporter un résultat
+agrégé opaque :
+- `read-routes.yml` : login par utilisateur virtuel + 4 routes API paginées
+  + `/dashboard` (charge combinée, 2 puis 5 req/s).
+- `login-latency.yml` : sonde séquentielle sur `/api/auth/mobile` seul.
+- `read-routes-isolated.yml` : mêmes routes que `read-routes.yml` mais avec
+  un `sessionToken` injecté via `--variables` (une session partagée), pour
+  isoler les routes de lecture du coût de login.
+- `api-lists-only.yml` : les 4 routes API paginées seules, sans dashboard.
+- `dashboard-only.yml` : `/dashboard` seule.
+
+**Résultats mesurés** :
+| Scénario | Volume | Échecs | p95 |
+|---|---|---|---|
+| `api-lists-only.yml` (4 routes API, pas de login ni dashboard) | 240 req | **0 %** | 596 ms |
+| `login-latency.yml` (`/api/auth/mobile` seul) | 10 req | 1 req timeout complet | p95/p99 = 6838 ms, moyenne 5355 ms |
+| `dashboard-only.yml` | 60 req | **100 %** (`ERR_SOCKET_TIMEOUT`), à seulement 3 req/s | — |
+| `read-routes.yml` (login par VU + lectures + dashboard) | 280 req | 73,6 % | — |
+| `read-routes-isolated.yml` (session partagée, dashboard dilué parmi 5 appels) | 1050 req | 20 % | — |
+
+**Diagnostic** : deux causes distinctes, pas une seule.
+1. **Login/rate-limiting** — coût Redis fail-open déjà documenté (story
+   15.1), confirmé ici avec des chiffres réels (~5,4s moyenne). Distorsion
+   assumée de ce test : non représentatif d'un environnement avec Redis
+   opérationnel.
+2. **`/dashboard` — goulot distinct, indépendant de Redis** : tracé jusqu'à
+   [`computeMonthlySnapshot()`](../apps/web/src/lib/analytics/snapshot.ts),
+   qui tente un `cacheGet()` (échoue vite et silencieusement, cf.
+   `lib/cache.ts`), puis exécute inconditionnellement un `findMany` +
+   `upsert` Prisma sur la clé composite unique `userId_year_month` de
+   `MonthlySnapshot`. Hypothèse retenue : contention de verrou ligne
+   Postgres quand plusieurs requêtes concurrentes du **même** compte de
+   démo (tous les utilisateurs virtuels du test partagent un seul compte)
+   ciblent la même ligne — aggravée par le fait que le cache ne "hit"
+   jamais (Redis injoignable), donc chaque requête relance le recalcul
+   complet. Cross-validé par `read-routes-isolated.yml` : 20 % d'échec
+   quand `/dashboard` est diluée parmi 5 appels, contre 100 % quand elle
+   est seule sous la même charge — cohérent avec un goulot localisé à cette
+   route plutôt qu'un problème réseau général.
+   - **Tentative de correctif testée et invalidée** : ajout de
+     `connectTimeout: 1000` à
+     [`lib/redis.ts`](../apps/web/src/lib/redis.ts), hypothèse que le
+     timeout de connexion TCP (pas configuré, donc valeur par défaut
+     ioredis) était en cause. Rebuild + retest : **toujours 100 %
+     d'échec** sur `dashboard-only.yml`. Logs serveur confirment un
+     `ECONNREFUSED` quasi instantané, pas un timeout lent — la piste Redis
+     est écartée pour ce goulot précis. Changement **annulé** (revert
+     intégral de `lib/redis.ts`) plutôt que laissé en place avec un
+     commentaire trompeur.
+   - **Non corrigé dans cette story** — le diagnostic est solide et
+     reproductible, mais la story portait sur la mesure, pas le correctif.
+     Recommandation pour une story de suivi : garde anti-thundering-herd
+     sur `computeMonthlySnapshot` (ex. skip l'upsert si un snapshot récent
+     existe déjà) et/ou remise en service réelle de Redis en local.
+
+**Acceptance criteria** :
+- [x] Outil de charge choisi et installé (Artillery), scripts dans
+      `apps/web/loadtests/`, deux commandes `pnpm --filter web run
+      test:load` / `test:load:auth`.
+- [x] Charge exécutée contre un build de production réel, BDD Neon réelle.
+- [x] Résultats quantifiés et goulots identifiés (routes API paginées :
+      saines ; login : coût Redis fail-open chiffré ; dashboard : goulot
+      distinct diagnostiqué et cross-validé, non corrigé).
+- [x] Distorsion du test (absence de Redis) documentée explicitement,
+      décision assumée avec vous plutôt que masquée.
+- [x] Tentative de correctif tracée honnêtement, y compris son échec et son
+      revert.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (52/52) verts après les
+      changements de dépendances de cette story.
+- [ ] **Correctif du goulot dashboard** — hors scope, story de suivi
+      recommandée (voir diagnostic ci-dessus).
+- [ ] **Test avec Redis réellement opérationnel** — non fait, nécessiterait
+      une installation locale (refusée pour cette story) ou un
+      environnement de staging dédié.
+
+**Implémentation** :
+[apps/web/loadtests/](../apps/web/loadtests/) (5 scénarios Artillery),
+[apps/web/package.json](../apps/web/package.json) (`test:load`,
+`test:load:auth`), override `artillery>js-yaml` dans
+[package.json racine](../package.json).
 
 ---
 

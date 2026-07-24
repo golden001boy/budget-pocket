@@ -1,0 +1,48 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    # Deliberately light (story 15.13) — the target DB is the real shared
+    # Neon instance on the Free tier, not a disposable staging DB. This is
+    # a smoke-level load test to catch obvious N+1s or missing indexes on
+    # the most-hit authenticated GET routes, not a capacity/stress test.
+    - duration: 30
+      arrivalRate: 2
+      name: "Warm-up"
+    - duration: 30
+      arrivalRate: 5
+      name: "Light load"
+  variables:
+    email: "demo@budget-pocket.app"
+    password: "demo1234"
+
+scenarios:
+  - name: "Authenticated read-heavy routes (paginated lists + dashboard)"
+    flow:
+      - post:
+          url: "/api/auth/mobile"
+          json:
+            email: "{{ email }}"
+            password: "{{ password }}"
+          capture:
+            - json: "$.token"
+              as: "sessionToken"
+      - get:
+          url: "/api/accounts"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/api/goals"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/api/portfolio"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/api/transactions?pageSize=20"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/dashboard"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"

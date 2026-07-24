@@ -1,0 +1,22 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    # Not a load test — a small number of sequential requests specifically
+    # to measure the real latency of the documented Redis fail-open path
+    # (story 15.1 ADR-004) when Redis is unreachable, with actual numbers
+    # instead of the previously-estimated "~9-10s".
+    - duration: 10
+      arrivalRate: 1
+      name: "Sequential probes"
+  variables:
+    email: "demo@budget-pocket.app"
+    password: "demo1234"
+
+scenarios:
+  - name: "Login (exercises the rate-limit Redis calls)"
+    flow:
+      - post:
+          url: "/api/auth/mobile"
+          json:
+            email: "{{ email }}"
+            password: "{{ password }}"

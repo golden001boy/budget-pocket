@@ -459,6 +459,55 @@ l'avance.
 
 **Détail complet** : [02-prd.md — Story 15.10](02-prd.md#story-1510--migrer-nextjs-14--15--✅-done).
 
+### ADR-010 — Tests de charge sans Redis local + goulot `/dashboard` non corrigé (story 15.13)
+
+**Contexte** : story 15.13 (tests de charge, Gate Phase 6 §9.3). Aucun
+Redis local disponible sur ce poste ; installation via Chocolatey proposée
+et **explicitement refusée**. Deux choix possibles : reporter la story
+jusqu'à disposer d'un Redis local, ou tester quand même en documentant
+honnêtement la distorsion que ça introduit.
+
+**Décision** : tester sans Redis, documenter la distorsion plutôt que
+reporter. Justification : le coût du fail-open Redis sur le rate limiting
+est déjà connu et documenté depuis l'ADR-004/story 15.1 ; le refaire
+mesurer une fois de plus n'apporte rien de neuf, alors que les routes de
+lecture pure (accounts/goals/portfolio/transactions, sans rate limiting)
+restent, elles, mesurables sans distorsion. Reporter la story entière
+aurait sacrifié une information utile (l'état réel des routes de lecture)
+pour éviter de répéter une limitation déjà connue.
+
+**Découverte en cours de route, hors périmètre initial** : `/dashboard`
+échoue à 100 % sous une charge de seulement 3 req/s
+(`ERR_SOCKET_TIMEOUT`), un ordre de grandeur en dessous de ce qu'on
+attendrait d'un problème Redis pur (les routes API pures encaissent la
+même charge sans problème). Tracé jusqu'à
+[`computeMonthlySnapshot()`](../apps/web/src/lib/analytics/snapshot.ts) :
+`cacheGet()` échoue vite (Redis injoignable, `lib/cache.ts` avale
+l'erreur), puis la fonction exécute **inconditionnellement** un `findMany`
++ `upsert` Prisma sur la clé composite unique `userId_year_month` de
+`MonthlySnapshot`. Hypothèse : contention de verrou ligne Postgres, chaque
+requête concurrente du même compte de démo (tous les utilisateurs
+virtuels du test de charge partagent un seul compte) tentant d'upsert la
+même ligne, sans jamais bénéficier du cache pour éviter ce recalcul.
+
+**Tentative de correctif testée et invalidée** : ajout de `connectTimeout:
+1000` à [`lib/redis.ts`](../apps/web/src/lib/redis.ts) (hypothèse : lenteur
+de connexion TCP). Rebuild + retest → toujours 100 % d'échec ; logs serveur
+montrent un `ECONNREFUSED` quasi instantané (pas un timeout lent), donc la
+piste "connexion Redis lente" est écartée pour ce goulot précis. Changement
+**annulé intégralement** (pas de correctif partiel laissé en place avec un
+commentaire qui prétendrait résoudre le problème).
+
+**Ce qui n'a volontairement pas été fait dans cette story** : corriger le
+goulot lui-même (ex. garde anti-thundering-herd sur
+`computeMonthlySnapshot`, ou remise en service réelle de Redis en local
+pour vérifier si le cache, une fois fonctionnel, absorbe le problème). La
+story portait sur la mesure et le diagnostic, pas la correction — une
+story de suivi dédiée est recommandée mais pas encore créée dans le PRD.
+
+**Détail complet, chiffres et méthodologie** :
+[02-prd.md — Story 15.13](02-prd.md#story-1513--tests-de-charge--fait-avec-distorsion-documentée).
+
 ## 7. Mapping Story → Fichiers affectés
 
 Voir chaque fichier `specs/epic-XX-*.md` — chaque story y liste ses fichiers

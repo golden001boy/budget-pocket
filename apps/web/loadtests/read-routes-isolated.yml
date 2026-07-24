@@ -1,0 +1,39 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 30
+      arrivalRate: 2
+      name: "Warm-up"
+    - duration: 30
+      arrivalRate: 5
+      name: "Light load"
+  variables:
+    # Injected via --variables at run time — a single session shared across
+    # all virtual users, to isolate the read routes' own performance from
+    # the separately-measured, known-costly concurrent-login pileup (see
+    # read-routes.yml's result and login-latency.yml).
+    sessionToken: ["PLACEHOLDER"]
+
+scenarios:
+  - name: "Authenticated read-heavy routes (paginated lists + dashboard), single shared session"
+    flow:
+      - get:
+          url: "/api/accounts"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/api/goals"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/api/portfolio"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/api/transactions?pageSize=20"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
+      - get:
+          url: "/dashboard"
+          headers:
+            Cookie: "next-auth.session-token={{ sessionToken }}"
