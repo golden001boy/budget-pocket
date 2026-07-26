@@ -167,6 +167,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.13 | Tests de charge | Should | M | ✅ | Gate Phase 6 §9.3 |
 | 15.14 | Coffre de secrets pour les variables d'environnement | Could | S | 🔴 | Gate Phase 6 §9.2 |
 | 15.15 | Politique de patching formelle + test de rollback | Could | S | 🔴 | Gate Phase 6 §9.3 |
+| 15.16 | Corriger le goulot `/dashboard` trouvé en story 15.13 | Should | M | ✅ | Gate Phase 6 §9.3 (suivi 15.13) |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -736,7 +737,12 @@ agrégé opaque :
    15.1), confirmé ici avec des chiffres réels (~5,4s moyenne). Distorsion
    assumée de ce test : non représentatif d'un environnement avec Redis
    opérationnel.
-2. **`/dashboard` — goulot distinct, indépendant de Redis** : tracé jusqu'à
+2. **`/dashboard` — goulot distinct, indépendant de Redis** ⚠️ **hypothèse
+   invalidée par la story 15.16** (le vrai coupable était le comportement
+   de reconnexion `ioredis`, pas Postgres — voir
+   [Story 15.16](#story-1516--corriger-le-goulot-dashboard-trouvé-en-story-1513--done)
+   pour la cause réelle et le correctif). Diagnostic original conservé
+   ci-dessous tel quel, par souci de traçabilité : tracé jusqu'à
    [`computeMonthlySnapshot()`](../apps/web/src/lib/analytics/snapshot.ts),
    qui tente un `cacheGet()` (échoue vite et silencieusement, cf.
    `lib/cache.ts`), puis exécute inconditionnellement un `findMany` +
@@ -826,6 +832,130 @@ Phase 6 §9.3).
 **Constat** : aucune politique de patching écrite à ce jour. Chevauche
 partiellement la story 15.7 (rollback BDD documenté, jamais testé en
 pratique) — à cadrer ensemble plutôt qu'en double lors de l'implémentation.
+
+**Non commencée.**
+
+---
+
+### Story 15.16 — Corriger le goulot `/dashboard` trouvé en story 15.13 · ✅ Done
+
+**Story** : En tant qu'utilisateur, je veux que `/dashboard` reste
+disponible sous charge concurrente, afin de ne pas subir le goulot
+d'étranglement identifié lors des tests de charge (story 15.13, Gate
+Phase 6 §9.3).
+
+**⚠️ Le diagnostic de la story 15.13 (ADR-010) était faux.** L'hypothèse de
+départ — contention de verrou ligne Postgres sur `MonthlySnapshot` — a été
+invalidée par cette story. Le vrai coupable : le comportement de reconnexion
+d'`ioredis`. Détail complet ci-dessous ; [ADR-010 dans
+03-architecture.md](03-architecture.md#adr-010--tests-de-charge-sans-redis-local--goulot-dashboard-non-corrigé-story-1513)
+a été mis à jour avec une correction plutôt que réécrit en silence — la
+chaîne de raisonnement (fausse piste incluse) reste visible.
+
+**Ce qui a été vérifié en premier, avant de toucher au code** : un `curl`
+serveur-à-serveur direct sur `/dashboard`, une seule requête, sans aucune
+charge concurrente, prenait déjà 12 à 16 secondes — de façon répétée, pas
+seulement au premier appel (ce qui aurait pu suggérer un cold-start Neon).
+Un script isolé mesurant les mêmes requêtes Prisma (`findUnique` sur
+`MonthlySnapshot`, `findMany` sur `Transaction`) directement contre Neon,
+sans passer par Next.js, donnait des temps de 140 à 300ms — sains. Donc pas
+la BDD. Un client `ioredis` isolé, tout neuf, configuré à l'identique
+(`maxRetriesPerRequest: 3`, `lazyConnect: true`), rejetait un `get()` en
+371ms — sain aussi. Donc pas non plus le comportement "de base" de la
+librairie. La différence : le client Redis du **serveur de prod déjà en
+vie** (celui qui avait essuyé les dizaines d'échecs du test de charge
+précédent) restait lent en continu, y compris sur une requête isolée,
+plusieurs minutes après. Cela pointait vers un état interne accumulé par le
+client au fil du temps, pas vers la BDD ni vers un comportement Redis de
+base.
+
+**Cause réelle** : `ioredis`, avec sa configuration par défaut
+(`enableOfflineQueue` activé par défaut), **met en file d'attente** les
+commandes émises pendant une déconnexion et les fait attendre le prochain
+cycle de reconnexion automatique — cycle dont le délai (`retryStrategy`)
+s'allonge progressivement et **ne se réinitialise jamais** tant que le
+client reste incapable de se reconnecter. Sur un serveur de longue durée
+avec Redis indisponible en continu (ce poste, en permanence), ce délai
+accumulé fait que **chaque appel cache, même unique, devient de plus en
+plus lent au fil de la vie du process** — jusqu'à 12-16 secondes observées
+ici, bien au-delà des ~300ms attendus d'un client fraîchement créé. C'est
+un bug de fond, pas un artefact du test de charge : n'importe quel
+déploiement réel où Redis tombe en panne durablement subirait la même
+dégradation progressive.
+
+**Correctif** : `enableOfflineQueue: false` sur le client
+[`lib/redis.ts`](../apps/web/src/lib/redis.ts). Une commande émise pendant
+une déconnexion est désormais **rejetée immédiatement** (0-14ms mesurés,
+stable sur 10 appels espacés d'une seconde) au lieu d'attendre le cycle de
+reconnexion. Vérifié isolément par script Node avant d'y toucher en prod.
+
+**Résultats mesurés avant/après** (même méthodologie et mêmes scénarios
+qu'en story 15.13, contre un build de production réel + Neon réelle) :
+| Scénario | Avant (15.13) | Après (15.16) |
+|---|---|---|
+| `dashboard-only.yml` (60 req, 3 req/s) | 100 % d'échec | **0 % d'échec**, p95 1526ms, p99 1720ms |
+| `login-latency.yml` (`/api/auth/mobile`, 10 req) | moyenne 5355ms, p95/p99 6838ms, 1 timeout complet | **moyenne 410ms, p95/p99 441ms, 0 échec** |
+| `api-lists-only.yml` (240 req, routes sans Redis) | 0 % d'échec (déjà sain) | 0 % d'échec, p95 573ms (inchangé) |
+| `read-routes-isolated.yml` (1050 req, session partagée, dashboard dilué) | 20 % d'échec | **5 % d'échec** (résiduel, voir note ci-dessous) |
+| `read-routes.yml` (login par VU + lectures + dashboard) | 73,6 % d'échec | **20,1 % d'échec** (résiduel, voir note ci-dessous) |
+
+**Ce correctif résout aussi, en même temps, un coût déjà documenté et
+accepté depuis la story 15.1/ADR-004** : le "coût du fail-open Redis"
+(~9-10s par requête, jusqu'ici considéré comme un compromis architectural
+inhérent au choix fail-open) n'était en réalité pas inhérent au design —
+c'était le même bug de configuration `ioredis`. `login-latency.yml` le
+confirme directement : moyenne 5355ms → 410ms, un ordre de grandeur.
+
+**Échecs résiduels, non éliminés dans cette story** : `read-routes.yml`
+(login par utilisateur virtuel à chaque VU) garde 20 % d'échec, et
+`read-routes-isolated.yml` (session partagée, pas de login) garde 5 %.
+Ni l'un ni l'autre n'implique plus Redis (`api-lists-only.yml`, qui
+n'appelle jamais Redis, reste à 0 %). Hypothèse la plus probable :
+capacité de connexions réelle du plan Neon Free sous charge combinée
+(jusqu'à ~13-65 req/s cumulées selon le scénario) plutôt qu'un bug
+applicatif — cohérent avec le fait que `read-routes.yml`, qui ajoute un
+`bcrypt.compare` par VU en plus des requêtes BDD, échoue davantage que
+`read-routes-isolated.yml` qui n'en fait aucun. **Non investigué plus
+avant** — hors périmètre de cette story (corriger le goulot dashboard
+diagnostiqué en 15.13), à cadrer séparément si jugé prioritaire.
+
+**Changement additionnel, indépendant du vrai correctif** :
+[`computeMonthlySnapshot()`](../apps/web/src/lib/analytics/snapshot.ts)
+lit désormais la ligne `MonthlySnapshot` existante et retourne son contenu
+sans recalcul ni ré-`upsert` si elle date de moins de 6h (même fenêtre que
+le TTL de cache déjà déclaré, `CACHE_TTL.MONTHLY_SNAPSHOT`) — évite un
+`findMany` + `upsert` Prisma inutile à chaque requête, y compris quand
+Redis fonctionne mal. **Ce n'est pas ce qui a corrigé le goulot mesuré ici**
+(le vrai correctif est `enableOfflineQueue`), mais reste une optimisation
+défensive raisonnable pour un scénario à plus grande échelle réelle. Effet
+de bord assumé : en environnement sans Redis fonctionnel, le tableau de
+bord du mois en cours devient éventuellement périmé jusqu'à 6h après un
+ajout de transaction, au lieu d'être toujours recalculé en direct — c'est
+exactement le contrat de fraîcheur que le cache Redis (jamais actif ici)
+était censé imposer depuis le début ; ce changement le fait simplement
+respecter même quand Redis est indisponible.
+
+**Acceptance criteria** :
+- [x] Cause racine réelle identifiée par isolation méthodique (BDD hors
+      cause, comportement Redis de base hors cause, état accumulé du
+      client Redis du serveur en cause) plutôt que reconduite sans
+      vérification depuis le diagnostic (faux) de la story 15.13.
+- [x] Correctif appliqué (`enableOfflineQueue: false`), vérifié isolément
+      avant modification du code de prod.
+- [x] `dashboard-only.yml` : 100 % → 0 % d'échec, mesuré contre un build de
+      production réel + Neon réelle.
+- [x] `login-latency.yml` : coût fail-open Redis réduit d'un ordre de
+      grandeur (5355ms → 410ms moyenne), fermant une limitation acceptée
+      depuis la story 15.1/ADR-004.
+- [x] Aucune régression sur les routes déjà saines (`api-lists-only.yml`
+      toujours à 0 %).
+- [x] Correction honnête d'ADR-010 (diagnostic faux de la story 15.13),
+      pas de réécriture silencieuse.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (56/56, +4 nouveaux tests
+      pour `computeMonthlySnapshot`) verts.
+- [ ] **Échecs résiduels sous charge combinée** (20 % / 5 % selon
+      scénario) non investigués — hypothèse capacité Neon Free, non
+      confirmée, hors périmètre de cette story.
 
 **Non commencée.**
 

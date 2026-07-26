@@ -241,6 +241,13 @@ en production (chaque instance a son propre compteur).
 fail-open = pas de protection). Redis n'est pas encore configuré dans
 l'environnement local à ce jour — voir [05-status.md](05-status.md).
 
+**Mise à jour (story 15.16)** : le coût mesuré du fail-open (~9-10s puis
+~5,4s par requête selon les mesures, story 15.1 puis 15.13) a longtemps été
+considéré comme un compromis inhérent au design fail-open. Il ne l'était
+pas — c'était un bug de configuration `ioredis` (`enableOfflineQueue` non
+désactivé, backoff de reconnexion qui s'accumule sans fin). Corrigé :
+coût réduit à ~410ms. Voir [ADR-011](#adr-011--vraie-cause-du-goulot-dashboard--backoff-de-reconnexion-ioredis-pas-postgres-story-1516).
+
 ### ADR-005 — Pas de test unitaire livré avec la story 15.1
 **Contexte** : la règle de développement §6.1 du framework impose des tests
 unitaires écrits avec le code. Aucun test runner n'est cependant câblé dans le
@@ -461,6 +468,16 @@ l'avance.
 
 ### ADR-010 — Tests de charge sans Redis local + goulot `/dashboard` non corrigé (story 15.13)
 
+> **⚠️ Correction (story 15.16)** : l'hypothèse de contention Postgres
+> ci-dessous, posée dans cette story, **s'est révélée fausse**. La cause
+> réelle était le comportement de reconnexion `ioredis` (délai de backoff
+> qui s'accumule sur la durée de vie du client sans jamais se
+> réinitialiser). Corrigée dans
+> [Story 15.16](02-prd.md#story-1516--corriger-le-goulot-dashboard-trouvé-en-story-1513--done).
+> Le texte original est conservé tel quel ci-dessous par souci de
+> traçabilité du raisonnement (fausse piste incluse), plutôt que réécrit
+> en silence.
+
 **Contexte** : story 15.13 (tests de charge, Gate Phase 6 §9.3). Aucun
 Redis local disponible sur ce poste ; installation via Chocolatey proposée
 et **explicitement refusée**. Deux choix possibles : reporter la story
@@ -507,6 +524,65 @@ story de suivi dédiée est recommandée mais pas encore créée dans le PRD.
 
 **Détail complet, chiffres et méthodologie** :
 [02-prd.md — Story 15.13](02-prd.md#story-1513--tests-de-charge--fait-avec-distorsion-documentée).
+
+### ADR-011 — Vraie cause du goulot `/dashboard` : backoff de reconnexion `ioredis`, pas Postgres (story 15.16)
+
+**Contexte** : story 15.16, cadrée pour corriger le goulot `/dashboard`
+diagnostiqué (à tort, voir correction en tête d'ADR-010) comme une
+contention de verrou ligne Postgres.
+
+**Méthode de vérification, avant de toucher au code** : plutôt que de
+recoder directement une hypothèse de correctif, trois mesures isolées ont
+été prises pour localiser la vraie cause :
+1. Une requête `curl` unique, sans charge concurrente, sur `/dashboard` :
+   déjà 12-16 secondes, de façon répétée (pas seulement au premier appel —
+   élimine l'hypothèse d'un cold-start Neon).
+2. Un script Node isolé exécutant les mêmes requêtes Prisma
+   (`monthlySnapshot.findUnique`, `transaction.findMany`) directement
+   contre Neon, hors Next.js : 140-300ms — la BDD est saine, hors cause.
+3. Un client `ioredis` isolé et fraîchement créé, config identique
+   (`maxRetriesPerRequest: 3`, `lazyConnect: true`) : un `get()` rejette en
+   371ms — comportement de base sain, hors cause lui aussi.
+
+Seul le client Redis du **serveur de production déjà en vie** (celui qui
+avait subi les dizaines d'échecs du test de charge précédent) restait lent
+en continu, y compris sur une requête isolée plusieurs minutes après.
+
+**Cause réelle** : `ioredis`, avec `enableOfflineQueue` à sa valeur par
+défaut (activé), met en **file d'attente** les commandes émises pendant une
+déconnexion et les fait attendre le prochain cycle de reconnexion
+automatique. Le délai de ce cycle (`retryStrategy`) **s'allonge
+progressivement et ne se réinitialise jamais** tant que le client échoue à
+se reconnecter. Sur un process de longue durée avec Redis indisponible en
+continu, ce délai accumulé fait que chaque appel cache — même unique,
+même sans aucune charge concurrente — devient de plus en plus lent au fil
+de la vie du process. C'est un bug de fond de configuration, pas un
+artefact du test de charge : n'importe quel déploiement réel où Redis tombe
+en panne durablement subirait la même dégradation progressive et sans
+fin.
+
+**Correctif** : `enableOfflineQueue: false` sur
+[`lib/redis.ts`](../apps/web/src/lib/redis.ts). Une commande émise pendant
+une déconnexion est rejetée immédiatement (0-14ms mesurés isolément,
+stable sur 10 appels espacés d'une seconde, pas de dégradation dans le
+temps) au lieu d'attendre le cycle de reconnexion.
+
+**Résultats** : `dashboard-only.yml` 100 % → 0 % d'échec ;
+`login-latency.yml` (qui exerce le même mécanisme via le rate limiting)
+moyenne 5355ms → 410ms — un ordre de grandeur, et referme au passage une
+limitation acceptée depuis la story 15.1/ADR-004 sans qu'elle soit en
+réalité inhérente au design fail-open. Détail complet, chiffres avant/après
+et échecs résiduels non expliqués par Redis :
+[02-prd.md — Story 15.16](02-prd.md#story-1516--corriger-le-goulot-dashboard-trouvé-en-story-1513--done).
+
+**Changement additionnel, non responsable de la correction ci-dessus** :
+[`computeMonthlySnapshot()`](../apps/web/src/lib/analytics/snapshot.ts)
+court-circuite désormais le recalcul si une ligne `MonthlySnapshot`
+existante date de moins de 6h (même fenêtre que `CACHE_TTL.MONTHLY_SNAPSHOT`).
+Optimisation défensive indépendante, gardée pour limiter la charge BDD à
+plus grande échelle réelle, mais ce n'est pas ce qui a résolu le goulot
+mesuré ici (voir Story 15.16 pour la distinction claire entre les deux
+changements).
 
 ## 7. Mapping Story → Fichiers affectés
 

@@ -83,11 +83,17 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
   [apps/web/playwright.config.ts](../apps/web/playwright.config.ts)). Pas
   dans le pipeline CI ([.github/workflows/ci.yml](../.github/workflows/ci.yml)
   ne lance que `type-check`/`test`). **Connu instable en local sans Redis**
-  (story 15.10) : `page.waitForURL(..., { timeout: 15000 })` est plus court
-  que le retry Redis (~9-10s, story 15.1) combiné au compile à froid de
-  `next dev` — la connexion et la navigation aboutissent réellement,
-  simplement après 15s. Diagnostiqué en détail, non corrigé (changement de
-  timeouts de test, hors périmètre d'une story de migration de version).
+  (story 15.10), attribué à l'époque au retry Redis (~9-10s, story 15.1)
+  combiné au compile à froid de `next dev`. **Re-testé après le correctif
+  Redis de la story 15.16** (`enableOfflineQueue: false`, qui a fait
+  chuter le coût du retry Redis de ~5,4s à ~0,4s) : l'instabilité
+  **persiste** (2 puis 3 échecs sur 10 selon l'exécution, mêmes
+  `TimeoutError` sur `page.waitForURL`/`page.click`), ce qui **écarte
+  Redis comme cause dominante** et pointe plutôt vers le compile à froid
+  de `next dev` (ou une contention entre workers Playwright parallèles
+  compilant plusieurs routes en même temps) comme facteur principal.
+  Non corrigé — hors périmètre des stories 15.13/15.16 (tests de charge),
+  resterait à cadrer comme story dédiée si jugé prioritaire.
 - **Unitaires** : câblés depuis la story 15.9 (`apps/web/jest.config.js`,
   `pnpm test`/`pnpm --filter web run test`). 52 tests, 6 fichiers —
   [rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts)
@@ -111,22 +117,29 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
   runner (nécessiterait `jest-expo`, hors périmètre de 15.9).
 - **Sécurité** : aucun test automatisé des items du catalogue §8 — cet audit
   est une revue de code manuelle, pas une exécution de suite de tests.
-- **Charge** : Artillery (story 15.13), scénarios dans
-  [apps/web/loadtests/](../apps/web/loadtests/), exécutés une fois contre un
+- **Charge** : Artillery (story 15.13, correctif en story 15.16), scénarios
+  dans [apps/web/loadtests/](../apps/web/loadtests/), exécutés contre un
   build de production (`pnpm build && pnpm start`) + BDD Neon réelle, hors
   CI. Routes API paginées (`accounts`/`goals`/`portfolio`/`transactions`) :
-  saines, 0 % d'échec, p95 596ms sur 240 requêtes. `/dashboard` : goulot
-  distinct trouvé — 100 % d'échec (`ERR_SOCKET_TIMEOUT`) à seulement 3 req/s
-  en isolation, 20 % quand dilué parmi les autres routes ; tracé jusqu'à un
-  `upsert` Prisma non protégé sur la clé composite de `MonthlySnapshot`
-  (contention probable quand plusieurs requêtes concurrentes du même compte
-  ciblent la même ligne), **non corrigé** — voir
+  saines, 0 % d'échec, p95 ~570-600ms sur 240 requêtes, inchangé entre les
+  deux stories. `/dashboard` (story 15.13) : goulot distinct trouvé — 100 %
+  d'échec (`ERR_SOCKET_TIMEOUT`) à seulement 3 req/s en isolation. Diagnostic
+  initial (contention Postgres sur `MonthlySnapshot`) **invalidé par la
+  story 15.16** : cause réelle = `ioredis` qui met les commandes en file
+  d'attente pendant une déconnexion et attend un cycle de reconnexion dont
+  le délai s'accumule sans fin sur la durée de vie du process (pas de
+  rapport avec Postgres). Correctif : `enableOfflineQueue: false` sur
+  [`lib/redis.ts`](../apps/web/src/lib/redis.ts) — `/dashboard` passe de
+  100 % à **0 % d'échec** ; le coût du rate limiting fail-open (déjà
+  accepté depuis 15.1/ADR-004) chute de ~5355ms à **~410ms** moyenne sur
+  `/api/auth/mobile`, le même bug étant en cause. Échecs résiduels sous
+  charge combinée (login par VU + lectures + dashboard) : 20,1 % — sans
+  rapport avec Redis (routes API pures toujours à 0 %), hypothèse capacité
+  Neon Free non confirmée, non investiguée plus avant. Détail complet :
   [02-prd.md, story 15.13](02-prd.md#story-1513--tests-de-charge--fait-avec-distorsion-documentée)
-  pour le diagnostic complet et la tentative de correctif invalidée. Test
-  réalisé **sans Redis local** (distorsion assumée et documentée) : le coût
-  du rate limiting fail-open (~5,4s moyenne mesurée sur `/api/auth/mobile`,
-  p95/p99 6838ms) est réel dans cet environnement mais ne reflète pas un
-  déploiement avec Redis opérationnel.
+  (diagnostic initial, y compris la fausse piste, conservé tel quel) et
+  [story 15.16](02-prd.md#story-1516--corriger-le-goulot-dashboard-trouvé-en-story-1513--done)
+  (cause réelle, correctif, chiffres avant/après).
 
 ## 7. Synthèse — priorités avant `bmad prelaunch`
 
@@ -162,7 +175,11 @@ Ordre recommandé (Critique → Haute → Moyenne) :
 12. ~~Gate Phase 6 §9.1 — vérification email (story 15.12)~~ ✅
     (non-bloquant par décision produit ; même nuance que 15.11 sur le
     critère "production réelle")
-13. ~~Gate Phase 6 §9.3 — tests de charge (story 15.13)~~ 🟡 (exécutés,
-    routes API saines, goulot `/dashboard` diagnostiqué mais non corrigé,
-    test réalisé sans Redis local — distorsion documentée plutôt que
-    reportée ; correctif du goulot recommandé en story de suivi)
+13. ~~Gate Phase 6 §9.3 — tests de charge (story 15.13)~~ ✅ (exécutés,
+    routes API saines, goulot `/dashboard` diagnostiqué — diagnostic
+    initial invalidé et corrigé en story 15.16 — test réalisé sans Redis
+    local, distorsion documentée plutôt que reportée)
+14. ~~Story de suivi — correctif du goulot `/dashboard` (story 15.16)~~ ✅
+    (cause réelle : bug de configuration `ioredis`, pas Postgres comme
+    supposé en 15.13 ; corrige au passage le coût fail-open Redis accepté
+    depuis 15.1/ADR-004 — ~5,4s → ~410ms)

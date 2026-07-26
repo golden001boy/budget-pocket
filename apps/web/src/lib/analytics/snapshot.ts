@@ -3,6 +3,10 @@ import { cacheGet, cacheSet, CACHE_TTL } from '../cache';
 import type { MonthlySnapshotDTO } from '@budget-pocket/shared';
 import { Decimal } from 'decimal.js';
 
+function isFresh(computedAt: Date): boolean {
+  return Date.now() - computedAt.getTime() < CACHE_TTL.MONTHLY_SNAPSHOT * 1000;
+}
+
 export async function computeMonthlySnapshot(
   userId: string,
   year: number,
@@ -11,6 +15,32 @@ export async function computeMonthlySnapshot(
   const cacheKey = `snapshot:${userId}:${year}:${month}`;
   const cached = await cacheGet<MonthlySnapshotDTO>(cacheKey);
   if (cached) return cached;
+
+  // When Redis is unreachable, cacheGet fails fast and silently (never
+  // hits), so without this DB-level fallback every request would recompute
+  // and re-upsert unconditionally — the row-lock contention found under
+  // concurrent load in story 15.13 (ADR-010). This row is read by its
+  // unique key, so it's a cheap read even under contention.
+  const existing = await prisma.monthlySnapshot.findUnique({
+    where: { userId_year_month: { userId, year, month } },
+  });
+  if (existing && isFresh(existing.computedAt)) {
+    const snapshot: MonthlySnapshotDTO = {
+      id:                existing.id,
+      userId:            existing.userId,
+      year:              existing.year,
+      month:             existing.month,
+      totalIncome:       existing.totalIncome.toNumber(),
+      totalExpenses:     existing.totalExpenses.toNumber(),
+      totalSavings:      existing.totalSavings.toNumber(),
+      savingsRate:       existing.savingsRate.toNumber(),
+      netWorth:          existing.netWorth ? existing.netWorth.toNumber() : null,
+      categoryBreakdown: existing.categoryBreakdown as MonthlySnapshotDTO['categoryBreakdown'],
+      computedAt:        existing.computedAt.toISOString(),
+    };
+    await cacheSet(cacheKey, snapshot, CACHE_TTL.MONTHLY_SNAPSHOT);
+    return snapshot;
+  }
 
   const startDate = new Date(year, month - 1, 1);
   const endDate   = new Date(year, month, 0, 23, 59, 59, 999);

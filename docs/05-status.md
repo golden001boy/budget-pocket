@@ -1,8 +1,9 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-24 (story 15.13 — tests de charge,
-✅ avec distorsion documentée)
+**Dernière mise à jour** : 2026-07-26 (story 15.16 — correction du goulot
+`/dashboard` trouvé en 15.13 ; diagnostic initial de la 15.13 invalidé et
+corrigé)
 
 ## Vue d'ensemble des phases
 
@@ -11,7 +12,7 @@
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 11 ✅ + 2 🟡 + 2 🔴 sur 15 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 12 ✅ + 2 🟡 + 2 🔴 sur 16 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -33,35 +34,53 @@
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 11 ✅ + 2 🟡 + 2 🔴 sur 15 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13 ✅ ; 15.7, 15.8 🟡 ; 15.14–15.15 🔴 non commencées) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 12 ✅ + 2 🟡 + 2 🔴 sur 16 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16 ✅ ; 15.7, 15.8 🟡 ; 15.14–15.15 🔴 non commencées) |
 
 ## Prochaine action recommandée
 
-15.11 (reset de mot de passe), 15.12 (vérification email) et 15.13 (tests
-de charge) faites. Les deux derniers Must de la checklist Phase 6 §9.1 sont
-traités ; il reste 15.14 (coffre de secrets) et 15.15 (politique de
-patching), toutes deux Could, créées suite à `bmad prelaunch`
-(2026-07-23, détail dans la section Gate Phase 6 plus bas). Le MFA (volet
-non traité de 15.8, voir ADR-008) reste sans story dédiée. Une story de
-suivi pour corriger le goulot `/dashboard` trouvé en 15.13 (contention
-Postgres sur `MonthlySnapshot`) n'est pas encore créée — à cadrer avec
-vous si vous voulez la prioriser. Voir
+15.11 (reset de mot de passe), 15.12 (vérification email), 15.13 (tests de
+charge) et 15.16 (correctif du goulot dashboard trouvé en 15.13) faites.
+Les deux derniers Must de la checklist Phase 6 §9.1 sont traités ; il
+reste 15.14 (coffre de secrets) et 15.15 (politique de patching), toutes
+deux Could, créées suite à `bmad prelaunch` (2026-07-23, détail dans la
+section Gate Phase 6 plus bas). Le MFA (volet non traité de 15.8, voir
+ADR-008) reste sans story dédiée. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour le détail complet.
+
+**Note story 15.16** : ✅ complet — corrige le goulot `/dashboard` trouvé
+en 15.13. **Le diagnostic de la 15.13 était faux** (contention Postgres
+supposée) : la vraie cause, trouvée par isolation méthodique (curl
+serveur direct, script Prisma isolé, client `ioredis` isolé), était un bug
+de configuration `ioredis` — `enableOfflineQueue` non désactivé fait
+attendre les commandes émises hors connexion sur un backoff de reconnexion
+qui s'allonge **sans jamais se réinitialiser** tant que le client reste
+déconnecté, rendant chaque appel cache de plus en plus lent au fil de la
+vie du process (12-16s observés sur une requête isolée sans charge, pas
+un problème de concurrence). Correctif : `enableOfflineQueue: false`.
+Résultat : `/dashboard` 100 % → 0 % d'échec ; **corrige aussi, au passage,
+le coût du fail-open Redis accepté depuis 15.1/ADR-004** (~5,4s → ~410ms
+sur `/api/auth/mobile`). Testé aussi contre l'instabilité E2E connue
+depuis 15.10 (attribuée en partie à ce même retry Redis) : **persiste**
+après le correctif, ce qui écarte Redis comme cause de cette instabilité-là
+et pointe vers le compile à froid de `next dev` — non corrigé, hors
+périmètre. Échecs résiduels sous charge combinée (20 %) non expliqués par
+Redis, hypothèse capacité Neon Free non confirmée. ADR-010 corrigé
+(pas réécrit en silence) + nouvel ADR-011. Détail complet :
+[02-prd.md](02-prd.md#story-1516--corriger-le-goulot-dashboard-trouvé-en-story-1513--done).
 
 **Note story 15.13** : ✅ complet, avec une distorsion assumée et
 documentée (pas de Redis local — installation Chocolatey refusée avec
 vous). Artillery contre un build de production réel + Neon réelle. Routes
 API paginées saines (0 % d'échec, p95 596ms). Goulot distinct découvert
-sur `/dashboard`, indépendant de Redis : tracé jusqu'à
-`computeMonthlySnapshot()` (`lib/analytics/snapshot.ts`), hypothèse de
-contention de verrou Postgres sur la clé composite `userId_year_month` de
-`MonthlySnapshot` quand toutes les requêtes concurrentes viennent du même
-compte de démo. Une tentative de correctif (`connectTimeout` sur Redis) a
-été testée, invalidée par re-test, et **annulée** plutôt que laissée en
-place. Correctif réel non fait dans cette story — voir
+sur `/dashboard` — **diagnostic initial invalidé par la story 15.16**, voir
+note ci-dessus pour la cause réelle. Une tentative de correctif
+(`connectTimeout` sur Redis) a été testée dans cette story, invalidée par
+re-test, et **annulée** plutôt que laissée en place — bon réflexe mais
+mauvaise piste, le vrai correctif (`enableOfflineQueue`) n'a été trouvé
+qu'en 15.16. Voir
 [02-prd.md](02-prd.md#story-1513--tests-de-charge--fait-avec-distorsion-documentée)
-pour le détail complet des chiffres et du diagnostic.
+pour le détail complet des chiffres et du diagnostic (conservé tel quel).
 
 **Note story 15.12** : ✅ complet. Vérification email **non-bloquante**
 (décision produit prise avec vous avant implémentation) : le compte reste
@@ -285,7 +304,9 @@ disponible. A aussi produit la story 15.9 (câbler Jest), nécessaire avant que
 toute story suivante puisse respecter la règle "tests écrits avec le code".
 Observation incidente : le fail-open Redis prend ~9-10s (backoff de
 reconnexion par défaut d'ioredis) — latence à corriger si l'epic revient sur
-ce fichier.
+ce fichier. **Corrigé en story 15.16** (`enableOfflineQueue: false`) : ~410ms
+mesuré après correctif, contre ~5,4s avant (story 15.13) — voir
+[03-architecture.md ADR-011](03-architecture.md#adr-011--vraie-cause-du-goulot-dashboard--backoff-de-reconnexion-ioredis-pas-postgres-story-1516).
 
 **Note story 15.2** : implémentée. Login mobile testé de bout en bout avec le
 compte de démo réel (`demo@budget-pocket.app`) maintenant que la BDD est
@@ -334,13 +355,15 @@ honnête item par item, contre le code réel :
 |---|---|---|
 | Monitoring d'erreurs actif + alertes | 🟡 | Sentry intégré (15.4) mais **sans DSN configuré = no-op**, donc pas réellement actif |
 | Journalisation actions sensibles centralisée | 🔴 | Aucun log applicatif des actions sensibles (login, changement de rôle...) — BE-08 |
-| Tests de charge effectués | 🟡 | Exécutés (story 15.13, Artillery) contre un build de production réel + Neon réelle. Routes API paginées : saines (0 % d'échec, p95 596ms). Goulot distinct identifié et diagnostiqué sur `/dashboard` (contention Postgres probable sur `MonthlySnapshot`), **non corrigé**. Test réalisé **sans Redis local** (installation refusée) — distorsion documentée, coût du fail-open chiffré plutôt que masqué |
+| Tests de charge effectués | 🟡 | Exécutés (story 15.13, Artillery) contre un build de production réel + Neon réelle. Test réalisé **sans Redis local** (installation refusée) — distorsion documentée. Routes API paginées : saines (0 % d'échec, p95 ~570-600ms). Goulot `/dashboard` trouvé en 15.13 (diagnostic initial faux, contention Postgres supposée) **corrigé en story 15.16** : vraie cause = bug de config `ioredis`, `/dashboard` 100 % → 0 % d'échec, coût du fail-open Redis (accepté depuis 15.1) réduit de ~5,4s à ~410ms. Échecs résiduels sous charge combinée (20 %) sans rapport avec Redis, cause non confirmée (capacité Neon Free suspectée). Reste 🟡 et non ✅ : la distorsion "sans Redis local" persiste (Redis n'est toujours pas opérationnel, seul le comportement de son absence est mieux géré) et une partie de la charge combinée échoue encore |
 | Politique de patching définie + rollback testé | 🟡 | Rollback BDD documenté (15.7) ; pas de politique de patching formelle, rien testé en pratique |
 
 **Score approximatif** : 6 ✅ / 9 🟡 / 5 🔴 sur 20 (évaluation initiale du
 23/07 : 5/8/7 — mis à jour après la story 15.12, qui active la
-vérification email ; puis après la story 15.13, tests de charge exécutés
-avec distorsion documentée).
+vérification email ; puis après la story 15.13/15.16, tests de charge
+exécutés et le goulot dashboard qu'ils ont révélé corrigé — le score reste
+inchangé car "tests de charge effectués" était déjà 🟡, pas 🔴, et le reste
+de la distorsion Redis/charge combinée maintient ce statut).
 
 **Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
 faudrait au minimum : un environnement de production réel (domaine, SSL,
@@ -359,6 +382,9 @@ pour l'instant, pas prêt pour un lancement réel.
 - ~~15.13 — Tests de charge~~ ✅ fait (avec distorsion documentée, sans Redis)
 - 15.14 — Coffre de secrets pour les variables d'environnement (non commencée)
 - 15.15 — Politique de patching formelle + test de rollback (non commencée)
+- ~~15.16 — Corriger le goulot `/dashboard` trouvé en 15.13~~ ✅ fait (créée
+  et complétée dans la même session, en plus des trois ci-dessus prévues
+  par `bmad prelaunch`)
 
 ## Environnement local (hors périmètre BMAD, pour mémoire)
 
