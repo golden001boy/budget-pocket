@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 21 ✅ + 4 🟡 sur 25 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 22 ✅ + 4 🟡 sur 26 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 21 ✅ + 4 🟡 sur 25 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 22 ✅ + 4 🟡 sur 26 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -263,6 +263,37 @@ réelle puis les 9 routes concernées (`accounts`, `budgets`, `goals`,
 `user/profile`, `analysis/snapshot`, `analysis/forecast`) toutes `200`
 avec de vraies données — et une coupure BDD transitoire réelle pendant la
 vérification a reconfirmé, en prime, le `500` propre de la story 15.21.
+
+**Note story 15.26** : ✅ complet — gap noté depuis la story 15.9
+("nécessiterait un preset différent (`jest-expo`), hors périmètre").
+`jest-expo@51.0.2` (dist-tag `sdk-51`, aligné sur `expo: ~51.0.0`),
+`jest@^29.7.0` (même pin que web depuis l'ADR-006). **Obstacle réel
+rencontré et corrigé** : le `transformIgnorePatterns` par défaut de
+`jest-expo` suppose un `node_modules` plat, incompatible avec la
+structure imbriquée de pnpm (`node_modules/.pnpm/<pkg>@<v>/node_modules/
+<pkg>/...`) — `@react-native/js-polyfills` (syntaxe Flow) était ignoré à
+tort et atteignait le parser tel quel. Diagnostiqué avec un script Node
+isolé testant le regex directement contre de vrais chemins, corrigé
+(détail complet dans
+[03-architecture.md ADR-013](03-architecture.md#adr-013--transformignorepatterns-pnpm-compatible-pour-jest-expo-story-1526)),
+plutôt que par essais-erreurs sur la suite Jest complète. Deux fichiers
+réels testés, pas un test bidon pour prouver que le runner tourne :
+[`lib/mfetch.ts`](../apps/mobile/lib/mfetch.ts) (primitive réseau de toute
+l'app mobile — authentification par cookie, pas de header `Authorization`,
+priorité des headers appelant, 4 chemins d'erreur de `mfetchJson`, 7
+tests) et [`contexts/AuthContext.tsx`](../apps/mobile/contexts/AuthContext.tsx)
+(toute la gestion de session mobile — restauration au démarrage,
+`login()`/`logout()`, 5 tests, rendu avec `react-test-renderer` déjà
+disponible via `jest-expo`, sans ajouter `@testing-library/react-native`
+ni aucune autre dépendance de rendu ; a nécessité `@types/react-test-renderer` en
+devDependency, absent initialement). `pnpm test` (racine) exécute
+désormais web (195/195) **et** mobile (12/12) ; `pnpm type-check` (4/4) et
+`pnpm build` (web) reconfirmés verts après l'installation. Accès au
+registre npm vérifié disponible avant de retenter (la première tentative,
+plus tôt dans la session, avait été reportée faute d'accès — connectivité
+intermittente déjà documentée, stories 15.19/15.21). **Non fait** : tests
+d'écrans complets (navigation réelle), CI mobile — le workflow de la
+story 15.6 ne couvre qu'`apps/web`.
 
 **Note story 15.25** : ✅ complet — même schéma de découverte que la
 story 15.23 : en auditant les schémas `packages/shared` inutilisés, trois
@@ -556,8 +587,11 @@ passage les deux ADR-005 en suspens : `rateLimit.ts` et les schémas
 (19 tests, tous verts). A nécessité de repointer `jest` de `^30` vers
 `^29.7.0` — `next/jest` (fourni par `next@14.2.35`) n'est pas compatible avec
 Jest 30 (voir [03-architecture.md ADR-006](03-architecture.md#adr-006--pin-jest-29x-pour-compatibilité-avec-nextjest)).
-Couverture encore très partielle — simulateurs, analytique et routes API
-n'ont aucun test à ce jour ; `apps/mobile` n'a pas de runner du tout.
+Couverture encore très partielle à l'époque — simulateurs, analytique et
+routes API n'avaient aucun test ; `apps/mobile` n'avait pas de runner du
+tout. **Comblé depuis** : routes API et `analysis/*` couvertes par les
+stories 15.17/15.18/15.20 à 15.25 ; `apps/mobile` a son propre runner
+(`jest-expo`) depuis la story 15.26.
 
 **Note story 15.1** : implémentée (rate limiting Redis sur login web/mobile +
 inscription, voir [03-architecture.md ADR-004](03-architecture.md#adr-004--rate-limiting--fenêtre-fixe-redis-fail-open))

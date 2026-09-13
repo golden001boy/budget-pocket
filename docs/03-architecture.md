@@ -642,6 +642,57 @@ les variables sont effectivement configurées comme "Production" scopées
 dans un vrai dashboard Vercel — nécessiterait un compte Vercel connecté,
 non disponible dans cette session.
 
+### ADR-013 — `transformIgnorePatterns` pnpm-compatible pour `jest-expo` (story 15.26)
+
+**Contexte** : story 15.26, câbler `jest-expo` pour `apps/mobile`
+(`expo: ~51.0.0` → `jest-expo@51.0.2`, dist-tag `sdk-51`). Premier essai
+échoue systématiquement : `SyntaxError: Unexpected identifier 'ErrorHandler'`
+sur `@react-native/js-polyfills/error-guard.js` (syntaxe Flow
+non transpilée, ex. `type ErrorHandler = (error: mixed, ...) => void;`).
+
+**Cause** : le `transformIgnorePatterns` par défaut de `jest-expo`
+(`node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo...)`)
+suppose un `node_modules` classique et plat — chaque paquet directement
+sous `node_modules/<pkg>/`. pnpm imbrique au contraire les dépendances
+transitives sous `node_modules/.pnpm/<pkg>@<version>/node_modules/<pkg>/...`.
+`RegExp.test()` cherche une correspondance n'importe où dans le chemin ;
+au **premier** `node_modules/` rencontré (juste avant `.pnpm`), le lookahead
+négatif du motif constate que `.pnpm` ne correspond à aucun nom autorisé —
+le motif matche donc à cette position, et `@react-native/js-polyfills`
+(qui apparaît plus loin, après le **second** `node_modules/`) est ignoré
+par erreur, jamais transpilé. Aggravé par le fait que cette session
+tourne sous Windows (séparateurs `\`) : le motif d'origine, tout en `/`,
+ne matchait de toute façon jamais sur ce poste, indépendamment du problème
+pnpm.
+
+**Diagnostic, avant de toucher au code** : un script Node isolé
+(`new RegExp(pattern).test(cheminRéel)`) a testé le motif directement
+contre des chemins réels du `node_modules` du projet — confirmé que le
+motif d'origine ignorait `@react-native/js-polyfills` (faux négatif) et
+qu'un candidat de correctif fonctionnait, **avant** de relancer la suite
+Jest complète. Deux itérations de parenthésage cassé (`Unterminated group`)
+détectées de cette façon en quelques secondes plutôt qu'en relançant Jest
+à chaque essai (~15-20s par run avec la transformation Babel complète).
+
+**Correctif** : ajout de `\.pnpm[\\/]` à la liste des motifs "autorisés"
+dans le lookahead négatif, mais uniquement pertinent à la frontière
+*externe* (`node_modules/.pnpm/`) — cela ne change pas le verdict à cet
+endroit (un paquet non-RN sous pnpm doit toujours être ignoré), ça
+empêche seulement cette frontière externe de décider elle-même : la
+vraie décision reste prise à la frontière *interne* (juste avant le
+fichier réel, après le second `node_modules/`), avec la même liste
+qu'avant. Classes de séparateur `[\\\\/]` utilisées partout pour couvrir
+Windows et POSIX.
+
+**Résultat** : `@react-native/js-polyfills` et tous les paquets Expo/RN
+imbriqués sous `.pnpm` sont désormais transpilés correctement ; un paquet
+tiers non-RN (ex. `lodash`) imbriqué de la même façon reste ignoré
+(comportement inchangé, transformation inutile pour du CJS déjà publié
+compilé). Voir
+[02-prd.md — Story 15.26](02-prd.md#story-1526--câbler-un-test-runner-jest-expo-pour-appsmobile--done)
+pour le détail complet et les 7 tests qui valident la suite désormais
+fonctionnelle.
+
 ## 7. Mapping Story → Fichiers affectés
 
 Voir chaque fichier `specs/epic-XX-*.md` — chaque story y liste ses fichiers
@@ -688,13 +739,19 @@ Détail complet des tests de validation par item : [04-tests.md](04-tests.md).
 
 ## 9. Build & outillage
 
-- **Gestionnaire de paquets** : pnpm 9, `.npmrc` avec `shamefully-hoist=true`
-  et `resolve-peers-from-workspace-root=true` pour éviter les conflits entre
-  les arbres de dépendances web (React 18.3) et mobile (React 18.2).
-- **Turborepo** : orchestre `dev`/`build`/`lint`/`type-check`/`format` avec
-  cache par tâche ([turbo.json](../turbo.json)).
-- **Tests** : 2 specs Playwright e2e (`apps/web/tests/`) ; pas de runner
-  unitaire câblé malgré `jest` en devDependency — voir [04-tests.md](04-tests.md).
+- **Gestionnaire de paquets** : pnpm 9, `.npmrc` avec l'équivalent de
+  `shamefully-hoist=true` (`public-hoist-pattern[]=*`) mais **sans**
+  `resolve-peers-from-workspace-root` (retiré en story 15.10/ADR-009 —
+  il faisait résoudre les peers `@types/react` d'`apps/web` contre la
+  version d'`apps/mobile`) ; `@types/react`/`@types/react-dom` explicitement
+  exclus du hoist pour laisser coexister web (React 19) et mobile
+  (React 18.2) sans conflit.
+- **Turborepo** : orchestre `dev`/`build`/`lint`/`type-check`/`format`/`test`
+  avec cache par tâche ([turbo.json](../turbo.json)).
+- **Tests** : 2 specs Playwright e2e (`apps/web/tests/`, connus instables,
+  voir story 15.10) ; suite Jest câblée sur `apps/web` depuis la story 15.9
+  et sur `apps/mobile` (`jest-expo`, ADR-013) depuis la story 15.26 — voir
+  [04-tests.md](04-tests.md).
 
 ## 10. Cible de déploiement
 

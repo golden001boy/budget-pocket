@@ -30,7 +30,7 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 21 ✅ + 4 🟡 sur 25, plus aucune story 🔴. 15.7
+sécurité/prod) est 🟡 22 ✅ + 4 🟡 sur 26, plus aucune story 🔴. 15.7
 (backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
 documentés (MFA reporté, voir ADR-008). **Dette technique signalée, non
 traitée** : `packages/api-client` est du code mort avec un mécanisme
@@ -39,7 +39,7 @@ dans
 [docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision),
 décision volontairement laissée à vous.
 
-**Stories 15.14 à 15.25 traitées le 2026-09-13** dans une session `/goal`
+**Stories 15.14 à 15.26 traitées le 2026-09-13** dans une session `/goal`
 en continuation autonome (« poursuis jusqu'à épuisement de token de cette
 session »), **sans pause pour confirmation avec vous** — contrairement au
 précédent établi par 15.10/15.12. Résumé (détail complet story par story
@@ -79,6 +79,14 @@ dans [docs/05-status.md](docs/05-status.md), section Gate Phase 6) :
   le nettoyage post-vérification (upsert sur la ligne seedée du compte
   de démo supprimé par réflexe), restauré immédiatement, signalé dans
   05-status.md. ✅
+- **15.26** `apps/mobile` a enfin un test runner (`jest-expo`), gap noté
+  depuis 15.9. A nécessité de corriger le `transformIgnorePatterns` par
+  défaut, incompatible avec la structure imbriquée de pnpm
+  ([ADR-013](docs/03-architecture.md#adr-013--transformignorepatterns-pnpm-compatible-pour-jest-expo-story-1526)).
+  12 premiers tests réels : `lib/mfetch.ts` (7) et `contexts/AuthContext.tsx`
+  (5, rendu via `react-test-renderer`, déjà disponible, sans ajouter
+  `@testing-library/react-native`). `pnpm test` racine couvre désormais
+  web (195) et mobile (12). ✅
 
 15.17–15.21 vérifiées en direct contre la vraie BDD Neon avec le compte de
 démo (connexions mobile réelles, écritures de test supprimées après coup),
@@ -146,7 +154,7 @@ Monorepo pnpm/Turborepo — Next.js 15 (web, React 19) + Expo/React Native
 pnpm install          # installe + génère le client Prisma (postinstall)
 pnpm dev              # lance web + mobile
 pnpm type-check        # gate de correction de type (le build ignore les erreurs TS)
-pnpm test               # suite Jest (apps/web uniquement à ce jour)
+pnpm test               # suite Jest (apps/web + apps/mobile depuis la story 15.26)
 pnpm db:migrate         # migration Prisma (jamais de modif directe du schéma en prod)
 pnpm db:seed            # compte de démo
 ```

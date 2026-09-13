@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (21 ✅ + 4 🟡 sur 25)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (22 ✅ + 4 🟡 sur 26)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -177,6 +177,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.23 | Validation Zod + résilience sur `POST /api/advisor/scenarios` | Must | S | ✅ | Règle #5 non-négociable (CLAUDE.md) : trouvé sans validation du tout |
 | 15.24 | `try/catch` sur les 12 routes restantes (CRUD + analysis) qui n'en avaient pas | Must | M | ✅ | Même fragilité que le bug `/api/auth/mobile` de 15.21, trouvée systémique |
 | 15.25 | Champs Prisma réels jamais exposés (retraite/objectifs/portefeuille) | Should | S | ✅ | Même schéma que 15.23 : schémas partagés complets mais inutilisés |
+| 15.26 | Câbler un test runner (`jest-expo`) pour `apps/mobile` | Should | M | ✅ | Gap noté depuis 15.9 : "apps/mobile n'a pas de runner du tout" |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1652,6 +1653,106 @@ est un `upsert` avant de supprimer par réflexe ce qu'on croit avoir créé.
 [api/planning/retirement/route.ts](../apps/web/src/app/api/planning/retirement/route.ts),
 [api/goals/route.ts](../apps/web/src/app/api/goals/route.ts),
 [api/portfolio/route.ts](../apps/web/src/app/api/portfolio/route.ts).
+
+---
+
+### Story 15.26 — Câbler un test runner (`jest-expo`) pour `apps/mobile` · ✅ Done
+
+**Story** : En tant que développeur, je veux qu'`apps/mobile` ait un
+test runner fonctionnel, afin que la règle §6.1 du framework ("tests
+écrits avec le code") soit enfin respectable côté mobile aussi — jusqu'ici
+seul `apps/web` en avait un depuis la story 15.9, qui notait explicitement
+`apps/mobile` comme "hors périmètre... nécessiterait un preset différent
+(`jest-expo`)".
+
+**Cadrage** : `jest-expo@51.0.2` (dist-tag `sdk-51`, exactement aligné sur
+`expo: ~51.0.0` déjà utilisé) — dépend en interne de
+`react-test-renderer@18.2.0`, qui correspond exactement à la version de
+`react` déjà fixée dans `apps/mobile`. `jest@^29.7.0` réutilisé (même pin
+que `apps/web` depuis l'ADR-006, story 15.9).
+
+**Obstacle réel rencontré, diagnostiqué puis corrigé** : la toute
+première tentative échouait systématiquement avec une erreur de syntaxe
+sur `@react-native/js-polyfills` (`type ErrorHandler = ...`, syntaxe Flow
+non transpilée). Cause : le `transformIgnorePatterns` par défaut de
+`jest-expo` suppose un `node_modules` classique et plat
+(`node_modules/<pkg>/...`), alors que pnpm imbrique les dépendances
+transitives sous `node_modules/.pnpm/<pkg>@<version>/node_modules/<pkg>/...`
+— le pattern négatif matchait sur le premier `node_modules/` (juste avant
+`.pnpm`, qui n'est dans aucune liste autorisée), ignorant à tort le
+fichier réel plus loin. Aggravé par le fait que cette session tourne sous
+Windows (séparateurs `\`), que le pattern d'origine (tout en `/`) ne
+matchait de toute façon jamais. Corrigé en ajoutant `.pnpm/` lui-même à la
+liste des motifs "autorisés" au niveau du *premier* `node_modules/`
+rencontré — cela ne change pas le verdict à cet endroit, ça empêche juste
+cette frontière externe de trancher : la vraie décision reste prise à la
+frontière *interne* (juste avant le fichier réel), avec la même liste de
+paquets RN/Expo qu'avant. Les deux séparateurs (`/` et `\`) sont matchés
+partout. Diagnostic confirmé par un script Node isolé testant le regex
+directement contre des chemins réels avant de retoucher `jest.config.js`,
+plutôt que par essais-erreurs sur la suite complète.
+
+**Critères d'acceptation**
+- [x] `pnpm --filter mobile run test` exécute une vraie suite Jest et
+      réussit.
+- [x] `pnpm test` (racine, via Turborepo) exécute la suite mobile en plus
+      de la suite web — aucune configuration supplémentaire nécessaire
+      dans `turbo.json` (la tâche `test: {}` générique, déjà en place
+      depuis la story 15.9, découvre automatiquement tout script `test`
+      d'un workspace).
+- [x] `pnpm type-check` (4/4) reste vert.
+- [x] Premier test réel écrit, pas un test bidon pour prouver que le
+      runner tourne : [`lib/mfetch.ts`](../apps/mobile/lib/mfetch.ts), la
+      primitive réseau centrale de toute l'app mobile (utilisée par tous
+      les écrans depuis `lib/mfetch.ts`, jamais testée jusqu'ici) — 7
+      tests couvrant l'authentification par cookie `next-auth.session-token`
+      (pas un header `Authorization`, confirmée story 15.19/routes divers),
+      l'absence de cookie sans token stocké, la priorité des headers
+      fournis par l'appelant, et les trois chemins d'erreur de
+      `mfetchJson` (succès, erreur JSON avec `error`, erreur JSON sans
+      `error`, corps non-JSON).
+- [x] Deuxième test réel, une fois l'infra prouvée : `contexts/AuthContext.tsx`
+      — toute la gestion de session mobile (login/logout/restauration au
+      démarrage), jamais testée jusqu'ici. Rendue avec `react-test-renderer`
+      (déjà une dépendance transitive de `jest-expo`, aucune nouvelle
+      dépendance de test ajoutée pour le rendu) et une petite sonde
+      (`Probe`) qui capture la valeur de contexte — pas
+      `@testing-library/react-native`, pour ne pas ajouter une dépendance
+      réseau de plus à cette story déjà consacrée à en faire fonctionner
+      une. A nécessité `@types/react-test-renderer` en devDependency
+      (absent, `pnpm type-check` échouait sinon). 5 tests : pas de session
+      au démarrage, restauration depuis `SecureStore`, `login()` persiste
+      token/utilisateur/devise et met à jour l'état, `login()` échoué lève
+      l'erreur serveur sans modifier l'état, `logout()` efface tout.
+- [x] `pnpm install` revérifié sans erreur — seul avertissement de peer
+      dependency rencontré (`@shopify/react-native-skia` exigeant React
+      19+/RN 0.78+) est préexistant (transitif de `victory-native`, déjà
+      présent avant cette story), pas introduit ici.
+- [x] `pnpm build` (web) reconfirmé vert après l'installation.
+- [x] Accès réseau au registre npm vérifié disponible avant de tenter
+      quoi que ce soit (cohérent avec la connectivité intermittente déjà
+      documentée cette session, stories 15.19/15.21) — tentative reportée
+      plus tôt dans la session faute d'accès, retentée avec succès une
+      fois le registre de nouveau joignable.
+- [x] `pnpm test` (racine) : 195 (web) + **12** (mobile, +7 depuis
+      `mfetch.ts` +5 depuis `AuthContext.tsx`). `pnpm type-check` 4/4.
+
+**Non fait, hors périmètre de cette story** : aucun test d'écran complet
+(seuls une primitive pure et un context provider ont été testés, sans
+rendu d'une vraie navigation/écran) ; aucune configuration CI mobile (le
+workflow GitHub Actions de la story 15.6 ne couvre que `apps/web`) — à
+envisager dans une story dédiée si la couverture mobile doit s'étendre
+davantage.
+
+**Implémentation** :
+[apps/mobile/package.json](../apps/mobile/package.json) (`jest`,
+`jest-expo`, `@types/jest`, `@types/react-test-renderer` en
+devDependencies, script `test`),
+[apps/mobile/jest.config.js](../apps/mobile/jest.config.js) (nouveau),
+[contexts/__tests__/AuthContext.test.tsx](../apps/mobile/contexts/__tests__/AuthContext.test.tsx)
+(nouveau),
+[lib/__tests__/mfetch.test.ts](../apps/mobile/lib/__tests__/mfetch.test.ts)
+(nouveau).
 
 ---
 
