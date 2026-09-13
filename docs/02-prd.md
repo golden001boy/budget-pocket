@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (13 ✅ + 4 🟡 sur 17)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (14 ✅ + 4 🟡 sur 18)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -169,6 +169,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.15 | Politique de patching formelle + test de rollback | Could | S | 🟡 | Gate Phase 6 §9.3 |
 | 15.16 | Corriger le goulot `/dashboard` trouvé en story 15.13 | Should | M | ✅ | Gate Phase 6 §9.3 (suivi 15.13) |
 | 15.17 | Ne pas exposer le détail interne des erreurs sur `/api/health` | Should | S | ✅ | Gate Phase 6 §9.2, BE-09 |
+| 15.18 | Pagination sur `/api/advisor/scenarios` et `/api/planning/taxes` | Should | S | ✅ | Gate Phase 6 §9.1 (résidu de 15.3) |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1094,6 +1095,66 @@ découverte, mais la première fois qu'une story s'en charge.
 **Implémentation** :
 [api/health/route.ts](../apps/web/src/app/api/health/route.ts),
 [api/health/__tests__/route.test.ts](../apps/web/src/app/api/health/__tests__/route.test.ts).
+
+---
+
+### Story 15.18 — Pagination sur `/api/advisor/scenarios` et `/api/planning/taxes` · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que les deux dernières listes
+API sans pagination (`scenarios`, `taxRecords`) suivent le même contrat que
+les autres depuis la story 15.3, afin de fermer le résidu explicitement
+noté dans la checklist §9.1 ("pas vérifié exhaustivement sur le reste
+(alerts, scenarios...)") (Gate Phase 6 §9.1).
+
+**Audit préalable** : les 6 routes API du projet ont été listées ; deux
+`GET` renvoyaient encore un tableau brut sans `skip`/`take` ni plafond —
+`/api/advisor/scenarios` et `/api/planning/taxes`. Les pages web
+équivalentes (`(dashboard)/advisor`, `(dashboard)/planning`) lisent Prisma
+directement côté serveur (même situation déjà notée pour le mobile
+Investissements en 15.3) donc ne dépendent pas du contrat de ces deux
+routes — mais **l'app mobile, elle, appelle bien `GET
+/api/advisor/scenarios`** (`apps/mobile/app/(tabs)/advisor/index.tsx`),
+ce qui a changé le périmètre de cette story en cours de route (voir bug
+trouvé ci-dessous).
+
+**Bug pré-existant trouvé pendant l'audit, sans rapport avec la
+pagination** : l'écran mobile Conseiller attendait `{ scenarios:
+ScenarioDTO[] }` alors que la route renvoyait (avant cette story) un
+tableau brut — `data.scenarios` sur un tableau est `undefined`, donc cet
+écran affichait **silencieusement zéro scénario sauvegardé, depuis
+toujours**, indépendamment de tout changement ici. Même famille de bug que
+celui trouvé sur l'écran mobile Investissements en story 15.3 (contrat API
+non aligné avec le client mobile).
+
+**Critères d'acceptation**
+- [x] `GET /api/advisor/scenarios` accepte `?page=&pageSize=`, renvoie
+      `{ data, meta }` (même contrat que accounts/budgets/goals/portfolio/
+      transactions), scope la requête à l'utilisateur courant.
+- [x] `GET /api/planning/taxes` — même changement.
+- [x] Écran mobile Conseiller corrigé pour lire `data.data` au lieu de
+      `data.scenarios` — corrige à la fois le passage au nouveau contrat
+      **et** le bug pré-existant ci-dessus en un seul changement.
+- [x] Aucun autre consommateur cassé — recherché explicitement
+      (`grep` sur web et mobile) avant de committer : les pages web lisent
+      Prisma directement (hors périmètre du contrat API), `/api/planning/
+      taxes` n'a aucun consommateur `GET` du tout à ce jour (web ou
+      mobile) donc aucun risque de rupture pour cette route.
+- [x] Test unitaire — 5 nouveaux : 3 pour
+      [`scenarios/route.test.ts`](../apps/web/src/app/api/advisor/scenarios/__tests__/route.test.ts)
+      (401 sans session, pagination + scoping utilisateur, plafond
+      `MAX_PAGE_SIZE` respecté) et 2 pour
+      [`taxes/route.test.ts`](../apps/web/src/app/api/planning/taxes/__tests__/route.test.ts).
+- [x] `pnpm type-check` (4/4, web **et** mobile) et `pnpm test` (78/78)
+      verts.
+- [x] Vérifié en direct : serveur de dev redémarré, les deux routes
+      répondent (redirection `307` sans session — comportement connu et
+      déjà documenté depuis la story 15.2, pas une régression de cette
+      story) plutôt qu'un crash au boot.
+
+**Implémentation** :
+[api/advisor/scenarios/route.ts](../apps/web/src/app/api/advisor/scenarios/route.ts),
+[api/planning/taxes/route.ts](../apps/web/src/app/api/planning/taxes/route.ts),
+[apps/mobile/app/(tabs)/advisor/index.tsx](../apps/mobile/app/(tabs)/advisor/index.tsx).
 
 ---
 

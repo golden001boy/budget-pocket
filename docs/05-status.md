@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 13 ✅ + 4 🟡 sur 17 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 14 ✅ + 4 🟡 sur 18 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 13 ✅ + 4 🟡 sur 17 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 14 ✅ + 4 🟡 sur 18 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -121,6 +121,24 @@ pendant la 15.15 (une assertion qui se comparait à sa propre constante).
 dev redémarré, `curl /api/health` renvoie `{"status":"error","db":"error","redis":"error"}`
 (BDD/Redis injoignables dans cette session, sandbox sans sortie réseau)
 sans plus aucune trace de l'hôte Neon ni d'un message Prisma.
+
+**Note story 15.18** : ✅ complet — ferme le résidu explicitement noté dans
+la checklist §9.1 depuis la story 15.3 ("pas vérifié exhaustivement sur le
+reste... scenarios"). Audit des 6 routes API du projet : deux `GET`
+renvoyaient encore un tableau brut sans pagination —
+`/api/advisor/scenarios` et `/api/planning/taxes` — désormais alignées sur
+le contrat `{ data, meta }` commun. **Bug pré-existant trouvé au passage,
+sans rapport avec la pagination** : l'écran mobile Conseiller lisait
+`data.scenarios` sur une réponse qui était (déjà avant cette story) un
+tableau brut — donc `undefined`, et cet écran affichait silencieusement
+**zéro scénario sauvegardé depuis toujours**, même famille de bug que
+celui trouvé sur mobile Investissements en 15.3. Corrigé dans le même
+changement (`data.data`). Vérifié qu'aucun autre consommateur ne casse :
+les pages web équivalentes lisent Prisma directement (hors périmètre du
+contrat API, même situation que 15.3), `/api/planning/taxes` n'a aucun
+consommateur `GET` à ce jour. 5 nouveaux tests (78/78 au total),
+`pnpm type-check` 4/4 (web **et** mobile). Vérifié en direct : serveur de
+dev redémarré, les deux routes répondent sans crash.
 
 **Note story 15.16** : ✅ complet — corrige le goulot `/dashboard` trouvé
 en 15.13. **Le diagnostic de la 15.13 était faux** (contention Postgres
@@ -409,7 +427,7 @@ honnête item par item, contre le code réel :
 | Clés API non exposées, secrets scannés | ✅ | `.env` gitignoré, aucun secret en dur (DEV-01) |
 | Backups BDD vérifiés fonctionnels | 🟡 | Story 15.7 — politique documentée, aucun test de restauration réel exécuté |
 | Vérification email activée | ✅ | Implémentée et vérifiée en direct contre Neon depuis la story 15.12 — email envoyé à l'inscription, lien de confirmation fonctionnel, statut suivi en BDD/session. **Non-bloquante** par décision produit (un compte non confirmé reste pleinement utilisable) : à revoir si le mode bloquant devient un jour requis, mais le système de vérification lui-même est bien actif |
-| Pagination sur toutes les listes | 🟡 | Story 15.3 couvre accounts/budgets/goals/portfolio/transactions ; pas vérifié exhaustivement sur le reste (alerts, scenarios...) |
+| Pagination sur toutes les listes | ✅ | Story 15.3 (accounts/budgets/goals/portfolio/transactions) + story 15.18 (`advisor/scenarios`, `planning/taxes` — les deux dernières routes API sans pagination). Alerts n'a pas de route API dédiée (page web lit Prisma directement) donc hors périmètre du contrat API |
 
 ### 9.2 Sécurité
 | Item | État | Constat |
@@ -432,7 +450,7 @@ honnête item par item, contre le code réel :
 | Tests de charge effectués | 🟡 | Exécutés (story 15.13, Artillery) contre un build de production réel + Neon réelle. Test réalisé **sans Redis local** (installation refusée) — distorsion documentée. Routes API paginées : saines (0 % d'échec, p95 ~570-600ms). Goulot `/dashboard` trouvé en 15.13 (diagnostic initial faux, contention Postgres supposée) **corrigé en story 15.16** : vraie cause = bug de config `ioredis`, `/dashboard` 100 % → 0 % d'échec, coût du fail-open Redis (accepté depuis 15.1) réduit de ~5,4s à ~410ms. Échecs résiduels sous charge combinée (20 %) sans rapport avec Redis, cause non confirmée (capacité Neon Free suspectée). Reste 🟡 et non ✅ : la distorsion "sans Redis local" persiste (Redis n'est toujours pas opérationnel, seul le comportement de son absence est mieux géré) et une partie de la charge combinée échoue encore |
 | Politique de patching définie + rollback testé | 🟡 | Story 15.15 — politique écrite (cadence par catégorie de patch, gate de test, mécanismes de rollback), rollback applicatif réellement testé par `git revert` sur une branche jetable ; rollback BDD (15.7) toujours non exercé, politique non encore éprouvée sur un cycle réel — détail dans [03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515) |
 
-**Score approximatif** : 7 ✅ / 8 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
+**Score approximatif** : 8 ✅ / 7 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
 compte 21 lignes, pas 20 comme les versions précédentes de cette section
 l'affirmaient — corrigé au passage. Historique : évaluation initiale du
 23/07, 5/8/7 (sur la même base de 21, déjà mal comptée à 20 à l'époque) ;
@@ -440,7 +458,8 @@ mise à jour après la story 15.12 (vérification email) ; après 15.13/15.16
 (tests de charge + goulot dashboard corrigé, statut inchangé, déjà 🟡) ;
 après 15.14/15.15 (secrets coffre 🔴→🟡, patching 🟡 enrichi mais statut
 inchangé) ; après 15.17 (endpoint debug `/api/health` 🟡→✅, trouvée en
-vérifiant 15.14 en direct)).
+vérifiant 15.14 en direct) ; après 15.18 (pagination sur toutes les listes
+🟡→✅)).
 
 **Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
 faudrait au minimum : un environnement de production réel (domaine, SSL,
@@ -466,6 +485,10 @@ pour l'instant, pas prêt pour un lancement réel.
   ✅ fait (même schéma que 15.16 : créée et complétée dans la même session
   `/goal` que 15.14/15.15, suite à un bug trouvé en vérifiant 15.14 en
   direct, pas prévue par `bmad prelaunch`)
+- ~~15.18 — Pagination sur `/api/advisor/scenarios` et
+  `/api/planning/taxes`~~ ✅ fait (résidu explicitement noté en 15.3, même
+  session `/goal` ; a aussi révélé et corrigé un bug mobile pré-existant
+  sans rapport, même famille que celui trouvé en 15.3)
 
 ## Environnement local (hors périmètre BMAD, pour mémoire)
 

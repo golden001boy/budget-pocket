@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -13,15 +14,19 @@ const schema = z.object({
   isPaid:  z.boolean().default(false),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const records = await prisma.taxRecord.findMany({
-    where:   { userId: session.user.id },
-    orderBy: { year: 'desc' },
-  });
-  return NextResponse.json(records);
+  const { searchParams } = new URL(req.url);
+  const { skip, take, page, pageSize } = parsePagination(searchParams);
+  const where = { userId: session.user.id };
+
+  const [records, total] = await Promise.all([
+    prisma.taxRecord.findMany({ where, orderBy: { year: 'desc' }, skip, take }),
+    prisma.taxRecord.count({ where }),
+  ]);
+  return NextResponse.json({ data: records, meta: buildPaginationMeta(total, page, pageSize) });
 }
 
 export async function POST(req: NextRequest) {

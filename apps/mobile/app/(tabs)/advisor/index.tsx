@@ -22,8 +22,16 @@ export default function AdvisorScreen() {
 
   const load = useCallback(async () => {
     try {
-      const data = await mfetchJson<{ scenarios: ScenarioDTO[] }>('/api/advisor/scenarios');
-      setScenarios(data.scenarios ?? []);
+      // Story 15.18: the route now paginates ({ data, meta }, same contract
+      // as accounts/budgets/goals/portfolio since 15.3) instead of returning
+      // a raw array. Found while adding that pagination: this screen was
+      // reading a `scenarios` key that never existed even before this
+      // change (the route returned a bare array), so `data.scenarios` was
+      // always `undefined` and this list silently showed zero saved
+      // scenarios regardless of what a user had actually saved — same class
+      // of bug as the mobile Investments screen found in story 15.3.
+      const data = await mfetchJson<{ data: ScenarioDTO[] }>('/api/advisor/scenarios');
+      setScenarios(data.data ?? []);
     } catch {
       // show cards only
     } finally {

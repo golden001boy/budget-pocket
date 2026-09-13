@@ -2,16 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const scenarios = await prisma.scenario.findMany({
-    where:   { userId: session.user.id },
-    orderBy: { createdAt: 'desc' },
-  });
-  return NextResponse.json(scenarios);
+  const { searchParams } = new URL(req.url);
+  const { skip, take, page, pageSize } = parsePagination(searchParams);
+  const where = { userId: session.user.id };
+
+  const [scenarios, total] = await Promise.all([
+    prisma.scenario.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
+    prisma.scenario.count({ where }),
+  ]);
+  return NextResponse.json({ data: scenarios, meta: buildPaginationMeta(total, page, pageSize) });
 }
 
 export async function POST(req: NextRequest) {
