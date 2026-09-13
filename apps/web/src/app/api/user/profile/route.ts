@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { checkMutationRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -14,6 +15,9 @@ const schema = z.object({
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const limit = await checkMutationRateLimit(session.user.id);
+  if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
   const body   = await req.json();
   const parsed = schema.safeParse(body);

@@ -1,21 +1,24 @@
 import { NextRequest } from 'next/server';
-import { GET } from '../route';
+import { GET, POST } from '../route';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
+import { checkMutationRateLimit } from '@/lib/rateLimit';
 
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
 jest.mock('@/lib/prisma', () => ({
-  prisma: { scenario: { findMany: jest.fn(), count: jest.fn() } },
+  prisma: { scenario: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() } },
 }));
+jest.mock('@/lib/rateLimit', () => ({ checkMutationRateLimit: jest.fn() }));
 
 const mockGetSession = getServerSession as jest.Mock;
 const mockPrisma = prisma as unknown as {
-  scenario: { findMany: jest.Mock; count: jest.Mock };
+  scenario: { findMany: jest.Mock; count: jest.Mock; create: jest.Mock };
 };
+const mockCheckMutationRateLimit = checkMutationRateLimit as jest.Mock;
 
-function makeRequest(url: string) {
-  return new NextRequest(new Request(url));
+function makeRequest(url: string, init?: RequestInit) {
+  return new NextRequest(new Request(url, init));
 }
 
 beforeEach(() => {
@@ -60,5 +63,35 @@ describe('GET /api/advisor/scenarios', () => {
     expect(mockPrisma.scenario.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 100 }),
     );
+  });
+});
+
+describe('POST /api/advisor/scenarios (story 15.20: mutation rate limit)', () => {
+  it('rejects with 429 once the per-user mutation limit is hit, without writing anything', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockCheckMutationRateLimit.mockResolvedValue({ success: false, limit: 60, remaining: 0, resetAt: 0 });
+
+    const response = await POST(makeRequest('http://localhost/api/advisor/scenarios', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'CUSTOM', name: 'Test' }),
+    }));
+
+    expect(response.status).toBe(429);
+    expect(mockCheckMutationRateLimit).toHaveBeenCalledWith('user-1');
+    expect(mockPrisma.scenario.create).not.toHaveBeenCalled();
+  });
+
+  it('creates the scenario when under the limit', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockCheckMutationRateLimit.mockResolvedValue({ success: true, limit: 60, remaining: 59, resetAt: 0 });
+    mockPrisma.scenario.create.mockResolvedValue({ id: 's1', type: 'CUSTOM', name: 'Test' });
+
+    const response = await POST(makeRequest('http://localhost/api/advisor/scenarios', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'CUSTOM', name: 'Test' }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.scenario.create).toHaveBeenCalled();
   });
 });

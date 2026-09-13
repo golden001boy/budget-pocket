@@ -57,6 +57,25 @@ export function accountLoginRateLimitKey(email: string): string {
   return `login-account:${email.toLowerCase().trim()}`;
 }
 
+// Story 15.20 (Gate Phase 6 §9.2, API-04/API-06): generic per-user limit for
+// mutating API routes (create/update/delete on accounts, budgets, goals,
+// portfolio, transactions, scenarios, tax records, profile). Unlike login,
+// this isn't guarding against credential guessing — every caller is already
+// an authenticated session — it bounds how fast one account can hammer the
+// database, so a buggy client or a compromised session can't turn into an
+// unbounded write storm. Deliberately generous: legitimate bulk entry (e.g.
+// adding a month of transactions by hand) shouldn't come anywhere near it.
+export const MUTATION_ATTEMPT_LIMIT = 60;
+export const MUTATION_WINDOW_SECONDS = 60;
+
+export function mutationRateLimitKey(userId: string): string {
+  return `mutation:${userId}`;
+}
+
+export function checkMutationRateLimit(userId: string): Promise<RateLimitResult> {
+  return rateLimit(mutationRateLimitKey(userId), MUTATION_ATTEMPT_LIMIT, MUTATION_WINDOW_SECONDS);
+}
+
 export function getClientIp(headers: Headers | Record<string, any> | undefined): string {
   if (!headers) return 'unknown';
   const get = (name: string): string | undefined =>

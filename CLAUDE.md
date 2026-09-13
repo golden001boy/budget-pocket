@@ -30,16 +30,17 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 15 ✅ + 4 🟡 sur 19, plus aucune story 🔴 (15.1 rate
-limiting, 15.2 validation Zod, 15.3 pagination, 15.4 Sentry, 15.5 scan SCA,
-15.6 CI/CD, 15.9 test runner Jest, 15.10 migration Next.js 15 + React 19,
-15.11 reset de mot de passe, 15.12 vérification email (non-bloquante),
-15.13 tests de charge, 15.16 correctif du goulot dashboard, **15.17
-correctif de fuite d'erreur sur `/api/health`, 15.18 pagination
-`scenarios`/`taxes`, 15.19 journalisation des actions sensibles** — tous
-✅ ; 15.7 backup/rollback BDD et 15.8 hardening auth 🟡 partiels
-documentés ; **15.14 (coffre de secrets), 15.15 (politique de patching +
-test de rollback), 15.17, 15.18 et 15.19 traitées le 2026-09-13** dans une
+sécurité/prod) est 🟡 16 ✅ + 4 🟡 sur 20, plus aucune story 🔴 (15.1 rate
+limiting login, 15.2 validation Zod, 15.3 pagination, 15.4 Sentry, 15.5
+scan SCA, 15.6 CI/CD, 15.9 test runner Jest, 15.10 migration Next.js 15 +
+React 19, 15.11 reset de mot de passe, 15.12 vérification email
+(non-bloquante), 15.13 tests de charge, 15.16 correctif du goulot
+dashboard, **15.17 correctif de fuite d'erreur sur `/api/health`, 15.18
+pagination `scenarios`/`taxes`, 15.19 journalisation des actions
+sensibles, 15.20 rate limiting sur les routes de mutation** — tous ✅ ;
+15.7 backup/rollback BDD et 15.8 hardening auth 🟡 partiels documentés ;
+**15.14 (coffre de secrets), 15.15 (politique de patching + test de
+rollback), 15.17, 15.18, 15.19 et 15.20 traitées le 2026-09-13** dans une
 session `/goal` en continuation autonome (« poursuis jusqu'à épuisement de
 token de cette session ») — **sans pause pour confirmation**,
 contrairement au précédent 15.10/15.12 : 15.14 a retenu les variables
@@ -56,8 +57,14 @@ passage un bug mobile pré-existant (écran Conseiller affichait
 silencieusement zéro scénario sauvegardé, même famille que le bug mobile
 Investissements trouvé en 15.3) — corrigé dans la même story ; **15.19**
 (nouvelle) a centralisé la journalisation des actions sensibles d'auth
-(`lib/auditLog.ts`), vérifiée en direct contre la vraie BDD Neon avec le
-compte de démo. **Correction** : les premières notes de cette session
+(`lib/auditLog.ts`) ; **15.20** (nouvelle) a étendu le rate limiting
+(15.1 ne couvrait que login/inscription) aux 14 handlers de mutation
+restants (accounts/budgets/goals/portfolio/transactions/profile/
+scenarios/taxes/retirement), 60 requêtes/minute par utilisateur,
+fail-open comme le reste (ADR-004). 15.19 et 15.20 vérifiées en direct
+contre la vraie BDD Neon avec le compte de démo (connexion mobile réelle,
+`POST /api/accounts` réussi, compte de test supprimé après coup).
+**Correction** : les premières notes de cette session
 affirmaient qu'aucun accès réseau n'existait dans ce sandbox (GitHub,
 Neon) — inexact, découvert pendant 15.19 : les deux se sont révélés
 joignables plus tard dans la session (la BDD avait probablement un simple
@@ -65,7 +72,7 @@ cold-start Neon la première fois). Travail néanmoins commité sur une
 branche locale non poussée (`epic-15/15.14-15.15-secrets-patching`) — pas
 par impossibilité, mais parce que pousser n'a pas été demandé — voir
 [docs/05-status.md §Gate Phase 6](docs/05-status.md#gate-phase-6--évaluation-bmad-prelaunch-2026-07-23)
-pour le détail item par item (score **9 ✅ / 6 🟡 / 6 🔴 sur 21** — le
+pour le détail item par item (score **10 ✅ / 5 🟡 / 6 🔴 sur 21** — le
 dénombrement précédent ("20 items") était déjà inexact ; le projet reste
 une démo solide en local, pas prêt pour un lancement réel). **Story 15.13**
 a tourné les

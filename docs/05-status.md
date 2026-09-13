@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 15 ✅ + 4 🟡 sur 19 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 16 ✅ + 4 🟡 sur 20 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 15 ✅ + 4 🟡 sur 19 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 16 ✅ + 4 🟡 sur 20 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -142,6 +142,22 @@ contrat API, même situation que 15.3), `/api/planning/taxes` n'a aucun
 consommateur `GET` à ce jour. 5 nouveaux tests (78/78 au total),
 `pnpm type-check` 4/4 (web **et** mobile). Vérifié en direct : serveur de
 dev redémarré, les deux routes répondent sans crash.
+
+**Note story 15.20** : ✅ complet — dernier volet restant de l'item
+"rate limiting sur tous les endpoints sensibles" (15.1 couvrait déjà
+login/inscription). `checkMutationRateLimit(userId)` dans
+[`lib/rateLimit.ts`](../apps/web/src/lib/rateLimit.ts) — limite par
+utilisateur (60/min, fail-open comme le reste depuis ADR-004), branchée
+sur les 14 handlers de mutation restants dans 10 fichiers (accounts,
+budgets, goals + `[id]`, portfolio, transactions + `[id]`, user/profile,
+planning/retirement, advisor/scenarios, planning/taxes). Audité
+explicitement pour ne rien oublier ; exclusions documentées (Stripe
+checkout/portal en `GET`, cron protégé par secret, advisor/chat désactivé).
+6 nouveaux tests (90/90 au total), `pnpm type-check` 4/4. **Vérifié en
+direct contre la vraie BDD Neon** : build de production + `pnpm start`,
+connexion mobile réelle avec le compte de démo, `POST /api/accounts`
+réussi (`201`) avec le cookie de session — compte de test supprimé après
+coup.
 
 **Vérification finale de session** (après 15.14/15.15/15.17/15.18/15.19) :
 `pnpm build` (production réelle, `apps/web`) — 50/50 pages générées, tous
@@ -474,7 +490,7 @@ honnête item par item, contre le code réel :
 ### 9.2 Sécurité
 | Item | État | Constat |
 |---|---|---|
-| Rate limiting sur tous les endpoints sensibles | 🟡 | Login/inscription couverts (15.1) ; le reste des routes mutatives n'a aucune limite (API-04/API-06) |
+| Rate limiting sur tous les endpoints sensibles | ✅ | Login/inscription (15.1) + story 15.20 : limite par utilisateur (60/min, fail-open) sur les 14 handlers de mutation restants (accounts/budgets/goals/portfolio/transactions/profile/scenarios/taxes/retirement). Hors périmètre par nature : Stripe checkout/portal (`GET`, pas une mutation), cron (protégé par secret, pas par session), advisor/chat (désactivé, `503` systématique) |
 | Protection anti-bot/spam | 🔴 | Aucun captcha, aucune protection anti-bot |
 | Validation inputs testée côté serveur | ✅ | Zod partout (15.2) |
 | CSRF protégé partout | 🟡 | Cookie `SameSite=Lax` par défaut NextAuth ; pas de token CSRF explicite sur les routes API custom (FE-04) |
@@ -492,7 +508,7 @@ honnête item par item, contre le code réel :
 | Tests de charge effectués | 🟡 | Exécutés (story 15.13, Artillery) contre un build de production réel + Neon réelle. Test réalisé **sans Redis local** (installation refusée) — distorsion documentée. Routes API paginées : saines (0 % d'échec, p95 ~570-600ms). Goulot `/dashboard` trouvé en 15.13 (diagnostic initial faux, contention Postgres supposée) **corrigé en story 15.16** : vraie cause = bug de config `ioredis`, `/dashboard` 100 % → 0 % d'échec, coût du fail-open Redis (accepté depuis 15.1) réduit de ~5,4s à ~410ms. Échecs résiduels sous charge combinée (20 %) sans rapport avec Redis, cause non confirmée (capacité Neon Free suspectée). Reste 🟡 et non ✅ : la distorsion "sans Redis local" persiste (Redis n'est toujours pas opérationnel, seul le comportement de son absence est mieux géré) et une partie de la charge combinée échoue encore |
 | Politique de patching définie + rollback testé | 🟡 | Story 15.15 — politique écrite (cadence par catégorie de patch, gate de test, mécanismes de rollback), rollback applicatif réellement testé par `git revert` sur une branche jetable ; rollback BDD (15.7) toujours non exercé, politique non encore éprouvée sur un cycle réel — détail dans [03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515) |
 
-**Score approximatif** : 9 ✅ / 6 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
+**Score approximatif** : 10 ✅ / 5 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
 compte 21 lignes, pas 20 comme les versions précédentes de cette section
 l'affirmaient — corrigé au passage. Historique : évaluation initiale du
 23/07, 5/8/7 (sur la même base de 21, déjà mal comptée à 20 à l'époque) ;
@@ -501,7 +517,9 @@ mise à jour après la story 15.12 (vérification email) ; après 15.13/15.16
 après 15.14/15.15 (secrets coffre 🔴→🟡, patching 🟡 enrichi mais statut
 inchangé) ; après 15.17 (endpoint debug `/api/health` 🟡→✅, trouvée en
 vérifiant 15.14 en direct) ; après 15.18 (pagination sur toutes les listes
-🟡→✅) ; après 15.19 (journalisation actions sensibles 🔴→✅)).
+🟡→✅) ; après 15.19 (journalisation actions sensibles 🔴→✅) ; après 15.20
+(rate limiting sur tous les endpoints sensibles 🟡→✅) — la moitié de la
+checklist est maintenant ✅).
 
 **Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
 faudrait au minimum : un environnement de production réel (domaine, SSL,
@@ -534,6 +552,9 @@ pour l'instant, pas prêt pour un lancement réel.
 - ~~15.19 — Journalisation centralisée des actions sensibles (auth)~~
   ✅ fait (dernier item 🔴 de la checklist 9.3, même session `/goal`,
   vérifiée en direct contre la vraie BDD Neon avec le compte de démo)
+- ~~15.20 — Rate limiting sur les routes de mutation~~ ✅ fait (dernier
+  volet de "rate limiting sur tous les endpoints sensibles", même session
+  `/goal`, vérifiée en direct en production avec le compte de démo)
 
 ## Environnement local (hors périmètre BMAD, pour mémoire)
 

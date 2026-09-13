@@ -1,4 +1,7 @@
-import { rateLimit, getClientIp, loginRateLimitKey, accountLoginRateLimitKey, ACCOUNT_LOGIN_ATTEMPT_LIMIT, LOGIN_ATTEMPT_LIMIT } from '../rateLimit';
+import {
+  rateLimit, getClientIp, loginRateLimitKey, accountLoginRateLimitKey, ACCOUNT_LOGIN_ATTEMPT_LIMIT, LOGIN_ATTEMPT_LIMIT,
+  checkMutationRateLimit, mutationRateLimitKey, MUTATION_ATTEMPT_LIMIT,
+} from '../rateLimit';
 import { redis } from '../redis';
 
 jest.mock('../redis', () => ({
@@ -90,6 +93,40 @@ describe('accountLoginRateLimitKey', () => {
 
   it('is set higher than the per-IP limit so a single-IP login mistake never trips it first', () => {
     expect(ACCOUNT_LOGIN_ATTEMPT_LIMIT).toBeGreaterThan(LOGIN_ATTEMPT_LIMIT);
+  });
+});
+
+describe('checkMutationRateLimit (story 15.20)', () => {
+  it('scopes the limit to the user id, not IP or email', () => {
+    expect(mutationRateLimitKey('user-1')).toBe('mutation:user-1');
+    expect(mutationRateLimitKey('user-1')).not.toBe(mutationRateLimitKey('user-2'));
+  });
+
+  it('allows requests under the limit', async () => {
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.ttl.mockResolvedValue(60);
+
+    const result = await checkMutationRateLimit('user-1');
+
+    expect(result.success).toBe(true);
+    expect(mockRedis.incr).toHaveBeenCalledWith('ratelimit:mutation:user-1');
+  });
+
+  it('blocks once the per-user limit is exceeded', async () => {
+    mockRedis.incr.mockResolvedValue(MUTATION_ATTEMPT_LIMIT + 1);
+    mockRedis.ttl.mockResolvedValue(30);
+
+    const result = await checkMutationRateLimit('user-1');
+
+    expect(result.success).toBe(false);
+  });
+
+  it('fails open when Redis is unreachable, same as the login limiter', async () => {
+    mockRedis.incr.mockRejectedValue(new Error('connection refused'));
+
+    const result = await checkMutationRateLimit('user-1');
+
+    expect(result.success).toBe(true);
   });
 });
 

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { createTransactionSchema } from '@budget-pocket/shared';
 import { cacheDel } from '@/lib/cache';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
+import { checkMutationRateLimit } from '@/lib/rateLimit';
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -39,6 +40,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+
+  const limit = await checkMutationRateLimit(session.user.id);
+  if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
   const body = await req.json();
   const data = createTransactionSchema.safeParse(body);

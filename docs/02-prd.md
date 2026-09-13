@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (15 ✅ + 4 🟡 sur 19)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (16 ✅ + 4 🟡 sur 20)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -171,6 +171,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.17 | Ne pas exposer le détail interne des erreurs sur `/api/health` | Should | S | ✅ | Gate Phase 6 §9.2, BE-09 |
 | 15.18 | Pagination sur `/api/advisor/scenarios` et `/api/planning/taxes` | Should | S | ✅ | Gate Phase 6 §9.1 (résidu de 15.3) |
 | 15.19 | Journalisation centralisée des actions sensibles (auth) | Should | S | ✅ | Gate Phase 6 §9.3, BE-08 |
+| 15.20 | Rate limiting sur les routes de mutation (accounts/budgets/goals/portfolio/transactions/profile/scenarios/taxes/retirement) | Should | M | ✅ | Gate Phase 6 §9.2, API-04/API-06 |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1237,6 +1238,64 @@ veille) plutôt qu'un vrai blocage réseau.
 [api/auth/reset-password/route.ts](../apps/web/src/app/api/auth/reset-password/route.ts),
 [api/auth/verify-email/route.ts](../apps/web/src/app/api/auth/verify-email/route.ts),
 [api/auth/resend-verification/route.ts](../apps/web/src/app/api/auth/resend-verification/route.ts).
+
+---
+
+### Story 15.20 — Rate limiting sur les routes de mutation · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que les routes qui créent/modifient/
+suppriment des données (comptes, budgets, objectifs, portefeuille,
+transactions, profil, scénarios, taxes, retraite) soient limitées en
+fréquence par utilisateur, afin qu'un client défaillant ou une session
+compromise ne puisse pas générer un volume d'écriture illimité (Gate Phase
+6 §9.2, API-04/API-06).
+
+**Cadrage** : contrairement au rate limiting de login (protection contre le
+brute force de mot de passe), cette limite protège contre l'abus de
+ressources par un compte **déjà authentifié** — clé par `userId`, pas par
+IP/email. Limite volontairement généreuse (60 requêtes/minute) : une saisie
+manuelle en rafale (import d'un mois de transactions) ne doit pas la
+déclencher ; seul un usage automatisé/anormal la touche.
+
+**Critères d'acceptation**
+- [x] [`lib/rateLimit.ts`](../apps/web/src/lib/rateLimit.ts) —
+      `checkMutationRateLimit(userId)`, réutilise la primitive `rateLimit()`
+      existante (même fail-open si Redis injoignable, ADR-004).
+- [x] Branché sur les 14 handlers de mutation existants, dans 10 fichiers :
+      `POST /api/accounts`, `POST /api/budgets`, `POST /api/goals` +
+      `PATCH`/`DELETE /api/goals/[id]`, `POST /api/portfolio`,
+      `POST /api/transactions` + `PATCH`/`DELETE /api/transactions/[id]`,
+      `PATCH /api/user/profile`, `POST /api/planning/retirement`,
+      `POST /api/advisor/scenarios`, `POST /api/planning/taxes`.
+- [x] Vérifié qu'aucun handler de mutation n'a été oublié — audit explicite
+      (`grep` sur `POST`/`PATCH`/`DELETE`/`PUT` dans tous les `route.ts`)
+      avant de considérer la story terminée.
+- [x] **Hors périmètre, noté plutôt que traité en douce** :
+      `GET /api/stripe/checkout` et `GET /api/stripe/portal` déclenchent des
+      appels Stripe (donc un effet de bord réel) mais via `GET`, pas un
+      verbe de mutation — Stripe a ses propres limites de débit côté API ;
+      les routes `cron/*` sont protégées par `CRON_SECRET`, pas une session
+      utilisateur, donc hors du modèle "par utilisateur" de cette limite ;
+      `POST /api/advisor/chat` renvoie toujours `503` (fonctionnalité
+      désactivée, Epic 9.3) donc n'a aucun effet à limiter.
+- [x] Test unitaire — 4 nouveaux pour `checkMutationRateLimit` dans
+      [`rateLimit.test.ts`](../apps/web/src/lib/__tests__/rateLimit.test.ts)
+      (scope par `userId`, sous la limite, au-delà de la limite, fail-open)
+      + 2 nouveaux tests d'intégration sur
+      [`advisor/scenarios/route.test.ts`](../apps/web/src/app/api/advisor/scenarios/__tests__/route.test.ts)
+      (`POST` rejeté `429` sans écriture, `POST` accepté sous la limite) —
+      route choisie comme représentative plutôt que dupliquer le même test
+      dans les 10 fichiers touchés.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (90/90) verts.
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo :
+      build de production (`pnpm build`, 50/50 pages) + `pnpm start`,
+      connexion mobile réelle puis `POST /api/accounts` avec le cookie de
+      session obtenu — compte créé avec succès (`201`, fail-open confirmé
+      puisque Redis reste injoignable dans cet environnement). Compte de
+      test supprimé après vérification.
+
+**Implémentation** : [lib/rateLimit.ts](../apps/web/src/lib/rateLimit.ts) +
+les 10 fichiers de route listés ci-dessus.
 
 ---
 

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateTransactionSchema } from '@budget-pocket/shared';
 import { cacheDel } from '@/lib/cache';
+import { checkMutationRateLimit } from '@/lib/rateLimit';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -20,6 +21,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+
+  const limit = await checkMutationRateLimit(session.user.id);
+  if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
   const { id } = await params;
   const tx = await prisma.transaction.findUnique({ where: { id } });
@@ -55,6 +59,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+
+  const limit = await checkMutationRateLimit(session.user.id);
+  if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
   const { id } = await params;
   const tx = await prisma.transaction.findUnique({ where: { id } });

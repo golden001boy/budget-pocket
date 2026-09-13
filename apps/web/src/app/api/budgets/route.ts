@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
+import { checkMutationRateLimit } from '@/lib/rateLimit';
 import { createBudgetSchema } from '@budget-pocket/shared';
 
 export async function GET(req: Request) {
@@ -34,6 +35,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+
+  const limit = await checkMutationRateLimit(session.user.id);
+  if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
   const body = await req.json();
   const data = createBudgetSchema.safeParse(body);
