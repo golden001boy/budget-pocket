@@ -868,3 +868,52 @@ signalé pour une story de suivi.
 - **Cadence de patching en pratique** — le tableau ci-dessus est une
   politique écrite, pas encore éprouvée sur un cycle réel (pas assez de
   temps écoulé depuis sa rédaction pour évaluer si elle est suivie).
+
+## 13. Dette technique identifiée (non traitée, signalée pour décision)
+
+Trouvé en auditant les consommateurs de `@budget-pocket/api-client`
+pendant la story 15.22 (couverture de tests) — pas encore transformé en
+story, une décision de produit/architecture est nécessaire avant d'agir
+(garder, réparer, ou supprimer), donc listé ici plutôt que corrigé
+unilatéralement.
+
+**Le package `packages/api-client` est du code mort dans toute la
+codebase, et son mécanisme d'authentification ne fonctionnerait de toute
+façon pas avec le backend actuel.**
+
+- [`createApiClient()`](../packages/api-client/src/client.ts) envoie un
+  header `Authorization: Bearer <token>` sur chaque requête.
+- Seul consommateur : [`apps/mobile/lib/api.ts`](../apps/mobile/lib/api.ts)
+  l'instancie (`createBudgetPocketClient`, lisant le token depuis
+  `expo-secure-store`) — **mais aucun écran mobile n'importe
+  `lib/api.ts`**. Tous les écrans réels (`advisor`, `expenses`,
+  accueil, `investments`, `add-transaction`) utilisent directement
+  [`lib/mfetch.ts`](../apps/mobile/lib/mfetch.ts), qui authentifie via un
+  header `Cookie: next-auth.session-token=<token>` — un mécanisme
+  entièrement différent.
+- `apps/web` déclare aussi `@budget-pocket/api-client` en dépendance
+  ([package.json](../apps/web/package.json)) mais ne l'importe nulle
+  part.
+- **Même si un écran l'utilisait** : `getServerSession()` (NextAuth v4,
+  App Router) lit la session depuis les cookies de la requête — aucune
+  route de ce projet ne lit ni ne parse un header `Authorization`. Un
+  appel via `createApiClient()` recevrait donc un `401` sur toute route
+  protégée, quel que soit le token fourni.
+- **Risque réel, pas seulement esthétique** : `pnpm audit`/`pnpm
+  type-check` ne détectent rien ici (le code compile, aucune dépendance
+  vulnérable) — seule une lecture attentive des imports révèle qu'il ne
+  fait rien. Un développeur futur pourrait raisonnablement supposer que
+  `api-client` est le client HTTP "officiel" du monorepo (son nom le
+  suggère) et l'utiliser pour un nouvel écran, en découvrant l'échec
+  d'authentification seulement au runtime.
+
+**Non traité ici** — options possibles, à trancher avec vous : (a)
+supprimer le package si `mfetch.ts` est le pattern retenu durablement ;
+(b) réparer `createApiClient()` pour envoyer le même header `Cookie` que
+`mfetch.ts` et migrer les écrans vers lui, si un client HTTP partagé/typé
+reste souhaitable à terme ; (c) documenter clairement que c'est un
+scaffold non fini et laisser tel quel. Aucune de ces options n'a été
+choisie unilatéralement — contrairement aux corrections de bugs de cette
+session (ADR-012 mis à part, qui portait sur une story déjà en cours),
+celle-ci change la surface de code exposée à l'équipe mobile future,
+donc mérite votre arbitrage plutôt qu'une décision prise seule.

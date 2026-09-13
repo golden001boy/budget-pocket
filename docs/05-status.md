@@ -224,6 +224,18 @@ reste néanmoins sur la branche locale `epic-15/15.14-15.15-secrets-patching`,
 **non poussée** — pas par impossibilité technique, mais parce que pousser
 n'a pas été explicitement demandé.
 
+**Découverte hors périmètre, signalée mais non traitée** (pendant la story
+15.22) : `packages/api-client` est du code mort dans toute la codebase —
+son unique consommateur (`apps/mobile/lib/api.ts`) n'est lui-même importé
+par aucun écran mobile réel (tous utilisent `lib/mfetch.ts` directement,
+authentification par cookie). Même s'il était utilisé, son header
+`Authorization: Bearer` ne fonctionnerait pas : `getServerSession()`
+(NextAuth v4) ne lit que les cookies. Détail complet et options possibles
+(garder/réparer/supprimer) dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
+— décision volontairement laissée à vous plutôt que tranchée seule, car
+elle change la surface de code exposée à l'équipe mobile future.
+
 **Note story 15.22** : ✅ complet — termine le gap noté depuis la story
 15.9 ("routes API n'ont aucun test à ce jour"). 59 nouveaux tests sur les 9
 routes CRUD restantes (accounts, budgets, goals + `[id]`, portfolio,
