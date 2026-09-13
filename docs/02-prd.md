@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (12 ✅ + 4 🟡 sur 16)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (13 ✅ + 4 🟡 sur 17)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -168,6 +168,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.14 | Coffre de secrets pour les variables d'environnement | Could | S | 🟡 | Gate Phase 6 §9.2 |
 | 15.15 | Politique de patching formelle + test de rollback | Could | S | 🟡 | Gate Phase 6 §9.3 |
 | 15.16 | Corriger le goulot `/dashboard` trouvé en story 15.13 | Should | M | ✅ | Gate Phase 6 §9.3 (suivi 15.13) |
+| 15.17 | Ne pas exposer le détail interne des erreurs sur `/api/health` | Should | S | ✅ | Gate Phase 6 §9.2, BE-09 |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1043,7 +1044,56 @@ respecter même quand Redis est indisponible.
       scénario) non investigués — hypothèse capacité Neon Free, non
       confirmée, hors périmètre de cette story.
 
-**Non commencée.**
+---
+
+### Story 15.17 — Ne pas exposer le détail interne des erreurs sur `/api/health` · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que `/api/health` ne révèle aucun
+détail interne (message d'erreur Prisma brut, hôte de BDD...) à un appelant
+non authentifié, afin de ne pas offrir de reconnaissance gratuite à un
+attaquant (Gate Phase 6 §9.2, BE-09).
+
+**Constat qui a motivé cette story** : trouvé en vérifiant en direct le
+correctif de la story 15.14 (serveur de dev démarré, `/api/health` appelé
+pour confirmer le boot) — la route renvoyait `String(error)` tel quel, donc
+le message d'erreur Prisma complet, y compris l'hôte de la BDD Neon, sur un
+endpoint sans authentification. Correspond exactement à l'item déjà noté
+🟡 dans la checklist §9.2 ("Aucun endpoint debug exposé... `/api/health`
+expose le message d'erreur Prisma brut, BE-09") — pas une nouvelle
+découverte, mais la première fois qu'une story s'en charge.
+
+**Critères d'acceptation**
+- [x] `GET /api/health` ne renvoie plus jamais le contenu de l'objet
+      erreur — seulement un statut structuré par dépendance
+      (`{ status, db, redis }`, chacun `'connected' | 'error'`).
+- [x] BDD et Redis vérifiés **indépendamment** (`Promise.all`, deux
+      fonctions séparées) plutôt qu'en séquence dans un seul `try` — avant
+      ce correctif, une BDD en panne empêchait même de tester Redis,
+      masquant l'état réel de la deuxième dépendance.
+- [x] Chaque échec est journalisé côté serveur (`console.error`, même
+      convention que le fail-open Redis dans `rateLimit.ts`) — l'opérateur
+      garde le détail utile au diagnostic, l'appelant externe n'en voit
+      rien.
+- [x] `200` si les deux dépendances répondent, `503` sinon (comportement
+      inchangé pour un monitoring externe qui ne regarde que le code HTTP).
+- [x] Test unitaire — 4 nouveaux dans
+      [`route.test.ts`](../apps/web/src/app/api/health/__tests__/route.test.ts)
+      (premier test d'une route API dans ce projet, `04-tests.md` notait
+      cette absence) : `200` si tout va bien, `503` sans fuite du message
+      brut si la BDD échoue, idem si Redis échoue, les deux indépendamment
+      si les deux échouent.
+- [x] Vérifié en direct : serveur de dev redémarré, `curl /api/health`
+      renvoie `{"status":"error","db":"error","redis":"error"}` (BDD et
+      Redis injoignables dans cette session, sandbox sans sortie réseau) —
+      **aucune trace de l'hôte Neon ni d'un message Prisma dans la
+      réponse**, contrairement au comportement observé avant correctif.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (73/73, +4 nouveaux tests pour
+      cette story +1 test de régression trouvé pendant la story 15.15)
+      verts.
+
+**Implémentation** :
+[api/health/route.ts](../apps/web/src/app/api/health/route.ts),
+[api/health/__tests__/route.test.ts](../apps/web/src/app/api/health/__tests__/route.test.ts).
 
 ---
 

@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 12 ✅ + 4 🟡 sur 16 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 13 ✅ + 4 🟡 sur 17 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,27 +34,33 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 12 ✅ + 4 🟡 sur 16 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 13 ✅ + 4 🟡 sur 17 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
 **Toutes les stories de l'Epic 15 ont désormais au moins été entamées** —
-12 ✅, 4 🟡 (15.7, 15.8, 15.14, 15.15), plus aucune 🔴. Il ne reste donc
+13 ✅, 4 🟡 (15.7, 15.8, 15.14, 15.15), plus aucune 🔴. Il ne reste donc
 plus de story non commencée dans l'epic ; ce qui reste, c'est de
 transformer les quatre 🟡 en ✅ (voir leurs notes respectives ci-dessous) et
 le MFA (volet non traité de 15.8, voir ADR-008), qui reste sans story
-dédiée. Voir
+dédiée. **15.17** (nouvelle, non prévue par `bmad prelaunch`) a aussi été
+créée et complétée dans cette session — même schéma que 15.16 : un bug de
+sécurité réel (fuite d'erreur Prisma sur `/api/health`) trouvé en
+vérifiant une autre story en direct, traité par une story dédiée plutôt
+que corrigé en douce dans la story qui l'a trouvé. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour le détail complet.
 
-**Point d'attention méthodologique** : les stories 15.14 et 15.15 ont été
-traitées dans une session `/goal` en continuation autonome (2026-09-13,
-« poursuis jusqu'à épuisement de token de cette session »), donc **sans
-pause pour confirmation avec vous** — à la différence du précédent établi
-par les stories 15.10/15.12 (décisions de cadrage explicitement prises
-avec vous avant implémentation). La décision de cadrage de la 15.14
-(ADR-012) est donc à confirmer ou corriger. Travail commité sur une
-branche locale (`epic-15/15.14-15.15-secrets-patching`), **pas fusionnée
+**Point d'attention méthodologique** : les stories 15.14, 15.15 et 15.17
+ont été traitées dans une session `/goal` en continuation autonome
+(2026-09-13, « poursuis jusqu'à épuisement de token de cette session »),
+donc **sans pause pour confirmation avec vous** — à la différence du
+précédent établi par les stories 15.10/15.12 (décisions de cadrage
+explicitement prises avec vous avant implémentation). La décision de
+cadrage de la 15.14 (ADR-012) est donc à confirmer ou corriger — 15.15 et
+15.17 n'impliquaient pas de décision de cadrage comparable, donc moins de
+réserve sur celles-ci. Travail commité sur une branche locale
+(`epic-15/15.14-15.15-secrets-patching`), **pas fusionnée
 ni poussée** — aucun accès réseau vers GitHub/Neon dans cette session
 (sandbox sans sortie internet, confirmé via `git ls-remote` et
 `/api/health`).
@@ -97,6 +103,24 @@ qu'à une valeur littérale) — gap de couverture réel, signalé mais non
 corrigé (hors périmètre de cette story). **Non vérifié** : rollback Vercel
 réel (aucun compte connecté) et restauration Neon réelle (toujours non
 exercée depuis 15.7, aucun changement).
+
+**Note story 15.17** : ✅ complet — trouvée en vérifiant en direct le
+correctif de la story 15.14 (`/api/health` appelé après un redémarrage du
+serveur de dev, pour confirmer que la validation d'env au boot n'empêchait
+pas le boot). L'endpoint renvoyait `String(error)`, donc le message
+d'erreur Prisma brut (hôte de la BDD Neon inclus) à tout appelant non
+authentifié — item déjà noté 🟡 dans la checklist §9.2 (BE-09), jamais
+traité par une story avant celle-ci. Corrigé : BDD et Redis vérifiés
+indépendamment (`Promise.all`), chaque échec journalisé côté serveur
+(`console.error`) mais jamais renvoyé dans la réponse HTTP (`{ status, db,
+redis }` structuré, plus aucun contenu d'erreur). Premier test unitaire
+d'une route API dans ce projet (`04-tests.md` notait cette absence) — 4
+nouveaux tests, plus 1 test de régression sur `pagination.test.ts` trouvé
+pendant la 15.15 (une assertion qui se comparait à sa propre constante).
+`pnpm type-check` 4/4, `pnpm test` 73/73. Vérifié en direct : serveur de
+dev redémarré, `curl /api/health` renvoie `{"status":"error","db":"error","redis":"error"}`
+(BDD/Redis injoignables dans cette session, sandbox sans sortie réseau)
+sans plus aucune trace de l'hôte Neon ni d'un message Prisma.
 
 **Note story 15.16** : ✅ complet — corrige le goulot `/dashboard` trouvé
 en 15.13. **Le diagnostic de la 15.13 était faux** (contention Postgres
@@ -395,7 +419,7 @@ honnête item par item, contre le code réel :
 | Validation inputs testée côté serveur | ✅ | Zod partout (15.2) |
 | CSRF protégé partout | 🟡 | Cookie `SameSite=Lax` par défaut NextAuth ; pas de token CSRF explicite sur les routes API custom (FE-04) |
 | Headers de sécurité présents | ✅ | CSP/X-Frame-Options/etc déployés (FE-06) |
-| Aucun endpoint debug exposé | 🟡 | Aucun `/debug` trouvé, mais `/api/health` expose le message d'erreur Prisma brut (BE-09) |
+| Aucun endpoint debug exposé | ✅ | Story 15.17 — `/api/health` ne renvoie plus le message d'erreur Prisma brut, BDD/Redis vérifiés indépendamment, erreurs journalisées côté serveur uniquement (BE-09) |
 | Secrets depuis un coffre dédié | 🟡 | Story 15.14 — décision de cadrage prise (variables d'env chiffrées Vercel plutôt que Vault/AWS Secrets Manager, [ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514), à confirmer avec vous) + validation Zod des secrets au boot (`lib/env.ts`) ; non vérifié sur un vrai compte Vercel |
 | Pipeline CI/CD protégé | ✅ | Story 15.6, confirmé actif |
 | Scan SCA sans vulnérabilité critique | ✅ | `pnpm audit` à **0 vulnérabilité** (story 15.10) |
@@ -408,15 +432,15 @@ honnête item par item, contre le code réel :
 | Tests de charge effectués | 🟡 | Exécutés (story 15.13, Artillery) contre un build de production réel + Neon réelle. Test réalisé **sans Redis local** (installation refusée) — distorsion documentée. Routes API paginées : saines (0 % d'échec, p95 ~570-600ms). Goulot `/dashboard` trouvé en 15.13 (diagnostic initial faux, contention Postgres supposée) **corrigé en story 15.16** : vraie cause = bug de config `ioredis`, `/dashboard` 100 % → 0 % d'échec, coût du fail-open Redis (accepté depuis 15.1) réduit de ~5,4s à ~410ms. Échecs résiduels sous charge combinée (20 %) sans rapport avec Redis, cause non confirmée (capacité Neon Free suspectée). Reste 🟡 et non ✅ : la distorsion "sans Redis local" persiste (Redis n'est toujours pas opérationnel, seul le comportement de son absence est mieux géré) et une partie de la charge combinée échoue encore |
 | Politique de patching définie + rollback testé | 🟡 | Story 15.15 — politique écrite (cadence par catégorie de patch, gate de test, mécanismes de rollback), rollback applicatif réellement testé par `git revert` sur une branche jetable ; rollback BDD (15.7) toujours non exercé, politique non encore éprouvée sur un cycle réel — détail dans [03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515) |
 
-**Score approximatif** : 6 ✅ / 9 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
+**Score approximatif** : 7 ✅ / 8 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
 compte 21 lignes, pas 20 comme les versions précédentes de cette section
 l'affirmaient — corrigé au passage. Historique : évaluation initiale du
 23/07, 5/8/7 (sur la même base de 21, déjà mal comptée à 20 à l'époque) ;
 mise à jour après la story 15.12 (vérification email) ; après 15.13/15.16
 (tests de charge + goulot dashboard corrigé, statut inchangé, déjà 🟡) ;
 après 15.14/15.15 (secrets coffre 🔴→🟡, patching 🟡 enrichi mais statut
-inchangé) — net : 5→6 ✅ n'a pas bougé depuis 15.12, 🔴 passe de 7 à 6 réels
-avec la 15.14).
+inchangé) ; après 15.17 (endpoint debug `/api/health` 🟡→✅, trouvée en
+vérifiant 15.14 en direct)).
 
 **Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
 faudrait au minimum : un environnement de production réel (domaine, SSL,
@@ -438,6 +462,10 @@ pour l'instant, pas prêt pour un lancement réel.
 - ~~15.16 — Corriger le goulot `/dashboard` trouvé en 15.13~~ ✅ fait (créée
   et complétée dans la même session, en plus des trois ci-dessus prévues
   par `bmad prelaunch`)
+- ~~15.17 — Ne pas exposer le détail interne des erreurs sur `/api/health`~~
+  ✅ fait (même schéma que 15.16 : créée et complétée dans la même session
+  `/goal` que 15.14/15.15, suite à un bug trouvé en vérifiant 15.14 en
+  direct, pas prévue par `bmad prelaunch`)
 
 ## Environnement local (hors périmètre BMAD, pour mémoire)
 

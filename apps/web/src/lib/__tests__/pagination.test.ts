@@ -17,6 +17,16 @@ describe('parsePagination', () => {
     expect(result.take).toBe(MAX_PAGE_SIZE);
   });
 
+  // Regression test (found during story 15.15's rollback drill): the check
+  // above compares the result to the MAX_PAGE_SIZE constant itself, so it
+  // would still pass even if that constant were quietly raised to an
+  // unsafe value — it only proves clamping happens, not that the cap is
+  // actually 100. Pinned to a literal here so changing the constant is a
+  // deliberate, visible decision instead of a silent regression.
+  it('caps pageSize at exactly 100, not just at whatever MAX_PAGE_SIZE currently is', () => {
+    expect(MAX_PAGE_SIZE).toBe(100);
+  });
+
   it('falls back to defaults for non-numeric page/pageSize instead of producing NaN', () => {
     const result = parsePagination(new URLSearchParams({ page: 'abc', pageSize: 'xyz' }));
     expect(result).toEqual({ page: 1, pageSize: DEFAULT_PAGE_SIZE, skip: 0, take: DEFAULT_PAGE_SIZE });
