@@ -72,7 +72,7 @@ cold-start Neon la première fois). Travail néanmoins commité sur une
 branche locale non poussée (`epic-15/15.14-15.15-secrets-patching`) — pas
 par impossibilité, mais parce que pousser n'a pas été demandé — voir
 [docs/05-status.md §Gate Phase 6](docs/05-status.md#gate-phase-6--évaluation-bmad-prelaunch-2026-07-23)
-pour le détail item par item (score **10 ✅ / 5 🟡 / 6 🔴 sur 21** — le
+pour le détail item par item (score **10 ✅ / 6 🟡 / 5 🔴 sur 21** — le
 dénombrement précédent ("20 items") était déjà inexact ; le projet reste
 une démo solide en local, pas prêt pour un lancement réel). **Story 15.13**
 a tourné les

@@ -508,7 +508,7 @@ honnête item par item, contre le code réel :
 | Tests de charge effectués | 🟡 | Exécutés (story 15.13, Artillery) contre un build de production réel + Neon réelle. Test réalisé **sans Redis local** (installation refusée) — distorsion documentée. Routes API paginées : saines (0 % d'échec, p95 ~570-600ms). Goulot `/dashboard` trouvé en 15.13 (diagnostic initial faux, contention Postgres supposée) **corrigé en story 15.16** : vraie cause = bug de config `ioredis`, `/dashboard` 100 % → 0 % d'échec, coût du fail-open Redis (accepté depuis 15.1) réduit de ~5,4s à ~410ms. Échecs résiduels sous charge combinée (20 %) sans rapport avec Redis, cause non confirmée (capacité Neon Free suspectée). Reste 🟡 et non ✅ : la distorsion "sans Redis local" persiste (Redis n'est toujours pas opérationnel, seul le comportement de son absence est mieux géré) et une partie de la charge combinée échoue encore |
 | Politique de patching définie + rollback testé | 🟡 | Story 15.15 — politique écrite (cadence par catégorie de patch, gate de test, mécanismes de rollback), rollback applicatif réellement testé par `git revert` sur une branche jetable ; rollback BDD (15.7) toujours non exercé, politique non encore éprouvée sur un cycle réel — détail dans [03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515) |
 
-**Score approximatif** : 10 ✅ / 5 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
+**Score approximatif** : 10 ✅ / 6 🟡 / 5 🔴 sur **21** (le tableau ci-dessus
 compte 21 lignes, pas 20 comme les versions précédentes de cette section
 l'affirmaient — corrigé au passage. Historique : évaluation initiale du
 23/07, 5/8/7 (sur la même base de 21, déjà mal comptée à 20 à l'époque) ;
@@ -519,7 +519,13 @@ inchangé) ; après 15.17 (endpoint debug `/api/health` 🟡→✅, trouvée en
 vérifiant 15.14 en direct) ; après 15.18 (pagination sur toutes les listes
 🟡→✅) ; après 15.19 (journalisation actions sensibles 🔴→✅) ; après 15.20
 (rate limiting sur tous les endpoints sensibles 🟡→✅) — la moitié de la
-checklist est maintenant ✅).
+checklist est maintenant ✅. **Correctif arithmétique** : une première
+version de cette ligne annonçait 5 🟡/6 🔴, l'inverse du décompte réel —
+corrigé après recomptage explicite ligne par ligne du tableau ci-dessus.
+Restent 🔴 : login/reset en prod réelle, paiements en mode réel, SSL,
+environnements séparés, anti-bot/spam — tous nécessitent une vraie
+infrastructure de prod ou un compte tiers non disponible dans cette
+session).
 
 **Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
 faudrait au minimum : un environnement de production réel (domaine, SSL,
