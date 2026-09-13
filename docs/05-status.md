@@ -143,6 +143,18 @@ consommateur `GET` à ce jour. 5 nouveaux tests (78/78 au total),
 `pnpm type-check` 4/4 (web **et** mobile). Vérifié en direct : serveur de
 dev redémarré, les deux routes répondent sans crash.
 
+**Vérification finale de session** (après 15.14/15.15/15.17/15.18/15.19) :
+`pnpm build` (production réelle, `apps/web`) — 50/50 pages générées, tous
+les endpoints API attendus présents dans le manifeste de routes, aucune
+erreur. `pnpm start` démarré (`✓ Ready in 3.3s`) et testé en direct :
+`/api/health` toujours sans fuite de détail interne, connexion mobile
+réussie avec le compte de démo (mot de passe correct → token émis, mot de
+passe erroné → `401`), les deux lignes d'audit log (`login_success` puis
+`login_failure`) confirmées dans les logs du serveur de production. `db:
+error` observé une fois sur `/api/health` avant le premier login réussi —
+cohérent avec l'hypothèse de cold-start Neon déjà notée dans la story
+15.19, pas une régression.
+
 **Note story 15.19** : ✅ complet — dernier item 🔴 restant de la checklist
 9.3. [`lib/auditLog.ts`](../apps/web/src/lib/auditLog.ts) journalise en JSON
 structuré (`{ type: 'audit', action, userId, email, ip, reason, at }`),
