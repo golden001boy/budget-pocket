@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (22 ✅ + 4 🟡 sur 26)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (23 ✅ + 4 🟡 sur 27)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -178,6 +178,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.24 | `try/catch` sur les 12 routes restantes (CRUD + analysis) qui n'en avaient pas | Must | M | ✅ | Même fragilité que le bug `/api/auth/mobile` de 15.21, trouvée systémique |
 | 15.25 | Champs Prisma réels jamais exposés (retraite/objectifs/portefeuille) | Should | S | ✅ | Même schéma que 15.23 : schémas partagés complets mais inutilisés |
 | 15.26 | Câbler un test runner (`jest-expo`) pour `apps/mobile` | Should | M | ✅ | Gap noté depuis 15.9 : "apps/mobile n'a pas de runner du tout" |
+| 15.27 | Tests pour `formatCurrency`/`convertToXOF` (`packages/shared`) | Could | S | ✅ | Logique argent réelle, utilisée partout, jamais testée |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1753,6 +1754,36 @@ devDependencies, script `test`),
 (nouveau),
 [lib/__tests__/mfetch.test.ts](../apps/mobile/lib/__tests__/mfetch.test.ts)
 (nouveau).
+
+---
+
+### Story 15.27 — Tests pour `formatCurrency`/`convertToXOF` · ✅ Done
+
+**Story** : couvrir la logique de formatage/conversion de devise
+(`packages/shared/src/constants/currencies.ts`) — utilisée dans tout
+l'affichage de montants de l'app (web et mobile), jamais testée jusqu'ici.
+
+**Cadrage** : `packages/shared` n'a pas de test runner propre (pas de
+script `test`, pas de `jest` en devDependency) — même convention déjà
+établie par `authSchemas.test.ts` : le code partagé est testé depuis
+`apps/web`, via son propre Jest, plutôt que laissé sans test faute d'un
+runner dédié.
+
+**Critères d'acceptation**
+- [x] 7 tests : XOF sans décimales + symbole FCFA, défaut sur XOF si
+      devise omise, EUR/USD/GBP avec 2 décimales et le bon symbole, XOF
+      arrondi à l'entier (pas de décimales affichées), `convertToXOF`
+      identité pour XOF, taux de conversion documentés respectés,
+      linéarité par rapport au montant.
+- [x] Assertions sur le contenu (regex/`toContain`), pas sur les octets
+      exacts du séparateur de milliers — `Intl.NumberFormat` utilise un
+      espace insécable fine (U+202F) dont l'encodage exact peut varier
+      selon la version d'ICU, vérifié directement en Node avant d'écrire
+      les assertions plutôt que supposé.
+- [x] `pnpm test` (202 web + 12 mobile) et `pnpm type-check` (4/4) verts.
+
+**Implémentation** :
+[lib/__tests__/currencies.test.ts](../apps/web/src/lib/__tests__/currencies.test.ts).
 
 ---
 

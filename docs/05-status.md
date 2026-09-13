@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 22 ✅ + 4 🟡 sur 26 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 23 ✅ + 4 🟡 sur 27 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 22 ✅ + 4 🟡 sur 26 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 23 ✅ + 4 🟡 sur 27 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26, 15.27 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -263,6 +263,15 @@ réelle puis les 9 routes concernées (`accounts`, `budgets`, `goals`,
 `user/profile`, `analysis/snapshot`, `analysis/forecast`) toutes `200`
 avec de vraies données — et une coupure BDD transitoire réelle pendant la
 vérification a reconfirmé, en prime, le `500` propre de la story 15.21.
+
+**Note story 15.27** : ✅ complet — `formatCurrency`/`convertToXOF`
+(`packages/shared/src/constants/currencies.ts`), logique argent réelle
+utilisée partout dans l'affichage web/mobile, jamais testée. Même
+convention que `authSchemas.test.ts` : testé depuis `apps/web` (pas de
+runner propre à `packages/shared`). 7 tests, assertions sur le contenu
+plutôt que sur l'octet exact du séparateur de milliers (espace insécable
+fine `Intl`, dépendante de la version d'ICU — vérifié en Node avant
+d'écrire les tests). 202 (web) + 12 (mobile), `pnpm type-check` 4/4.
 
 **Note story 15.26** : ✅ complet — gap noté depuis la story 15.9
 ("nécessiterait un preset différent (`jest-expo`), hors périmètre").
