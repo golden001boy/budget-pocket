@@ -30,11 +30,11 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 17 ✅ + 4 🟡 sur 21, plus aucune story 🔴. 15.7
+sécurité/prod) est 🟡 18 ✅ + 4 🟡 sur 22, plus aucune story 🔴. 15.7
 (backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
 documentés (MFA reporté, voir ADR-008).
 
-**Stories 15.14 à 15.21 traitées le 2026-09-13** dans une session `/goal`
+**Stories 15.14 à 15.22 traitées le 2026-09-13** dans une session `/goal`
 en continuation autonome (« poursuis jusqu'à épuisement de token de cette
 session »), **sans pause pour confirmation avec vous** — contrairement au
 précédent établi par 15.10/15.12. Résumé (détail complet story par story
@@ -57,6 +57,9 @@ dans [docs/05-status.md](docs/05-status.md), section Gate Phase 6) :
 - **15.21** `401` JSON propre sur les routes API protégées au lieu d'une
   redirection `307` (gap noté depuis 15.2) + `/api/auth/mobile` ne
   crashe plus brut sur une coupure BDD transitoire. ✅
+- **15.22** couverture de tests (59 tests) pour les 9 routes CRUD
+  restantes sans aucun test (gap noté depuis 15.9) — tests seulement,
+  aucun changement de comportement. ✅
 
 15.17–15.21 vérifiées en direct contre la vraie BDD Neon avec le compte de
 démo (connexions mobile réelles, écritures de test supprimées après coup),

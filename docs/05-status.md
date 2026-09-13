@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 17 ✅ + 4 🟡 sur 21 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 18 ✅ + 4 🟡 sur 22 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 17 ✅ + 4 🟡 sur 21 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 18 ✅ + 4 🟡 sur 22 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -223,6 +223,20 @@ début de session, a été retesté avec succès. Le travail de cette session
 reste néanmoins sur la branche locale `epic-15/15.14-15.15-secrets-patching`,
 **non poussée** — pas par impossibilité technique, mais parce que pousser
 n'a pas été explicitement demandé.
+
+**Note story 15.22** : ✅ complet — termine le gap noté depuis la story
+15.9 ("routes API n'ont aucun test à ce jour"). 59 nouveaux tests sur les 9
+routes CRUD restantes (accounts, budgets, goals + `[id]`, portfolio,
+transactions + `[id]`, user/profile, planning/retirement) : `401` sans
+session, `429` une fois la limite de mutation atteinte, `400` sur body
+invalide, scoping par `userId`, chemin de succès — plus `404`
+d'appartenance sur `goals/[id]`/`transactions/[id]`, effets de bord
+(`budget.spent`, invalidation cache) sur `transactions`, et protection
+contre un `id` client qui écraserait `session.user.id` sur `user/profile`.
+**Portée limitée aux tests** : aucune route modifiée, donc aucun nouveau
+risque de régression — les routes elles-mêmes étaient déjà vérifiées en
+direct contre la vraie BDD Neon lors des stories 15.20/15.21. 157/157
+tests au total (+59), `pnpm type-check` 4/4, `pnpm build` reconfirmé vert.
 
 **Note story 15.16** : ✅ complet — corrige le goulot `/dashboard` trouvé
 en 15.13. **Le diagnostic de la 15.13 était faux** (contention Postgres

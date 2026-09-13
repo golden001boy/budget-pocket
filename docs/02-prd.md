@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (17 ✅ + 4 🟡 sur 21)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (18 ✅ + 4 🟡 sur 22)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -173,6 +173,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.19 | Journalisation centralisée des actions sensibles (auth) | Should | S | ✅ | Gate Phase 6 §9.3, BE-08 |
 | 15.20 | Rate limiting sur les routes de mutation (accounts/budgets/goals/portfolio/transactions/profile/scenarios/taxes/retirement) | Should | M | ✅ | Gate Phase 6 §9.2, API-04/API-06 |
 | 15.21 | 401 JSON propre sur les routes API protégées (au lieu d'une redirection 307) + résilience `/api/auth/mobile` | Should | S | ✅ | Gap noté depuis 15.2, jamais transformé en story |
+| 15.22 | Couverture de tests unitaires pour les 9 routes CRUD principales | Should | M | ✅ | Gap noté depuis 15.9 : "routes API n'ont aucun test à ce jour" |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1372,6 +1373,65 @@ dans le temps de cette session.
 [middleware.ts](../apps/web/src/middleware.ts),
 [middleware.test.ts](../apps/web/src/__tests__/middleware.test.ts),
 [api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts).
+
+---
+
+### Story 15.22 — Couverture de tests unitaires pour les 9 routes CRUD principales · ✅ Done
+
+**Story** : En tant que développeur, je veux que les routes API qui font le
+gros du trafic applicatif (comptes, budgets, objectifs, portefeuille,
+transactions, profil, retraite) aient une couverture de tests de base,
+afin qu'une régression sur l'auth, la validation ou le scoping par
+utilisateur soit détectée par `pnpm test` avant même d'atteindre la BDD
+réelle.
+
+**Constat** : gap noté depuis la story 15.9 ("couverture encore très
+partielle — simulateurs, analytique et routes API n'ont aucun test à ce
+jour"). Les stories 15.17/15.18/15.20/15.21 avaient déjà commencé à combler
+ce vide au fil de l'eau (`health`, `advisor/scenarios`, `planning/taxes`,
+`auth/mobile`, `middleware`) ; cette story termine le travail pour les
+routes CRUD restantes qui n'avaient encore aucun test.
+
+**Portée** : uniquement des tests — **aucun changement de comportement**
+dans les routes elles-mêmes (déjà vérifiées en direct contre la vraie BDD
+Neon lors des stories 15.20/15.21), donc risque de régression nul par
+construction.
+
+**Critères d'acceptation**
+- [x] Tests unitaires pour les 9 fichiers de route restants : `accounts`
+      (6 tests), `budgets` (6), `goals` (6) + `goals/[id]` (8),
+      `portfolio` (6), `transactions` (8) + `transactions/[id]` (9),
+      `user/profile` (4), `planning/retirement` (6) — 59 tests au total.
+- [x] Chaque suite couvre au minimum : rejet `401` sans session, rejet
+      `429` une fois la limite de mutation atteinte (sans écriture),
+      rejet `400` sur un body invalide, scoping correct par
+      `userId` (jamais un autre utilisateur), et le chemin de succès.
+- [x] `goals/[id]` et `transactions/[id]` couvrent aussi le `404` quand la
+      ressource appartient à un autre utilisateur — le contrôle
+      d'appartenance (`findFirst`/`findUnique` puis comparaison de
+      `userId`) est le point le plus sensible de ces deux fichiers.
+- [x] `transactions` couvre le calcul incrémental de `budget.spent` (`{
+      increment: amount }`) et l'invalidation du cache de snapshot mensuel
+      — deux effets de bord faciles à casser silencieusement.
+- [x] `user/profile` couvre explicitement qu'un `id` fourni par le client
+      dans le body ne peut jamais écraser `session.user.id` (le schéma Zod
+      ne le whitelist pas, donc Prisma ne le voit jamais).
+- [x] `pnpm test` (157/157, +59 vs avant cette story) et
+      `pnpm type-check` (4/4) verts.
+- [x] `pnpm build` (production réelle, 50/50 pages) reconfirmé vert après
+      l'ajout des fichiers de test — pas de live re-test nécessaire au-delà
+      (aucune route modifiée, déjà vérifiées en direct en 15.20/15.21).
+
+**Implémentation** : `__tests__/route.test.ts` dans
+[accounts/](../apps/web/src/app/api/accounts/__tests__/route.test.ts),
+[budgets/](../apps/web/src/app/api/budgets/__tests__/route.test.ts),
+[goals/](../apps/web/src/app/api/goals/__tests__/route.test.ts),
+[goals/[id]/](../apps/web/src/app/api/goals/%5Bid%5D/__tests__/route.test.ts),
+[portfolio/](../apps/web/src/app/api/portfolio/__tests__/route.test.ts),
+[transactions/](../apps/web/src/app/api/transactions/__tests__/route.test.ts),
+[transactions/[id]/](../apps/web/src/app/api/transactions/%5Bid%5D/__tests__/route.test.ts),
+[user/profile/](../apps/web/src/app/api/user/profile/__tests__/route.test.ts),
+[planning/retirement/](../apps/web/src/app/api/planning/retirement/__tests__/route.test.ts).
 
 ---
 
