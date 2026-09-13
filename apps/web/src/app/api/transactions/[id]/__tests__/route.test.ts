@@ -133,4 +133,17 @@ describe('DELETE /api/transactions/[id]', () => {
     expect(mockPrisma.transaction.delete).toHaveBeenCalledWith({ where: { id: 'tx1' } });
     expect(cacheDel).toHaveBeenCalledWith('snapshot:user-1:2026:3');
   });
+
+  it('returns a clean 500 JSON instead of crashing when Prisma throws (story 15.24)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.transaction.findUnique.mockRejectedValue(new Error('Can\'t reach database server'));
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await DELETE(makeRequest('http://localhost/api/transactions/tx1', { method: 'DELETE' }), { params });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Erreur serveur' });
+
+    errorSpy.mockRestore();
+  });
 });

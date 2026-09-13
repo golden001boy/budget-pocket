@@ -87,6 +87,21 @@ describe('PATCH /api/goals/[id]', () => {
       expect.objectContaining({ where: { id: 'g1' }, data: expect.objectContaining({ currentAmount: 200 }) }),
     );
   });
+
+  it('returns a clean 500 JSON instead of crashing when Prisma throws (story 15.24)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.financialGoal.findFirst.mockRejectedValue(new Error('Can\'t reach database server'));
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await PATCH(makeRequest('http://localhost/api/goals/g1', {
+      method: 'PATCH', body: JSON.stringify({ currentAmount: 200 }),
+    }), { params });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Erreur serveur' });
+
+    errorSpy.mockRestore();
+  });
 });
 
 describe('DELETE /api/goals/[id]', () => {

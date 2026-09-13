@@ -69,4 +69,19 @@ describe('PATCH /api/user/profile', () => {
       expect.objectContaining({ where: { id: 'user-1' }, data: { name: 'New Name' } }),
     );
   });
+
+  it('returns a clean 500 JSON instead of crashing when Prisma throws (story 15.24)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.user.update.mockRejectedValue(new Error('Can\'t reach database server'));
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await PATCH(makeRequest('http://localhost/api/user/profile', {
+      method: 'PATCH', body: JSON.stringify({ name: 'New Name' }),
+    }));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Erreur serveur' });
+
+    errorSpy.mockRestore();
+  });
 });

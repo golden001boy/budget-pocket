@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 19 ✅ + 4 🟡 sur 23 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 20 ✅ + 4 🟡 sur 24 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 19 ✅ + 4 🟡 sur 23 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 20 ✅ + 4 🟡 sur 24 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -241,6 +241,28 @@ mobile` de 15.21, trouvée cette fois par audit plutôt que par accident).
 direct contre la vraie BDD Neon avec le compte de démo : body invalide →
 `400` avec erreurs de champ détaillées, body valide → `201`, scénario
 réellement créé puis supprimé après vérification.
+
+**Note story 15.24** : ✅ complet — audit systémique après les correctifs
+ponctuels de 15.21 (`auth/mobile`) et 15.23 (`advisor/scenarios`), chacun
+motivé par un incident précis. Un `grep` sur les 10 autres routes CRUD a
+montré qu'**aucune** n'avait de `try/catch` ; un second passage sur les
+routes de lecture restantes a trouvé la même fragilité sur
+`analysis/snapshot` (la route derrière le goulot `/dashboard` de 15.13/
+15.16 — pas hypothétique ici) et `analysis/forecast` (`prices/*` avait
+déjà son propre `try/catch`, confirmé). 12 fichiers au total, même
+fragilité à l'échelle de quasi toute l'API du projet, pas seulement les
+deux endroits déjà touchés. Même patron appliqué partout (`console.error`
+préfixé + `{ error: 'Erreur serveur' }` en `500`), aucun changement de
+comportement sur le chemin normal — les 162 tests existants passent sans
+modification, plus 24 nouveaux (15 "500 propre" un par fichier déjà
+testé, 9 pour `analysis/snapshot`/`analysis/forecast` qui n'avaient aucun
+test du tout). 186/186 au total, `pnpm type-check` 4/4, `pnpm build`
+vert. Vérifié en direct contre la vraie BDD Neon : connexion mobile
+réelle puis les 9 routes concernées (`accounts`, `budgets`, `goals`,
+`portfolio`, `transactions`, `planning/retirement`, `planning/taxes`,
+`user/profile`, `analysis/snapshot`, `analysis/forecast`) toutes `200`
+avec de vraies données — et une coupure BDD transitoire réelle pendant la
+vérification a reconfirmé, en prime, le `500` propre de la story 15.21.
 
 **Découverte hors périmètre, signalée mais non traitée** (pendant la story
 15.22) : `packages/api-client` est du code mort dans toute la codebase —

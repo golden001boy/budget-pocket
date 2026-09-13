@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (19 ✅ + 4 🟡 sur 23)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (20 ✅ + 4 🟡 sur 24)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -175,6 +175,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.21 | 401 JSON propre sur les routes API protégées (au lieu d'une redirection 307) + résilience `/api/auth/mobile` | Should | S | ✅ | Gap noté depuis 15.2, jamais transformé en story |
 | 15.22 | Couverture de tests unitaires pour les 9 routes CRUD principales | Should | M | ✅ | Gap noté depuis 15.9 : "routes API n'ont aucun test à ce jour" |
 | 15.23 | Validation Zod + résilience sur `POST /api/advisor/scenarios` | Must | S | ✅ | Règle #5 non-négociable (CLAUDE.md) : trouvé sans validation du tout |
+| 15.24 | `try/catch` sur les 10 routes CRUD restantes (accounts/budgets/goals/portfolio/transactions/profile/retirement/taxes) | Must | M | ✅ | Même fragilité que le bug `/api/auth/mobile` de 15.21, trouvée systémique |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1500,6 +1501,74 @@ inventer de shape par type pour des types non spécifiés.
 
 **Implémentation** :
 [api/advisor/scenarios/route.ts](../apps/web/src/app/api/advisor/scenarios/route.ts).
+
+---
+
+### Story 15.24 — `try/catch` sur les 12 routes restantes qui n'en avaient pas · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux qu'aucune route API ne puisse
+planter avec un crash brut (non-JSON) sur une erreur inattendue (coupure
+BDD transitoire, etc.), afin que tout client — web, mobile, ou un futur
+consommateur — reçoive toujours une réponse JSON exploitable.
+
+**Constat, trouvé en auditant systématiquement le reste de l'API après
+les corrections ponctuelles de 15.21 (`auth/mobile`) et 15.23
+(`advisor/scenarios`)** : ces deux corrections avaient chacune été
+motivées par un incident précis, pas par un audit — un `grep` sur les
+routes CRUD (déjà pagination + rate-limit + Zod depuis 15.3/15.20) a
+montré qu'**aucune** n'avait de `try/catch`. Un second passage sur les
+routes de lecture restantes (`analysis/*`) a trouvé la même fragilité sur
+`analysis/snapshot` (la route derrière le goulot `/dashboard` de 15.13/
+15.16 — pas hypothétique du tout ici) et `analysis/forecast` ; `prices/*`
+avait déjà son propre `try/catch`, confirmé au passage. Même fragilité
+systémique, à l'échelle de quasi toute l'API du projet, pas seulement les
+deux endroits où elle avait déjà causé un incident visible.
+
+**Cadrage — pas une nouvelle politique, l'application cohérente d'un
+patron déjà établi** : chaque route a été enveloppée dans le même
+`try/catch` que `register`/`forgot-password`/`reset-password`/
+`verify-email`/`auth/mobile`/`advisor/scenarios` — un `console.error`
+préfixé par le nom de la route/méthode, puis `{ error: 'Erreur serveur'
+}` en `500`. Aucun changement de comportement sur le chemin normal.
+
+**Critères d'acceptation**
+- [x] `try/catch` ajouté sur les 21 handlers restants dans 12 fichiers :
+      `accounts` (GET, POST), `budgets` (GET, POST), `goals` (GET, POST) +
+      `goals/[id]` (PATCH, DELETE), `portfolio` (GET, POST),
+      `transactions` (GET, POST) + `transactions/[id]` (GET, PATCH,
+      DELETE), `user/profile` (PATCH), `planning/retirement` (GET, POST),
+      `planning/taxes` (GET, POST), `analysis/snapshot` (GET),
+      `analysis/forecast` (GET).
+- [x] Aucun changement de comportement sur le chemin de succès — les 162
+      tests déjà existants pour les 10 premiers fichiers (stories
+      15.20/15.22) passent sans modification.
+- [x] Test unitaire — 24 nouveaux : 15 ("retourne un 500 JSON propre au
+      lieu de planter quand Prisma lève une exception"), un par fichier de
+      route déjà testé (deux pour `planning/taxes`, dont la suite `POST`
+      n'existait pas encore et a été complétée au passage) ; 9 nouveaux
+      pour `analysis/snapshot` et `analysis/forecast`, qui n'avaient
+      aucun test du tout jusqu'ici (401, scoping par utilisateur, plafond
+      de mois par plan FREE/PREMIUM, 500 propre).
+- [x] `pnpm test` (186/186) et `pnpm type-check` (4/4) verts.
+- [x] `pnpm build` (production réelle, 50/50 pages) vert.
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo :
+      build de production + `pnpm start`, connexion mobile réelle, puis
+      `GET`/`PATCH` sur les 9 routes concernées (`accounts`, `budgets`,
+      `goals`, `portfolio`, `transactions`, `planning/retirement`,
+      `planning/taxes`, `user/profile`, `analysis/snapshot`,
+      `analysis/forecast`) — toutes `200` avec de vraies données
+      (`analysis/forecast` a renvoyé une vraie projection sur le compte de
+      démo), aucune régression sur le chemin normal. En prime : une
+      tentative de connexion pendant cette vérification a essuyé une
+      coupure BDD transitoire réelle et reçu le `{"error":"Erreur
+      serveur"}` propre de 15.21 plutôt qu'un crash — reconfirmation
+      incidente de cette story antérieure.
+
+**Implémentation** : les 12 fichiers de route listés ci-dessus, plus
+[analysis/snapshot/__tests__/route.test.ts](../apps/web/src/app/api/analysis/snapshot/__tests__/route.test.ts)
+et
+[analysis/forecast/__tests__/route.test.ts](../apps/web/src/app/api/analysis/forecast/__tests__/route.test.ts)
+(nouveaux).
 
 ---
 

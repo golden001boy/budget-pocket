@@ -101,4 +101,20 @@ describe('POST /api/budgets', () => {
     );
     expect(body.data).toEqual({ id: 'b1', amount: 150, spent: 0, alertAt: 80 });
   });
+
+  it('returns a clean 500 JSON instead of crashing when Prisma throws (story 15.24)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1', currency: 'XOF' } });
+    mockPrisma.budget.upsert.mockRejectedValue(new Error('Can\'t reach database server'));
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await POST(makeRequest('http://localhost/api/budgets', {
+      method: 'POST',
+      body: JSON.stringify({ category: 'FOOD', amount: 150, month: 3, year: 2026 }),
+    }));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Erreur serveur' });
+
+    errorSpy.mockRestore();
+  });
 });

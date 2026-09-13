@@ -91,4 +91,19 @@ describe('POST /api/planning/retirement', () => {
       expect.objectContaining({ where: { userId: 'user-1' } }),
     );
   });
+
+  it('returns a clean 500 JSON instead of crashing when Prisma throws (story 15.24)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.retirementPlan.upsert.mockRejectedValue(new Error('Can\'t reach database server'));
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await POST(makeRequest('http://localhost/api/planning/retirement', {
+      method: 'POST', body: JSON.stringify(validBody),
+    }));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Erreur serveur' });
+
+    errorSpy.mockRestore();
+  });
 });

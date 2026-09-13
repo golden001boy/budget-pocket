@@ -16,43 +16,57 @@ const createSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
-  const { skip, take, page, pageSize } = parsePagination(searchParams);
-  const where = { userId: session.user.id };
+    const { searchParams } = new URL(req.url);
+    const { skip, take, page, pageSize } = parsePagination(searchParams);
+    const where = { userId: session.user.id };
 
-  const [goals, total] = await Promise.all([
-    prisma.financialGoal.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
-    prisma.financialGoal.count({ where }),
-  ]);
+    const [goals, total] = await Promise.all([
+      prisma.financialGoal.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
+      prisma.financialGoal.count({ where }),
+    ]);
 
-  return NextResponse.json({ data: goals, meta: buildPaginationMeta(total, page, pageSize) });
+    return NextResponse.json({ data: goals, meta: buildPaginationMeta(total, page, pageSize) });
+  } catch (error) {
+    // Story 15.24: same fragility class fixed in auth/mobile (15.21) and
+    // advisor/scenarios (15.23) — a transient DB error (observed live
+    // multiple times this session) previously surfaced as a bare,
+    // un-JSON crash instead of a graceful response.
+    console.error('[goals:GET]', error);
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const limit = await checkMutationRateLimit(session.user.id);
-  if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
+    const limit = await checkMutationRateLimit(session.user.id);
+    if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
-  const body   = await req.json();
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    const body   = await req.json();
+    const parsed = createSchema.safeParse(body);
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const goal = await prisma.financialGoal.create({
-    data: {
-      userId:        session.user.id,
-      name:          parsed.data.name,
-      type:          parsed.data.type,
-      targetAmount:  parsed.data.targetAmount,
-      currentAmount: parsed.data.currentAmount,
-      deadline:      parsed.data.deadline ? new Date(parsed.data.deadline) : undefined,
-      notes:         parsed.data.notes,
-      status:        'ACTIVE',
-    },
-  });
-  return NextResponse.json(goal, { status: 201 });
+    const goal = await prisma.financialGoal.create({
+      data: {
+        userId:        session.user.id,
+        name:          parsed.data.name,
+        type:          parsed.data.type,
+        targetAmount:  parsed.data.targetAmount,
+        currentAmount: parsed.data.currentAmount,
+        deadline:      parsed.data.deadline ? new Date(parsed.data.deadline) : undefined,
+        notes:         parsed.data.notes,
+        status:        'ACTIVE',
+      },
+    });
+    return NextResponse.json(goal, { status: 201 });
+  } catch (error) {
+    console.error('[goals:POST]', error);
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
+  }
 }

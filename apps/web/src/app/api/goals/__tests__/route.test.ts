@@ -98,4 +98,20 @@ describe('POST /api/goals', () => {
       expect.objectContaining({ data: expect.objectContaining({ userId: 'user-1', status: 'ACTIVE' }) }),
     );
   });
+
+  it('returns a clean 500 JSON instead of crashing when Prisma throws (story 15.24)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.financialGoal.create.mockRejectedValue(new Error('Can\'t reach database server'));
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await POST(makeRequest('http://localhost/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Voiture', type: 'PURCHASE', targetAmount: 5000 }),
+    }));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Erreur serveur' });
+
+    errorSpy.mockRestore();
+  });
 });
