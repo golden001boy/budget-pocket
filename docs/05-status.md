@@ -328,6 +328,15 @@ authentification par cookie). Même s'il était utilisé, son header
 — décision volontairement laissée à vous plutôt que tranchée seule, car
 elle change la surface de code exposée à l'équipe mobile future.
 
+**Deuxième découverte de fin de session, également non traitée** : cinq
+répertoires sous `apps/web/src/app/api` n'ont jamais eu de `route.ts`
+(`accounts/[id]/`, `portfolio/[id]/`, `alerts/[id]/`, `admin/stats/`,
+`admin/users/`) — du scaffold vide, jamais implémenté, aucun consommateur
+web ou mobile ne les appelle (les pages admin lisent déjà Prisma
+directement). Construire ces routes serait du développement de
+fonctionnalité neuve, pas un correctif — détail dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
+
 **Note story 15.22** : ✅ complet — termine le gap noté depuis la story
 15.9 ("routes API n'ont aucun test à ce jour"). 59 nouveaux tests sur les 9
 routes CRUD restantes (accounts, budgets, goals + `[id]`, portfolio,

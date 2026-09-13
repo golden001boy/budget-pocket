@@ -33,11 +33,13 @@ story suivante. `bmad adr` documente une décision architecturale dans
 sécurité/prod) est 🟡 22 ✅ + 4 🟡 sur 26, plus aucune story 🔴. 15.7
 (backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
 documentés (MFA reporté, voir ADR-008). **Dette technique signalée, non
-traitée** : `packages/api-client` est du code mort avec un mécanisme
-d'auth qui ne fonctionnerait pas contre ce backend — détail et options
-dans
-[docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision),
-décision volontairement laissée à vous.
+traitée** (deux découvertes, décisions volontairement laissées à vous) :
+`packages/api-client` est du code mort avec un mécanisme d'auth qui ne
+fonctionnerait pas contre ce backend ; cinq répertoires de route API sous
+`apps/web/src/app/api` n'ont jamais eu de `route.ts`
+(`accounts/[id]`, `portfolio/[id]`, `alerts/[id]`, `admin/stats`,
+`admin/users`) — détail et options dans
+[docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
 
 **Stories 15.14 à 15.26 traitées le 2026-09-13** dans une session `/goal`
 en continuation autonome (« poursuis jusqu'à épuisement de token de cette

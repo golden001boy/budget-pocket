@@ -943,11 +943,10 @@ signalé pour une story de suivi.
 
 ## 13. Dette technique identifiée (non traitée, signalée pour décision)
 
-Trouvé en auditant les consommateurs de `@budget-pocket/api-client`
-pendant la story 15.22 (couverture de tests) — pas encore transformé en
-story, une décision de produit/architecture est nécessaire avant d'agir
-(garder, réparer, ou supprimer), donc listé ici plutôt que corrigé
-unilatéralement.
+Deux découvertes de fin de session, toutes deux non transformées en story
+— une décision de produit/architecture est nécessaire avant d'agir
+(garder/réparer/supprimer pour la première, construire ou non pour la
+seconde), donc listées ici plutôt que corrigées unilatéralement.
 
 **Le package `packages/api-client` est du code mort dans toute la
 codebase, et son mécanisme d'authentification ne fonctionnerait de toute
@@ -989,3 +988,38 @@ choisie unilatéralement — contrairement aux corrections de bugs de cette
 session (ADR-012 mis à part, qui portait sur une story déjà en cours),
 celle-ci change la surface de code exposée à l'équipe mobile future,
 donc mérite votre arbitrage plutôt qu'une décision prise seule.
+
+### Répertoires de route API vides (scaffold jamais implémenté)
+
+Trouvé en listant récursivement `apps/web/src/app/api` en fin de session
+(15.24/15.20 n'avaient audité que les fichiers `route.ts` déjà présents,
+pas les répertoires vides). Cinq répertoires existent dans
+`apps/web/src/app/api` sans aucun fichier `route.ts` à l'intérieur — donc
+**aucune route réelle**, un appel à n'importe lequel de ces chemins
+renvoie un `404` Next.js standard, pas une erreur applicative :
+
+- `accounts/[id]/` (avec un sous-répertoire `sync/` également vide)
+- `portfolio/[id]/`
+- `alerts/[id]/`
+- `admin/stats/`
+- `admin/users/`
+
+**Confirmé sans consommateur** : aucun composant web ou écran mobile
+n'appelle un de ces chemins (`grep` sur toute la codebase) — seul
+`middleware.ts` référence les motifs `/api/accounts/:path*`,
+`/api/portfolio/:path*`, `/api/alerts/:path*` dans son `matcher` (une
+protection d'authentification pré-configurée pour des routes qui n'ont
+jamais été construites). Les pages `admin/page.tsx` et
+`admin/users/page.tsx` lisent déjà Prisma directement côté serveur (même
+pattern qu'`advisor`/`planning`), donc `admin/stats`/`admin/users` en
+tant que routes API n'ont jamais été nécessaires pour l'app telle qu'elle
+existe.
+
+**Non traité** : construire ces routes serait du développement de
+fonctionnalité neuve (CRUD par item sur comptes/positions de portefeuille,
+lecture d'une alerte par id, endpoints admin JSON) — pas un correctif de
+bug, donc hors périmètre d'une correction unilatérale. Si un besoin réel
+émerge (ex. bouton "modifier"/"supprimer" sur une position de portefeuille
+dans l'UI), la story correspondante devra explicitement définir le
+contrat (validation, ownership check, codes d'erreur) plutôt que de
+supposer que le scaffold vide en donne un indice fiable.
