@@ -66,7 +66,81 @@ describe('GET /api/advisor/scenarios', () => {
   });
 });
 
-describe('POST /api/advisor/scenarios (story 15.20: mutation rate limit)', () => {
+describe('POST /api/advisor/scenarios (story 15.23: validation + resilience)', () => {
+  it('rejects an unauthenticated request with 401, before any rate-limit or DB call', async () => {
+    mockGetSession.mockResolvedValue(null);
+
+    const response = await POST(makeRequest('http://localhost/api/advisor/scenarios', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'CUSTOM', name: 'Test' }),
+    }));
+
+    expect(response.status).toBe(401);
+    expect(mockCheckMutationRateLimit).not.toHaveBeenCalled();
+    expect(mockPrisma.scenario.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid type with 400, without writing anything', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockCheckMutationRateLimit.mockResolvedValue({ success: true, limit: 60, remaining: 59, resetAt: 0 });
+
+    const response = await POST(makeRequest('http://localhost/api/advisor/scenarios', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'NOT_A_REAL_TYPE', name: 'Test' }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockPrisma.scenario.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-string name with 400', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockCheckMutationRateLimit.mockResolvedValue({ success: true, limit: 60, remaining: 59, resetAt: 0 });
+
+    const response = await POST(makeRequest('http://localhost/api/advisor/scenarios', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'CUSTOM', name: { nested: 'object' } }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockPrisma.scenario.create).not.toHaveBeenCalled();
+  });
+
+  it('falls back to CUSTOM when type is omitted, same as before this story', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockCheckMutationRateLimit.mockResolvedValue({ success: true, limit: 60, remaining: 59, resetAt: 0 });
+    mockPrisma.scenario.create.mockResolvedValue({ id: 's1', type: 'CUSTOM' });
+
+    const response = await POST(makeRequest('http://localhost/api/advisor/scenarios', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Sans type' }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.scenario.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'CUSTOM' }) }),
+    );
+  });
+
+  it('returns a clean 500 JSON instead of crashing when Prisma throws', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockCheckMutationRateLimit.mockResolvedValue({ success: true, limit: 60, remaining: 59, resetAt: 0 });
+    mockPrisma.scenario.create.mockRejectedValue(new Error('Can\'t reach database server at `secret-host:5432`'));
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await POST(makeRequest('http://localhost/api/advisor/scenarios', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'CUSTOM', name: 'Test' }),
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: 'Erreur serveur' });
+    expect(JSON.stringify(body)).not.toContain('secret-host');
+
+    errorSpy.mockRestore();
+  });
+
   it('rejects with 429 once the per-user mutation limit is hit, without writing anything', async () => {
     mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
     mockCheckMutationRateLimit.mockResolvedValue({ success: false, limit: 60, remaining: 0, resetAt: 0 });

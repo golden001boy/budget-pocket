@@ -30,11 +30,16 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 18 ✅ + 4 🟡 sur 22, plus aucune story 🔴. 15.7
+sécurité/prod) est 🟡 19 ✅ + 4 🟡 sur 23, plus aucune story 🔴. 15.7
 (backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
-documentés (MFA reporté, voir ADR-008).
+documentés (MFA reporté, voir ADR-008). **Dette technique signalée, non
+traitée** : `packages/api-client` est du code mort avec un mécanisme
+d'auth qui ne fonctionnerait pas contre ce backend — détail et options
+dans
+[docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision),
+décision volontairement laissée à vous.
 
-**Stories 15.14 à 15.22 traitées le 2026-09-13** dans une session `/goal`
+**Stories 15.14 à 15.23 traitées le 2026-09-13** dans une session `/goal`
 en continuation autonome (« poursuis jusqu'à épuisement de token de cette
 session »), **sans pause pour confirmation avec vous** — contrairement au
 précédent établi par 15.10/15.12. Résumé (détail complet story par story
@@ -60,6 +65,9 @@ dans [docs/05-status.md](docs/05-status.md), section Gate Phase 6) :
 - **15.22** couverture de tests (59 tests) pour les 9 routes CRUD
   restantes sans aucun test (gap noté depuis 15.9) — tests seulement,
   aucun changement de comportement. ✅
+- **15.23** `POST /api/advisor/scenarios` n'avait aucune validation Zod
+  (règle #5 violée) ni `try/catch` — corrigé, sans imposer de shape pour
+  les 3 types de scénario qui n'en ont pas encore (signalé en §13). ✅
 
 15.17–15.21 vérifiées en direct contre la vraie BDD Neon avec le compte de
 démo (connexions mobile réelles, écritures de test supprimées après coup),

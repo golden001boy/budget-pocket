@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (18 ✅ + 4 🟡 sur 22)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (19 ✅ + 4 🟡 sur 23)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -174,6 +174,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.20 | Rate limiting sur les routes de mutation (accounts/budgets/goals/portfolio/transactions/profile/scenarios/taxes/retirement) | Should | M | ✅ | Gate Phase 6 §9.2, API-04/API-06 |
 | 15.21 | 401 JSON propre sur les routes API protégées (au lieu d'une redirection 307) + résilience `/api/auth/mobile` | Should | S | ✅ | Gap noté depuis 15.2, jamais transformé en story |
 | 15.22 | Couverture de tests unitaires pour les 9 routes CRUD principales | Should | M | ✅ | Gap noté depuis 15.9 : "routes API n'ont aucun test à ce jour" |
+| 15.23 | Validation Zod + résilience sur `POST /api/advisor/scenarios` | Must | S | ✅ | Règle #5 non-négociable (CLAUDE.md) : trouvé sans validation du tout |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1432,6 +1433,73 @@ construction.
 [transactions/[id]/](../apps/web/src/app/api/transactions/%5Bid%5D/__tests__/route.test.ts),
 [user/profile/](../apps/web/src/app/api/user/profile/__tests__/route.test.ts),
 [planning/retirement/](../apps/web/src/app/api/planning/retirement/__tests__/route.test.ts).
+
+---
+
+### Story 15.23 — Validation Zod + résilience sur `POST /api/advisor/scenarios` · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que `POST /api/advisor/scenarios`
+respecte la règle non-négociable #5 du projet ("Toute API valide ses
+inputs côté serveur, sans exception"), afin qu'un body malformé ne puisse
+ni corrompre une donnée ni faire planter la route.
+
+**Constat, trouvé en auditant les schémas Zod existants pendant la story
+15.22** : cette route n'avait **aucune validation** — `const { type, name,
+inputs, results } = await req.json()` puis un simple
+`VALID_TYPES.includes(type)` en dur, sans jamais vérifier que `name` est
+une chaîne, ni qu'`inputs`/`results` sont des objets. Un schéma
+[`createScenarioSchema`](../packages/shared/src/schemas/scenario.ts) existe
+déjà dans `packages/shared` (union discriminée par `type`, avec un shape
+d'`inputs` typé par type) — mais il ne couvre que 3 des 6 valeurs de
+`ScenarioType` que cette route accepte réellement (`REAL_ESTATE`,
+`EARLY_RETIREMENT`, `STOCK_INVESTMENT` — pas `BUSINESS_CREATION`,
+`EDUCATION_FUND`, `CUSTOM`, qui n'ont aucun shape d'`inputs` défini nulle
+part). Le brancher tel quel aurait **rejeté trois types qui fonctionnent
+aujourd'hui** — un choix produit (quel shape donner à ces types ?), pas un
+correctif de validation. Documenté dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
+plutôt que tranché seul.
+
+**Décision de cadrage** : schéma plus étroit, écrit pour cette story,
+validant ce que la route suppose déjà (chaînes/objets bien formés) sans
+inventer de shape par type pour des types non spécifiés.
+
+**Critères d'acceptation**
+- [x] Nouveau schéma local dans la route : `type` (les 6 valeurs
+      `ScenarioType` réelles, optionnel), `name` (chaîne 1-200
+      caractères, optionnel), `inputs`/`results` (objets, optionnels) —
+      rejette un `type` inconnu, un `name` non-chaîne, ou des
+      `inputs`/`results` qui ne sont pas des objets.
+- [x] Comportement de repli préservé à l'identique : `type` absent ou
+      manquant → `CUSTOM` (avant : n'importe quelle chaîne invalide
+      tombait aussi sur `CUSTOM` ; maintenant le schéma rejette d'abord
+      les chaînes invalides avec un `400`, seul `undefined` tombe encore
+      sur le repli — changement de comportement mineur et voulu, un
+      `type` explicitement invalide est maintenant un input rejeté, pas
+      silencieusement recatégorisé).
+- [x] `try/catch` ajouté — même classe de fragilité que le bug
+      `/api/auth/mobile` corrigé en story 15.21 (aucun filet avant),
+      trouvée par la même méthode (audit, pas un crash accidentel cette
+      fois).
+- [x] Cast `as any` sur `inputs`/`results` au moment de l'écriture Prisma
+      — nécessaire, `Record<string, unknown>` de Zod n'est pas
+      structurellement assignable au type `InputJsonValue` récursif de
+      Prisma (incompatibilité connue, déjà rencontrée ailleurs dans le
+      projet avec les champs `Json`).
+- [x] Test unitaire — 6 nouveaux : `401` avant tout appel rate-limit/BDD,
+      `400` sur type invalide, `400` sur `name` non-chaîne, repli `CUSTOM`
+      préservé quand `type` est omis, `500` propre sans fuite si Prisma
+      lève une exception, plus les tests déjà existants de 15.18/15.20
+      toujours verts.
+- [x] `pnpm test` (162/162) et `pnpm type-check` (4/4) verts.
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo :
+      build de production + `pnpm start`, `{"type":"NOT_A_TYPE","name":123}`
+      → `400` avec les deux erreurs de champ détaillées ;
+      `{"type":"CUSTOM","name":"Test 15.23"}` → `201`, scénario réellement
+      créé en BDD. Enregistrement de test supprimé après vérification.
+
+**Implémentation** :
+[api/advisor/scenarios/route.ts](../apps/web/src/app/api/advisor/scenarios/route.ts).
 
 ---
 

@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 18 ✅ + 4 🟡 sur 22 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 19 ✅ + 4 🟡 sur 23 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 18 ✅ + 4 🟡 sur 22 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 19 ✅ + 4 🟡 sur 23 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -223,6 +223,24 @@ début de session, a été retesté avec succès. Le travail de cette session
 reste néanmoins sur la branche locale `epic-15/15.14-15.15-secrets-patching`,
 **non poussée** — pas par impossibilité technique, mais parce que pousser
 n'a pas été explicitement demandé.
+
+**Note story 15.23** : ✅ complet — trouvé en auditant les schémas Zod
+existants pendant la story 15.22 : `POST /api/advisor/scenarios` n'avait
+**aucune validation** (règle non-négociable #5 du framework, violée).
+Un schéma `createScenarioSchema` existe déjà dans `packages/shared` mais
+ne couvre que 3 des 6 `ScenarioType` réellement acceptés par la route — le
+brancher tel quel aurait cassé les 3 autres, donc un schéma plus étroit a
+été écrit pour cette story (valide `type`/`name`/`inputs`/`results` sans
+imposer de shape par type non défini) ; le résidu (shape complet pour
+`BUSINESS_CREATION`/`EDUCATION_FUND`/`CUSTOM`) reste signalé, pas résolu,
+dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
+Même occasion : `try/catch` ajouté (même fragilité que le bug `/api/auth/
+mobile` de 15.21, trouvée cette fois par audit plutôt que par accident).
+6 nouveaux tests (162/162 au total), `pnpm type-check` 4/4. Vérifié en
+direct contre la vraie BDD Neon avec le compte de démo : body invalide →
+`400` avec erreurs de champ détaillées, body valide → `201`, scénario
+réellement créé puis supprimé après vérification.
 
 **Découverte hors périmètre, signalée mais non traitée** (pendant la story
 15.22) : `packages/api-client` est du code mort dans toute la codebase —
