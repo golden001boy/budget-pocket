@@ -466,6 +466,21 @@ une nouvelle vague d'erreurs une fois le précédent corrigé — pas de
 méthode plus directe trouvée pour énumérer tous les paquets concernés à
 l'avance.
 
+**Post-scriptum 3 — post-scriptum 1 (client Prisma sur store froid)
+reproduit indépendamment, story 15.26** : en installant `jest-expo` pour
+`apps/mobile`, un `node_modules` totalement vidé puis réinstallé
+(`pnpm install --frozen-lockfile`, store pnpm local conservé mais aucun
+`node_modules`) a fait resurgir **exactement** les mêmes erreurs `TS7006`
+sur des fichiers sans rapport (`investments/page.tsx`, `planning/page.tsx`,
+`admin/page.tsx`, `cron/snapshots/route.ts`, `lib/ai/buildContext.ts`,
+etc.) malgré un `postinstall` de `prisma generate` rapportant à nouveau un
+succès. Confirme que ce n'est pas un incident isolé de la story 15.10 mais
+un bug latent et reproductible du pipeline d'installation lui-même,
+toujours présent. Corrigé de la même façon : un second `prisma generate`
+explicite après l'installation complète (déjà le correctif appliqué en CI
+depuis 15.10 — non touché ici, cette reproduction n'a eu lieu qu'en local).
+Signalé ici comme confirmation, pas comme nouveau correctif.
+
 **Détail complet** : [02-prd.md — Story 15.10](02-prd.md#story-1510--migrer-nextjs-14--15--✅-done).
 
 ### ADR-010 — Tests de charge sans Redis local + goulot `/dashboard` non corrigé (story 15.13)
