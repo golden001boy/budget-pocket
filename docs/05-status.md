@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 16 ✅ + 4 🟡 sur 20 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 17 ✅ + 4 🟡 sur 21 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 16 ✅ + 4 🟡 sur 20 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 17 ✅ + 4 🟡 sur 21 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -158,6 +158,32 @@ direct contre la vraie BDD Neon** : build de production + `pnpm start`,
 connexion mobile réelle avec le compte de démo, `POST /api/accounts`
 réussi (`201`) avec le cookie de session — compte de test supprimé après
 coup.
+
+**Note story 15.21** : ✅ complet — gap noté depuis la story 15.2, jamais
+transformé en story jusqu'ici. `authMiddleware` (extrait de `withAuth` dans
+[middleware.ts](../apps/web/src/middleware.ts) pour être testable
+directement) renvoie désormais un `401` JSON sur toute route `/api/*` non
+authentifiée au lieu de la redirection `307` vers `/login` que `withAuth`
+appliquait indifféremment aux pages et aux routes API. 7 nouveaux tests.
+**Bug trouvé et corrigé au passage, pendant la vérification en direct** :
+`api/auth/mobile/route.ts` n'avait aucun `try/catch` englobant (contrairement
+à ses routes sœurs) — une coupure BDD transitoire, observée en direct dans
+cette session, faisait remonter un `500` brut au lieu du `{ error: 'Erreur
+serveur' }` JSON attendu. Corrigé avec le même patron que les autres routes
+d'auth, 1 nouveau test. 98/98 tests, `pnpm type-check` 4/4. Vérifié en
+direct dans les deux sens sur le même serveur : `500` propre pendant la
+coupure BDD réelle, puis `200` normal une fois la BDD reconnectée quelques
+minutes plus tard sans redémarrage.
+
+**Sur l'accès réseau de ce sandbox — troisième et dernière correction de
+cette session** : la BDD Neon est passée joignable → injoignable → de
+nouveau joignable **pendant** la vérification de la story 15.21, sans
+action de ma part. Ni "bloqué en continu" (l'affirmation initiale des
+stories 15.14/15.15) ni "joignable de façon fiable" (ma correction en story
+15.19) n'étaient exactes : la réalité est une **connectivité
+intermittente**, dont la cause exacte (cold-start du compute Neon Free qui
+se suspend, ou instabilité du sandbox lui-même) n'a pas pu être confirmée
+avec certitude dans le temps de cette session.
 
 **Vérification finale de session** (après 15.14/15.15/15.17/15.18/15.19) :
 `pnpm build` (production réelle, `apps/web`) — 50/50 pages générées, tous
@@ -466,6 +492,7 @@ A révélé un gap d'API hors périmètre : les routes protégées par
 `middleware.ts` renvoient une redirection `307` HTML plutôt qu'un `401` JSON
 pour les clients non authentifiés — noté dans
 [03-architecture.md §5](03-architecture.md), pas encore transformé en story.
+**Corrigé en story 15.21** (2026-09-13) — voir sa note plus haut.
 
 ## Gate Phase 6 — évaluation (`bmad prelaunch`, 2026-07-23)
 

@@ -15,64 +15,74 @@ import { logSensitiveAction } from '@/lib/auditLog';
 const MOBILE_TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 export async function POST(req: NextRequest) {
-  const body   = await req.json();
-  const parsed = loginSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
+  try {
+    const body   = await req.json();
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
+    }
+    const { email, password } = parsed.data;
+
+    const ip = getClientIp(req.headers);
+    const limit = await rateLimit(loginRateLimitKey(email, ip), LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
+    if (!limit.success) {
+      logSensitiveAction({ action: 'login_failure', email, ip, reason: 'rate_limited_ip' });
+      return NextResponse.json({ error: 'Trop de tentatives, réessayez plus tard' }, { status: 429 });
+    }
+
+    const accountLimit = await rateLimit(accountLoginRateLimitKey(email), ACCOUNT_LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
+    if (!accountLimit.success) {
+      logSensitiveAction({ action: 'login_failure', email, ip, reason: 'rate_limited_account' });
+      return NextResponse.json({ error: 'Trop de tentatives, réessayez plus tard' }, { status: 429 });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user || !user.passwordHash) {
+      logSensitiveAction({ action: 'login_failure', email, ip, reason: 'no_such_account' });
+      return NextResponse.json({ error: 'Identifiants invalides' }, { status: 401 });
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      logSensitiveAction({ action: 'login_failure', userId: user.id, email: user.email, ip, reason: 'wrong_password' });
+      return NextResponse.json({ error: 'Identifiants invalides' }, { status: 401 });
+    }
+
+    logSensitiveAction({ action: 'login_success', userId: user.id, email: user.email, ip });
+
+    const token = await encode({
+      token: {
+        sub:            user.id,
+        id:             user.id,
+        name:           user.name,
+        email:          user.email,
+        role:           user.role,
+        currency:       user.currency,
+        onboardingDone: user.onboardingDone,
+        emailVerified:  !!user.emailVerified,
+      },
+      secret:  process.env.NEXTAUTH_SECRET!,
+      maxAge:  MOBILE_TOKEN_MAX_AGE_SECONDS,
+    });
+
+    return NextResponse.json({
+      token,
+      user: {
+        id:             user.id,
+        name:           user.name,
+        email:          user.email,
+        role:           user.role,
+        currency:       user.currency,
+        onboardingDone: user.onboardingDone,
+      },
+    });
+  } catch (error) {
+    // Story 15.21: this handler had no top-level try/catch — an unhandled
+    // rejection (observed live: a transient Neon connection failure) meant
+    // a plain, un-JSON 500 instead of the same graceful error shape every
+    // other auth route already returns (register, forgot-password,
+    // reset-password, verify-email).
+    console.error('[auth/mobile]', error);
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
-  const { email, password } = parsed.data;
-
-  const ip = getClientIp(req.headers);
-  const limit = await rateLimit(loginRateLimitKey(email, ip), LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
-  if (!limit.success) {
-    logSensitiveAction({ action: 'login_failure', email, ip, reason: 'rate_limited_ip' });
-    return NextResponse.json({ error: 'Trop de tentatives, réessayez plus tard' }, { status: 429 });
-  }
-
-  const accountLimit = await rateLimit(accountLoginRateLimitKey(email), ACCOUNT_LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
-  if (!accountLimit.success) {
-    logSensitiveAction({ action: 'login_failure', email, ip, reason: 'rate_limited_account' });
-    return NextResponse.json({ error: 'Trop de tentatives, réessayez plus tard' }, { status: 429 });
-  }
-
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user || !user.passwordHash) {
-    logSensitiveAction({ action: 'login_failure', email, ip, reason: 'no_such_account' });
-    return NextResponse.json({ error: 'Identifiants invalides' }, { status: 401 });
-  }
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
-    logSensitiveAction({ action: 'login_failure', userId: user.id, email: user.email, ip, reason: 'wrong_password' });
-    return NextResponse.json({ error: 'Identifiants invalides' }, { status: 401 });
-  }
-
-  logSensitiveAction({ action: 'login_success', userId: user.id, email: user.email, ip });
-
-  const token = await encode({
-    token: {
-      sub:            user.id,
-      id:             user.id,
-      name:           user.name,
-      email:          user.email,
-      role:           user.role,
-      currency:       user.currency,
-      onboardingDone: user.onboardingDone,
-      emailVerified:  !!user.emailVerified,
-    },
-    secret:  process.env.NEXTAUTH_SECRET!,
-    maxAge:  MOBILE_TOKEN_MAX_AGE_SECONDS,
-  });
-
-  return NextResponse.json({
-    token,
-    user: {
-      id:             user.id,
-      name:           user.name,
-      email:          user.email,
-      role:           user.role,
-      currency:       user.currency,
-      onboardingDone: user.onboardingDone,
-    },
-  });
 }

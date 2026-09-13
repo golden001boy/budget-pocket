@@ -30,45 +30,43 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 16 ✅ + 4 🟡 sur 20, plus aucune story 🔴 (15.1 rate
-limiting login, 15.2 validation Zod, 15.3 pagination, 15.4 Sentry, 15.5
-scan SCA, 15.6 CI/CD, 15.9 test runner Jest, 15.10 migration Next.js 15 +
-React 19, 15.11 reset de mot de passe, 15.12 vérification email
-(non-bloquante), 15.13 tests de charge, 15.16 correctif du goulot
-dashboard, **15.17 correctif de fuite d'erreur sur `/api/health`, 15.18
-pagination `scenarios`/`taxes`, 15.19 journalisation des actions
-sensibles, 15.20 rate limiting sur les routes de mutation** — tous ✅ ;
-15.7 backup/rollback BDD et 15.8 hardening auth 🟡 partiels documentés ;
-**15.14 (coffre de secrets), 15.15 (politique de patching + test de
-rollback), 15.17, 15.18, 15.19 et 15.20 traitées le 2026-09-13** dans une
-session `/goal` en continuation autonome (« poursuis jusqu'à épuisement de
-token de cette session ») — **sans pause pour confirmation**,
-contrairement au précédent 15.10/15.12 : 15.14 a retenu les variables
-d'environnement chiffrées Vercel comme coffre dédié (décision **à
-confirmer avec vous**, voir
-[docs/03-architecture.md ADR-012](docs/03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514))
-plus une validation Zod des secrets au boot (`apps/web/src/lib/env.ts`) ;
-15.15 a documenté la politique de patching et réellement testé le rollback
-applicatif par `git revert` ; **15.17 et 15.18 (nouvelles, non prévues par
-`bmad prelaunch`, même schéma que 15.16)** ont corrigé une fuite réelle du
-message d'erreur Prisma brut sur `/api/health` (hôte Neon inclus) et étendu
-la pagination aux deux dernières listes API qui en manquaient, révélant au
-passage un bug mobile pré-existant (écran Conseiller affichait
-silencieusement zéro scénario sauvegardé, même famille que le bug mobile
-Investissements trouvé en 15.3) — corrigé dans la même story ; **15.19**
-(nouvelle) a centralisé la journalisation des actions sensibles d'auth
-(`lib/auditLog.ts`) ; **15.20** (nouvelle) a étendu le rate limiting
-(15.1 ne couvrait que login/inscription) aux 14 handlers de mutation
-restants (accounts/budgets/goals/portfolio/transactions/profile/
-scenarios/taxes/retirement), 60 requêtes/minute par utilisateur,
-fail-open comme le reste (ADR-004). 15.19 et 15.20 vérifiées en direct
-contre la vraie BDD Neon avec le compte de démo (connexion mobile réelle,
-`POST /api/accounts` réussi, compte de test supprimé après coup).
-**Correction** : les premières notes de cette session
-affirmaient qu'aucun accès réseau n'existait dans ce sandbox (GitHub,
-Neon) — inexact, découvert pendant 15.19 : les deux se sont révélés
-joignables plus tard dans la session (la BDD avait probablement un simple
-cold-start Neon la première fois). Travail néanmoins commité sur une
+sécurité/prod) est 🟡 17 ✅ + 4 🟡 sur 21, plus aucune story 🔴. 15.7
+(backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
+documentés (MFA reporté, voir ADR-008).
+
+**Stories 15.14 à 15.21 traitées le 2026-09-13** dans une session `/goal`
+en continuation autonome (« poursuis jusqu'à épuisement de token de cette
+session »), **sans pause pour confirmation avec vous** — contrairement au
+précédent établi par 15.10/15.12. Résumé (détail complet story par story
+dans [docs/05-status.md](docs/05-status.md), section Gate Phase 6) :
+- **15.14** coffre de secrets — variables d'env chiffrées Vercel retenues
+  plutôt que Vault/AWS Secrets Manager, décision **à confirmer avec vous**
+  ([ADR-012](docs/03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514)),
+  + validation Zod des secrets au boot (`lib/env.ts`). 🟡 partiel.
+- **15.15** politique de patching + rollback applicatif réellement testé
+  (`git revert`, rollback BDD toujours non exercé). 🟡 partiel.
+- **15.17** `/api/health` ne fuit plus le message d'erreur Prisma brut. ✅
+- **15.18** pagination sur `scenarios`/`taxes` (dernier résidu de 15.3) —
+  a aussi révélé et corrigé un bug mobile pré-existant (écran Conseiller
+  affichait toujours zéro scénario, même famille que le bug Investissements
+  de 15.3). ✅
+- **15.19** journalisation centralisée des actions sensibles d'auth
+  (`lib/auditLog.ts`). ✅
+- **15.20** rate limiting étendu (60/min/utilisateur) aux 14 handlers de
+  mutation qui n'en avaient aucun. ✅
+- **15.21** `401` JSON propre sur les routes API protégées au lieu d'une
+  redirection `307` (gap noté depuis 15.2) + `/api/auth/mobile` ne
+  crashe plus brut sur une coupure BDD transitoire. ✅
+
+15.17–15.21 vérifiées en direct contre la vraie BDD Neon avec le compte de
+démo (connexions mobile réelles, écritures de test supprimées après coup),
+pas seulement en unitaire. **Correction sur l'accès réseau** : les
+premières notes de cette session affirmaient qu'aucun accès réseau
+n'existait dans ce sandbox (GitHub, Neon) — inexact. La réalité, observée
+plusieurs fois pendant la session : une **connectivité intermittente**
+(Neon est passé joignable → injoignable → joignable sans action de ma
+part), cause exacte non confirmée (cold-start du compute Neon Free
+suspecté, instabilité du sandbox pas exclue). Travail commité sur une
 branche locale non poussée (`epic-15/15.14-15.15-secrets-patching`) — pas
 par impossibilité, mais parce que pousser n'a pas été demandé — voir
 [docs/05-status.md §Gate Phase 6](docs/05-status.md#gate-phase-6--évaluation-bmad-prelaunch-2026-07-23)

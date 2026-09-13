@@ -167,15 +167,17 @@ reflète pas automatiquement — la page `/verify-email` appelle
   non authentifié, 404 non trouvé/non autorisé, 400 validation échouée). Pas
   de code d'erreur structuré (`code: "..."`) sur la plupart des routes, sauf
   exception ponctuelle (`FEATURE_DISABLED` sur `/api/advisor/chat`).
-- **Incohérence relevée (story 15.2)** : les routes API sous le matcher de
-  `middleware.ts` (voir [apps/web/src/middleware.ts](../apps/web/src/middleware.ts))
-  reçoivent une redirection `307` vers `/api/auth/signin` si non
-  authentifiées, **avant** même d'atteindre le `getServerSession` du handler
-  — donc jamais le `401 { error: ... }` JSON attendu par un client API/mobile.
-  Le contrôle `if (!session) return NextResponse.json(...)` dans chaque
-  handler est de fait mort pour ces routes. Non corrigé ici (hors périmètre
-  de 15.2) — à traiter dans une story dédiée si confirmé gênant pour le
-  client mobile (`@budget-pocket/api-client`).
+- **Incohérence relevée en story 15.2, corrigée en story 15.21** : les
+  routes API sous le matcher de
+  [`middleware.ts`](../apps/web/src/middleware.ts) recevaient une
+  redirection `307` si non authentifiées, **avant** même d'atteindre le
+  `getServerSession` du handler — donc jamais le `401 { error: ... }` JSON
+  attendu par un client API/mobile ; le contrôle
+  `if (!session) return NextResponse.json(...)` de chaque handler était de
+  fait mort pour ces routes. `authMiddleware` (extrait de `withAuth` pour
+  être testable, voir story 15.21) renvoie désormais un `401` JSON pour
+  toute route `/api/*` non authentifiée, et conserve la redirection pour
+  les pages.
 - **Validation** : Zod sur toutes les routes mutatives connues via
   `@budget-pocket/shared` (schémas partagés avec le mobile) depuis la story
   15.2 — voir [04-tests.md](04-tests.md) FE-08/API-03.

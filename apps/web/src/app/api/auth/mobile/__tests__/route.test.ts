@@ -86,3 +86,20 @@ describe('POST /api/auth/mobile — audit logging (story 15.19)', () => {
     );
   });
 });
+
+describe('POST /api/auth/mobile — error handling (story 15.21)', () => {
+  it('returns a clean 500 JSON instead of an unhandled crash when the DB throws', async () => {
+    mockPrisma.user.findUnique.mockRejectedValue(new Error('Can\'t reach database server at `secret-host:5432`'));
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await POST(makeRequest({ email: 'demo@budget-pocket.app', password: 'whatever123' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: 'Erreur serveur' });
+    expect(JSON.stringify(body)).not.toContain('secret-host');
+    expect(errorSpy).toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+  });
+});

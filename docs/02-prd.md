@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (16 ✅ + 4 🟡 sur 20)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (17 ✅ + 4 🟡 sur 21)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -172,6 +172,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.18 | Pagination sur `/api/advisor/scenarios` et `/api/planning/taxes` | Should | S | ✅ | Gate Phase 6 §9.1 (résidu de 15.3) |
 | 15.19 | Journalisation centralisée des actions sensibles (auth) | Should | S | ✅ | Gate Phase 6 §9.3, BE-08 |
 | 15.20 | Rate limiting sur les routes de mutation (accounts/budgets/goals/portfolio/transactions/profile/scenarios/taxes/retirement) | Should | M | ✅ | Gate Phase 6 §9.2, API-04/API-06 |
+| 15.21 | 401 JSON propre sur les routes API protégées (au lieu d'une redirection 307) + résilience `/api/auth/mobile` | Should | S | ✅ | Gap noté depuis 15.2, jamais transformé en story |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -266,7 +267,7 @@ Zod n'est atteignable qu'avec une vraie session cookie — pas simulable via
 `401` JSON propre — ce qui casse le contrat attendu par un client API/mobile
 consommant du JSON. Comportement pré-existant, non introduit par 15.1/15.2 ;
 à traiter dans une story dédiée si confirmé problématique pour le client
-mobile.
+mobile. **Corrigé en story 15.21** (2026-09-13).
 
 ### Story 15.9 — Câbler un test runner (Jest) · ✅ Done
 
@@ -1296,6 +1297,81 @@ déclencher ; seul un usage automatisé/anormal la touche.
 
 **Implémentation** : [lib/rateLimit.ts](../apps/web/src/lib/rateLimit.ts) +
 les 10 fichiers de route listés ci-dessus.
+
+---
+
+### Story 15.21 — 401 JSON propre sur les routes API protégées + résilience `/api/auth/mobile` · ✅ Done
+
+**Story** : En tant que client API (mobile ou futur), je veux recevoir un
+`401` JSON propre quand je ne suis pas authentifié sur une route API
+protégée, au lieu d'une redirection HTML `307` que je ne peux pas
+raisonnablement suivre.
+
+**Constat** : gap noté depuis la story 15.2 ("l'observation incidente"),
+répété en 15.3, jamais transformé en story — `middleware.ts` (`withAuth`)
+redirige systématiquement vers `/login` pour toute requête non
+authentifiée, page **ou** route `/api/*`, car son callback `authorized`
+ne peut renvoyer qu'un booléen, pas façonner la réponse elle-même.
+
+**Critères d'acceptation**
+- [x] [`middleware.ts`](../apps/web/src/middleware.ts) — logique extraite
+      dans une fonction nommée `authMiddleware` (exportée séparément pour
+      être testée directement) ; `authorized` renvoie désormais toujours
+      `true`, et c'est `authMiddleware` qui décide de la réponse : `401`
+      JSON si `pathname` commence par `/api/` et qu'aucun token n'est
+      présent, sinon la redirection `/login?callbackUrl=...` déjà en place
+      (reproduite manuellement, même comportement qu'avant pour les pages).
+- [x] Logique d'onboarding et de garde admin inchangée, seulement
+      réorganisée pour partir d'un token garanti non-null après le nouveau
+      bloc d'authentification.
+- [x] Test unitaire — 7 nouveaux dans
+      [`middleware.test.ts`](../apps/web/src/__tests__/middleware.test.ts) :
+      `401` JSON sur route API non authentifiée, redirection `/login` +
+      `callbackUrl` sur page non authentifiée, passage normal si
+      authentifié, redirection onboarding, garde admin (bloque/passe).
+- [x] Vérifié en direct : build de production + `pnpm start`,
+      `GET /api/goals` sans session → `401 {"error":"Unauthorized"}` (plus
+      de `307`) ; `GET /dashboard` sans session → toujours `307` vers
+      `/login?callbackUrl=...` (comportement page inchangé) ; connexion
+      mobile réelle puis mêmes routes avec session → passage normal ;
+      garde admin revérifiée (non-admin bloqué, admin passe).
+
+**Découverte pendant la vérification, corrigée dans la même story** : en
+testant la connexion mobile en direct, un `500` brut (pas de JSON) est
+apparu — `api/auth/mobile/route.ts` n'avait **aucun** `try/catch`
+englobant, contrairement à `register`/`forgot-password`/`reset-password`/
+`verify-email` qui renvoient tous un `{ error: 'Erreur serveur' }` propre
+en cas d'exception. Une coupure transitoire de la BDD (observée en direct
+dans cette session) suffisait à faire remonter l'erreur Prisma brute non
+gérée. Corrigé par le même patron `try/catch` que les autres routes.
+- [x] Test unitaire — 1 nouveau dans
+      [`auth/mobile/route.test.ts`](../apps/web/src/app/api/auth/mobile/__tests__/route.test.ts) :
+      `findUnique` qui rejette → `500` JSON propre, sans fuite du message
+      d'erreur brut.
+- [x] Vérifié en direct, dans les deux sens : pendant une coupure BDD réelle
+      de cette session, `POST /api/auth/mobile` renvoyait
+      `{"error":"Erreur serveur"}` (`500`) au lieu d'un crash brut ; une
+      fois la BDD reconnectée (quelques minutes plus tard, sans
+      redémarrage du serveur), la même requête a réussi normalement
+      (`200`, token émis).
+- [x] `pnpm test` (98/98) et `pnpm type-check` (4/4) verts.
+
+**Observation reconfirmée sur l'accès réseau de ce sandbox** : au cours de
+cette story, la BDD Neon est passée de joignable → injoignable → de
+nouveau joignable, **sans aucune action de ma part**, sur une fenêtre de
+quelques minutes avec le même serveur en cours d'exécution. Ce n'est donc
+ni "bloqué en continu" (l'affirmation initiale des stories 15.14/15.15) ni
+"joignable de façon fiable" (la correction apportée en story 15.19) — la
+réalité est une **connectivité intermittente**, cohérente avec un
+comportement de compute Neon Free qui se suspend/reprend, mais pas
+exclu non plus qu'il s'agisse d'une instabilité réseau du sandbox
+lui-même. Aucune des deux hypothèses n'a pu être confirmée avec certitude
+dans le temps de cette session.
+
+**Implémentation** :
+[middleware.ts](../apps/web/src/middleware.ts),
+[middleware.test.ts](../apps/web/src/__tests__/middleware.test.ts),
+[api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts).
 
 ---
 
