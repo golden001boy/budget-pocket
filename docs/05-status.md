@@ -1,10 +1,9 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-09-13 (story 15.14 — coffre de secrets :
-décision de cadrage Vercel + validation Zod des variables d'environnement
-au boot ; décision prise en session `/goal` autonome, sans vous — voir note
-ci-dessous)
+**Dernière mise à jour** : 2026-09-13 (stories 15.14 et 15.15 — coffre de
+secrets + politique de patching/test de rollback ; les deux traitées dans
+la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 
 ## Vue d'ensemble des phases
 
@@ -13,7 +12,7 @@ ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 12 ✅ + 3 🟡 + 1 🔴 sur 16 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 12 ✅ + 4 🟡 sur 16 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -35,20 +34,30 @@ ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 12 ✅ + 3 🟡 + 1 🔴 sur 16 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16 ✅ ; 15.7, 15.8, 15.14 🟡 ; 15.15 🔴 non commencée) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 12 ✅ + 4 🟡 sur 16 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
-15.11 (reset de mot de passe), 15.12 (vérification email), 15.13 (tests de
-charge) et 15.16 (correctif du goulot dashboard trouvé en 15.13) faites.
-Les deux derniers Must de la checklist Phase 6 §9.1 sont traités.
-**15.14 (coffre de secrets) traitée partiellement** (🟡, voir note
-ci-dessous) ; il reste **15.15** (politique de patching), Could, créée
-suite à `bmad prelaunch` (2026-07-23, détail dans la section Gate Phase 6
-plus bas). Le MFA (volet non traité de 15.8, voir ADR-008) reste sans
-story dédiée. Voir
+**Toutes les stories de l'Epic 15 ont désormais au moins été entamées** —
+12 ✅, 4 🟡 (15.7, 15.8, 15.14, 15.15), plus aucune 🔴. Il ne reste donc
+plus de story non commencée dans l'epic ; ce qui reste, c'est de
+transformer les quatre 🟡 en ✅ (voir leurs notes respectives ci-dessous) et
+le MFA (volet non traité de 15.8, voir ADR-008), qui reste sans story
+dédiée. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour le détail complet.
+
+**Point d'attention méthodologique** : les stories 15.14 et 15.15 ont été
+traitées dans une session `/goal` en continuation autonome (2026-09-13,
+« poursuis jusqu'à épuisement de token de cette session »), donc **sans
+pause pour confirmation avec vous** — à la différence du précédent établi
+par les stories 15.10/15.12 (décisions de cadrage explicitement prises
+avec vous avant implémentation). La décision de cadrage de la 15.14
+(ADR-012) est donc à confirmer ou corriger. Travail commité sur une
+branche locale (`epic-15/15.14-15.15-secrets-patching`), **pas fusionnée
+ni poussée** — aucun accès réseau vers GitHub/Neon dans cette session
+(sandbox sans sortie internet, confirmé via `git ls-remote` et
+`/api/health`).
 
 **Note story 15.14** : 🟡 partiel — traitée dans une session `/goal` en
 continuation autonome (2026-09-13, « poursuis jusqu'à épuisement de token
@@ -69,6 +78,25 @@ réelle dans un vrai dashboard Vercel (pas de compte connecté dans cette
 session). Aucun accès réseau vers GitHub/Neon dans cette session (sandbox
 sans sortie internet) — travail commité sur une branche locale
 (`epic-15/15.14-15.15-secrets-patching`), pas poussée, `master` non touché.
+
+**Note story 15.15** : 🟡 partiel — même session `/goal` autonome que la
+15.14. Politique de patching écrite (trois catégories : correctifs de
+sécurité, montées mineures, montées majeures, chacune avec une cadence et
+un précédent réel du projet à l'appui) + gate de test avant déploiement +
+mécanismes de rollback documentés, détail complet dans
+[03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515).
+**Rollback réellement testé, contrairement à 15.7** : sur une branche
+locale jetable (jamais poussée, supprimée après coup), une régression
+intentionnelle dans `lib/pagination.ts` a fait échouer `pagination.test.ts`
+comme prévu, puis `git revert HEAD` a restauré un état vert (7/7) sans
+conflit — confirme que le gate CI (15.6) aurait bloqué la régression et
+que le mécanisme de rollback applicatif fonctionne. Effet de bord honnête :
+une première tentative de régression n'a été détectée par **aucun** test
+existant (`pagination.test.ts` compare `MAX_PAGE_SIZE` à lui-même plutôt
+qu'à une valeur littérale) — gap de couverture réel, signalé mais non
+corrigé (hors périmètre de cette story). **Non vérifié** : rollback Vercel
+réel (aucun compte connecté) et restauration Neon réelle (toujours non
+exercée depuis 15.7, aucun changement).
 
 **Note story 15.16** : ✅ complet — corrige le goulot `/dashboard` trouvé
 en 15.13. **Le diagnostic de la 15.13 était faux** (contention Postgres
@@ -378,14 +406,17 @@ honnête item par item, contre le code réel :
 | Monitoring d'erreurs actif + alertes | 🟡 | Sentry intégré (15.4) mais **sans DSN configuré = no-op**, donc pas réellement actif |
 | Journalisation actions sensibles centralisée | 🔴 | Aucun log applicatif des actions sensibles (login, changement de rôle...) — BE-08 |
 | Tests de charge effectués | 🟡 | Exécutés (story 15.13, Artillery) contre un build de production réel + Neon réelle. Test réalisé **sans Redis local** (installation refusée) — distorsion documentée. Routes API paginées : saines (0 % d'échec, p95 ~570-600ms). Goulot `/dashboard` trouvé en 15.13 (diagnostic initial faux, contention Postgres supposée) **corrigé en story 15.16** : vraie cause = bug de config `ioredis`, `/dashboard` 100 % → 0 % d'échec, coût du fail-open Redis (accepté depuis 15.1) réduit de ~5,4s à ~410ms. Échecs résiduels sous charge combinée (20 %) sans rapport avec Redis, cause non confirmée (capacité Neon Free suspectée). Reste 🟡 et non ✅ : la distorsion "sans Redis local" persiste (Redis n'est toujours pas opérationnel, seul le comportement de son absence est mieux géré) et une partie de la charge combinée échoue encore |
-| Politique de patching définie + rollback testé | 🟡 | Rollback BDD documenté (15.7) ; pas de politique de patching formelle, rien testé en pratique |
+| Politique de patching définie + rollback testé | 🟡 | Story 15.15 — politique écrite (cadence par catégorie de patch, gate de test, mécanismes de rollback), rollback applicatif réellement testé par `git revert` sur une branche jetable ; rollback BDD (15.7) toujours non exercé, politique non encore éprouvée sur un cycle réel — détail dans [03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515) |
 
-**Score approximatif** : 6 ✅ / 9 🟡 / 5 🔴 sur 20 (évaluation initiale du
-23/07 : 5/8/7 — mis à jour après la story 15.12, qui active la
-vérification email ; puis après la story 15.13/15.16, tests de charge
-exécutés et le goulot dashboard qu'ils ont révélé corrigé — le score reste
-inchangé car "tests de charge effectués" était déjà 🟡, pas 🔴, et le reste
-de la distorsion Redis/charge combinée maintient ce statut).
+**Score approximatif** : 6 ✅ / 9 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
+compte 21 lignes, pas 20 comme les versions précédentes de cette section
+l'affirmaient — corrigé au passage. Historique : évaluation initiale du
+23/07, 5/8/7 (sur la même base de 21, déjà mal comptée à 20 à l'époque) ;
+mise à jour après la story 15.12 (vérification email) ; après 15.13/15.16
+(tests de charge + goulot dashboard corrigé, statut inchangé, déjà 🟡) ;
+après 15.14/15.15 (secrets coffre 🔴→🟡, patching 🟡 enrichi mais statut
+inchangé) — net : 5→6 ✅ n'a pas bougé depuis 15.12, 🔴 passe de 7 à 6 réels
+avec la 15.14).
 
 **Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
 faudrait au minimum : un environnement de production réel (domaine, SSL,
@@ -402,8 +433,8 @@ pour l'instant, pas prêt pour un lancement réel.
 - ~~15.11 — Reset de mot de passe (flux email + token)~~ ✅ fait
 - ~~15.12 — Vérification email à l'inscription~~ ✅ fait
 - ~~15.13 — Tests de charge~~ ✅ fait (avec distorsion documentée, sans Redis)
-- 15.14 — Coffre de secrets pour les variables d'environnement (non commencée)
-- 15.15 — Politique de patching formelle + test de rollback (non commencée)
+- 15.14 — Coffre de secrets pour les variables d'environnement — 🟡 partiel (décision de cadrage prise sans vous, à confirmer, voir ADR-012)
+- 15.15 — Politique de patching formelle + test de rollback — 🟡 partiel (politique écrite, rollback applicatif testé ; rollback BDD/Vercel réels toujours non exercés)
 - ~~15.16 — Corriger le goulot `/dashboard` trouvé en 15.13~~ ✅ fait (créée
   et complétée dans la même session, en plus des trois ci-dessus prévues
   par `bmad prelaunch`)

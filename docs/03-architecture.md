@@ -768,3 +768,101 @@ de rollback, selon la fraîcheur de l'incident :
 - Pas de sauvegarde **hors Neon** (export périodique vers un stockage tiers,
   ex. S3) — la restauration Neon ne protège pas contre une suppression du
   compte/projet Neon lui-même. Non traité ici, hors périmètre d'une story S.
+
+## 12. Politique de patching + test de rollback (story 15.15)
+
+**Chevauche partiellement la story 15.7** (rollback BDD, §11 ci-dessus) —
+cette section couvre le volet **applicatif** (code, dépendances) ; §11
+couvre le volet **données/schéma**. Traitée dans la même session `/goal`
+autonome que la story 15.14 — voir la note de transparence dans ADR-012 :
+aucune décision de cadrage à trancher ici (contrairement à 15.14), donc pas
+la même réserve, mais toujours sans confirmation avec vous en temps réel.
+
+### Portée du "patching"
+
+Trois catégories distinctes, avec une cadence propre à chacune :
+
+| Catégorie | Exemple | Cadence recommandée | Précédent dans ce projet |
+|---|---|---|---|
+| Correctifs de sécurité (`pnpm audit`) | Vulnérabilité critique/haute dans une dépendance transitive | Critique : dès détection, avant tout autre travail. Haute : sous 1 semaine. Modérée/basse : lors du prochain cycle de dépendances normal | Story 15.5 (46→14 vulnérabilités via `pnpm.overrides`), story 15.10 (14→0, en corrigeant aussi une vulnérabilité `sharp` détectée en cours de route) |
+| Montées de version mineures/patch (dépendances non-sécurité) | `recharts@2.13.3→2.15.4` | Mensuel ou à la demande, groupées, jamais isolées pour une seule dépendance sauf urgence | — |
+| Montées de version majeures (Next.js, React, Prisma, Node) | Next 14→15 + React 18→19 | **Story dédiée**, précédée d'une recherche explicite avant tout code (l'écosystème a pu bouger depuis la rédaction de la story), décision de scope actée avant implémentation | Story 15.10 — précédent qui fixe le standard à suivre pour toute future montée majeure |
+
+### Qui décide
+
+Projet à un seul opérateur/développeur à ce jour (vous) — pas de comité de
+review formel. Toute déviation par rapport à ce tableau (ex. repousser un
+correctif critique) doit être actée explicitement, la même règle que pour
+toute déviation architecturale (§2.4 du framework, ADR). Si l'équipe
+grandit, ce paragraphe devra désigner un rôle explicite plutôt qu'une
+personne.
+
+### Gate avant tout déploiement
+
+1. `pnpm type-check` + `pnpm test` verts (gate CI existant depuis la story
+   15.6, `type-check-and-test`, requis par la protection de branche
+   `master`).
+2. Pour un changement touchant la BDD ou l'auth : vérification manuelle en
+   direct contre la vraie BDD Neon avec le compte de démo — précédent
+   constant depuis les stories 15.2/15.8/15.10/15.11/15.12.
+3. Pour un changement touchant Redis/le chemin `/dashboard` (rate limiting,
+   cache) : re-jouer au moins `dashboard-only.yml` et `login-latency.yml`
+   (story 15.13, `apps/web/loadtests/`) — ces deux scénarios ont
+   spécifiquement révélé la régression corrigée en story 15.16.
+4. Fusion sur `master` uniquement via PR (protection de branche active
+   depuis 15.6) — jamais de push direct, même si le propriétaire du dépôt
+   peut techniquement bypasser la règle (`enforcement_level: non_admins`).
+
+### Mécanisme de rollback applicatif
+
+- **Code** : `git revert` du commit fautif sur une branche, PR, merge —
+  jamais de rewrite d'historique sur `master`. Vercel conserve par ailleurs
+  chaque déploiement passé et permet de "promote" instantanément un
+  déploiement antérieur sans attendre un nouveau build, pour un rollback
+  encore plus rapide qu'un revert+redeploy — **non vérifié en direct**
+  (pas de compte Vercel connecté dans cette session, même limitation que
+  15.4/15.6/15.14).
+- **Schéma/données** : voir §11 (restauration Neon dans la fenêtre PITR de
+  6h, migration Prisma inverse manuelle au-delà).
+- **Dépendances** : `pnpm.overrides` (déjà en place pour la SCA, ADR-007)
+  ou un simple retour à la version précédente dans `package.json` +
+  `pnpm install` — pas de mécanisme dédié au-delà du contrôle de version
+  normal.
+
+### Test de rollback réellement exécuté dans cette story
+
+Contrairement à la restauration Neon (§11, jamais exercée faute d'accès à
+la console), le rollback **applicatif par `git revert`** a été testé en
+direct, sur une branche locale jetable (`rollback-drill-test`, supprimée
+après coup, jamais poussée) :
+
+1. Régression intentionnelle introduite dans
+   [`lib/pagination.ts`](../apps/web/src/lib/pagination.ts)
+   (`buildPaginationMeta` : `Math.ceil` → `Math.floor`), committée.
+2. `pnpm jest pagination.test.ts` : **échoue** comme attendu
+   (`totalPages` attendu 3, reçu 2) — confirme que le gate CI de l'étape 1
+   ci-dessus aurait bloqué la fusion.
+3. `git revert HEAD` : un commit de revert propre, sans conflit.
+4. `pnpm jest pagination.test.ts` : **repasse au vert**, 7/7 — confirme que
+   le rollback restaure un état fonctionnel identique à l'avant-régression.
+
+**Effet de bord découvert pendant la préparation du test** : une première
+tentative de régression (`MAX_PAGE_SIZE` 100 → 1000) n'a été détectée par
+**aucun** test, car
+[`pagination.test.ts`](../apps/web/src/lib/__tests__/pagination.test.ts)
+compare le résultat à la constante `MAX_PAGE_SIZE` elle-même plutôt qu'à
+une valeur littérale (`expect(result.pageSize).toBe(MAX_PAGE_SIZE)`) — un
+test qui passe même si le plafond réel change. Gap de couverture réel,
+non corrigé ici (hors périmètre de cette story, qui porte sur la politique
+et le mécanisme de rollback, pas un audit de la suite de tests existante) ;
+signalé pour une story de suivi.
+
+### Ce qui n'a pas été vérifié dans cette story
+
+- **Rollback Vercel réel** (promotion d'un déploiement antérieur) — aucun
+  compte Vercel connecté dans cette session.
+- **Restauration Neon réelle** — toujours non exercée, voir §11 (story
+  15.7), aucun changement depuis.
+- **Cadence de patching en pratique** — le tableau ci-dessus est une
+  politique écrite, pas encore éprouvée sur un cycle réel (pas assez de
+  temps écoulé depuis sa rédaction pour évaluer si elle est suivie).

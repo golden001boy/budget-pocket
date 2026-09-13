@@ -30,18 +30,29 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 12 ✅ + 2 🟡 + 2 🔴 sur 16 (15.1 rate limiting, 15.2
-validation Zod, 15.3 pagination, 15.4 Sentry, 15.5 scan SCA, 15.6 CI/CD,
-15.9 test runner Jest, 15.10 migration Next.js 15 + React 19, 15.11 reset
-de mot de passe, 15.12 vérification email (non-bloquante), 15.13 tests de
-charge, 15.16 correctif du goulot dashboard — tous ✅ ; 15.7 backup/rollback
-et 15.8 hardening auth 🟡 partiels documentés ; **15.14 et 15.15 créées
-suite à `bmad prelaunch` (2026-07-23)**, non commencées : coffre de
-secrets, politique de patching — voir
+sécurité/prod) est 🟡 12 ✅ + 4 🟡 sur 16, plus aucune story 🔴 (15.1 rate
+limiting, 15.2 validation Zod, 15.3 pagination, 15.4 Sentry, 15.5 scan SCA,
+15.6 CI/CD, 15.9 test runner Jest, 15.10 migration Next.js 15 + React 19,
+15.11 reset de mot de passe, 15.12 vérification email (non-bloquante),
+15.13 tests de charge, 15.16 correctif du goulot dashboard — tous ✅ ; 15.7
+backup/rollback BDD et 15.8 hardening auth 🟡 partiels documentés ; **15.14
+(coffre de secrets) et 15.15 (politique de patching + test de rollback)
+traitées le 2026-09-13** dans une session `/goal` en continuation autonome
+(« poursuis jusqu'à épuisement de token de cette session ») — **sans pause
+pour confirmation**, contrairement au précédent 15.10/15.12 : 15.14 a
+retenu les variables d'environnement chiffrées Vercel comme coffre dédié
+(décision **à confirmer avec vous**, voir
+[docs/03-architecture.md ADR-012](docs/03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514))
+plus une validation Zod des secrets au boot (`apps/web/src/lib/env.ts`) ;
+15.15 a documenté la politique de patching et réellement testé le rollback
+applicatif par `git revert` (rollback BDD/Vercel toujours non exercés,
+faute d'accès réseau dans cette session). Travail commité sur une branche
+locale non poussée (`epic-15/15.14-15.15-secrets-patching`) — voir
 [docs/05-status.md §Gate Phase 6](docs/05-status.md#gate-phase-6--évaluation-bmad-prelaunch-2026-07-23)
-pour le détail item par item (score inchangé à **6 ✅ / 9 🟡 / 5 🔴 sur les
-20 items de la checklist Phase 6** — le projet est une démo solide en
-local, pas prêt pour un lancement réel). **Story 15.13** a tourné les
+pour le détail item par item (score **6 ✅ / 9 🟡 / 6 🔴 sur 21** — le
+dénombrement précédent ("20 items") était déjà inexact ; le projet reste
+une démo solide en local, pas prêt pour un lancement réel). **Story 15.13**
+a tourné les
 tests de charge (Artillery) sans Redis local (installation refusée,
 distorsion documentée) et cru trouver un goulot Postgres sur `/dashboard`
 — **diagnostic invalidé par la story 15.16** : la vraie cause était un bug

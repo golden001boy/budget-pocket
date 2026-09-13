@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (12 ✅ + 3 🟡 + 1 🔴 sur 16)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (12 ✅ + 4 🟡 sur 16)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -166,7 +166,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.12 | Vérification email à l'inscription | Must | M | ✅ | Gate Phase 6 §9.1 |
 | 15.13 | Tests de charge | Should | M | ✅ | Gate Phase 6 §9.3 |
 | 15.14 | Coffre de secrets pour les variables d'environnement | Could | S | 🟡 | Gate Phase 6 §9.2 |
-| 15.15 | Politique de patching formelle + test de rollback | Could | S | 🔴 | Gate Phase 6 §9.3 |
+| 15.15 | Politique de patching formelle + test de rollback | Could | S | 🟡 | Gate Phase 6 §9.3 |
 | 15.16 | Corriger le goulot `/dashboard` trouvé en story 15.13 | Should | M | ✅ | Gate Phase 6 §9.3 (suivi 15.13) |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
@@ -869,7 +869,7 @@ préférez un vrai coffre tiers.
 
 ---
 
-### Story 15.15 — Politique de patching formelle + test de rollback · 🔴 À faire
+### Story 15.15 — Politique de patching formelle + test de rollback · 🟡 Partiel
 
 **Story** : En tant qu'opérateur, je veux une politique écrite de mise à
 jour des dépendances/de la plateforme (cadence, qui décide, comment
@@ -877,11 +877,49 @@ tester avant déploiement) et un rollback réellement testé une fois, afin
 de ne pas improviser en cas de régression après une mise à jour (Gate
 Phase 6 §9.3).
 
-**Constat** : aucune politique de patching écrite à ce jour. Chevauche
-partiellement la story 15.7 (rollback BDD documenté, jamais testé en
-pratique) — à cadrer ensemble plutôt qu'en double lors de l'implémentation.
+**Constat initial** : aucune politique de patching écrite à ce jour.
+Chevauche partiellement la story 15.7 (rollback BDD documenté, jamais
+testé en pratique) — cadrée ensemble plutôt qu'en double, voir
+[03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515),
+qui distingue explicitement le volet applicatif (cette story) du volet
+données/schéma (§11, story 15.7, inchangé).
 
-**Non commencée.**
+**Critères d'acceptation**
+- [x] Politique de patching écrite : trois catégories (correctifs de
+      sécurité, montées mineures, montées majeures) avec cadence
+      recommandée par catégorie, ancrée sur les précédents réels du projet
+      (stories 15.5/15.10) plutôt qu'inventée dans l'abstrait.
+- [x] Qui décide : documenté (projet à un seul opérateur à ce jour, toute
+      déviation actée comme une décision architecturale — même règle que
+      §2.4 du framework).
+- [x] Gate de test avant déploiement documenté : CI (`type-check-and-test`,
+      15.6) + vérification manuelle Neon pour tout changement BDD/auth
+      (précédent constant depuis 15.2) + re-jeu Artillery ciblé pour tout
+      changement touchant Redis/`/dashboard` (15.13/15.16).
+- [x] Mécanismes de rollback applicatif documentés : `git revert` + PR
+      (jamais de rewrite d'historique sur `master`), promotion d'un
+      déploiement Vercel antérieur (non vérifiée en direct, pas de compte
+      connecté), `pnpm.overrides`/retour de version pour les dépendances.
+- [x] **Rollback réellement testé** — contrairement à la restauration Neon
+      (15.7, toujours jamais exercée), le rollback applicatif par
+      `git revert` a été exécuté en direct sur une branche jetable : une
+      régression intentionnelle dans
+      [`lib/pagination.ts`](../apps/web/src/lib/pagination.ts) fait
+      échouer `pagination.test.ts` comme prévu (confirme que le gate CI
+      aurait bloqué la fusion), `git revert` restaure un état vert (7/7)
+      sans conflit. Détail complet et effet de bord découvert (un gap de
+      couverture de test réel, non corrigé ici) dans
+      [03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515).
+- [ ] **Non vérifié** : rollback Vercel réel (promotion d'un déploiement
+      antérieur) et restauration Neon réelle — aucun accès à un compte
+      Vercel ni à la console Neon dans cette session.
+- [ ] **Reste 🟡, pas ✅** : politique écrite mais pas encore éprouvée sur
+      un cycle réel de patching (pas assez de temps écoulé pour évaluer si
+      elle est suivie en pratique).
+
+**Implémentation** :
+[03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515)
+(politique + détail du test de rollback exécuté).
 
 ---
 
