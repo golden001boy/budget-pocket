@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 20 ✅ + 4 🟡 sur 24 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 21 ✅ + 4 🟡 sur 25 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 20 ✅ + 4 🟡 sur 24 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 21 ✅ + 4 🟡 sur 25 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -263,6 +263,27 @@ réelle puis les 9 routes concernées (`accounts`, `budgets`, `goals`,
 `user/profile`, `analysis/snapshot`, `analysis/forecast`) toutes `200`
 avec de vraies données — et une coupure BDD transitoire réelle pendant la
 vérification a reconfirmé, en prime, le `500` propre de la story 15.21.
+
+**Note story 15.25** : ✅ complet — même schéma de découverte que la
+story 15.23 : en auditant les schémas `packages/shared` inutilisés, trois
+autres (`retirement.ts`, `goal.ts`, `portfolio.ts`) se sont révélés
+complets et cohérents avec Prisma, mais non branchés — leurs routes
+utilisent chacune un schéma local plus restreint qui omet de vraies
+colonnes (`RetirementPlan.inflationRate`/`.notes`,
+`FinancialGoal.priority`, `PortfolioItem.exchange`/`.notes`) ; `assetClass`
+sur `portfolio` était aussi un `z.string()` non contraint (valeur invalide
+atteignant Prisma au lieu d'un `400` clair). Champs/validations manquants
+ajoutés directement dans chaque schéma local (pas d'import du schéma
+partagé tel quel — chacun diverge légèrement en bornes/defaults du
+comportement déjà en production). 20 nouveaux tests (195/195 au total),
+`pnpm type-check` 4/4, `pnpm build` vert. Vérifié en direct contre la
+vraie BDD Neon avec le compte de démo : les trois champs/validations
+fonctionnent réellement. **Incident de nettoyage, corrigé** : le plan
+retraite de test a été écrit par `upsert` sur la ligne déjà seedée du
+compte de démo (pas une nouvelle ligne) ; supprimé par réflexe pendant le
+nettoyage, restauré immédiatement avec les valeurs exactes de
+`scripts/seed.ts` — aucune donnée réelle affectée, signalé en toute
+transparence.
 
 **Découverte hors périmètre, signalée mais non traitée** (pendant la story
 15.22) : `packages/api-client` est du code mort dans toute la codebase —

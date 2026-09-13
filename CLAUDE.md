@@ -30,7 +30,7 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 20 ✅ + 4 🟡 sur 24, plus aucune story 🔴. 15.7
+sécurité/prod) est 🟡 21 ✅ + 4 🟡 sur 25, plus aucune story 🔴. 15.7
 (backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
 documentés (MFA reporté, voir ADR-008). **Dette technique signalée, non
 traitée** : `packages/api-client` est du code mort avec un mécanisme
@@ -39,7 +39,7 @@ dans
 [docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision),
 décision volontairement laissée à vous.
 
-**Stories 15.14 à 15.24 traitées le 2026-09-13** dans une session `/goal`
+**Stories 15.14 à 15.25 traitées le 2026-09-13** dans une session `/goal`
 en continuation autonome (« poursuis jusqu'à épuisement de token de cette
 session »), **sans pause pour confirmation avec vous** — contrairement au
 précédent établi par 15.10/15.12. Résumé (détail complet story par story
@@ -72,6 +72,13 @@ dans [docs/05-status.md](docs/05-status.md), section Gate Phase 6) :
   CRUD ni `analysis/snapshot`/`analysis/forecast` n'avaient de
   `try/catch` (12 fichiers, 21 handlers) — même patron appliqué partout,
   aucun changement de comportement sur le chemin normal. ✅
+- **15.25** même schéma que 15.23 : 3 autres schémas partagés complets
+  mais inutilisés (`retirement.ts`, `goal.ts`, `portfolio.ts`) — champs
+  Prisma réels (`inflationRate`, `priority`, `exchange`, `notes`) jamais
+  exposés par l'API, ajoutés aux schémas locaux. Incident mineur pendant
+  le nettoyage post-vérification (upsert sur la ligne seedée du compte
+  de démo supprimé par réflexe), restauré immédiatement, signalé dans
+  05-status.md. ✅
 
 15.17–15.21 vérifiées en direct contre la vraie BDD Neon avec le compte de
 démo (connexions mobile réelles, écritures de test supprimées après coup),

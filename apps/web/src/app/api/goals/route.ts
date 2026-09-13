@@ -13,6 +13,14 @@ const createSchema = z.object({
   currentAmount: z.number().min(0).default(0),
   deadline:      z.string().optional(),
   notes:         z.string().optional(),
+  // Story 15.25: FinancialGoal.priority is a real column (Prisma default
+  // 1) this schema never accepted, even though updateGoalSchema (already
+  // imported by PATCH .../[id]) has had it all along — a goal's priority
+  // could be changed after creation but never set at creation. No
+  // `.default()` here on purpose: omitting it should still fall through
+  // to Prisma's own column default (1), not silently change to something
+  // else.
+  priority:      z.number().int().min(1).max(10).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -61,6 +69,7 @@ export async function POST(req: NextRequest) {
         currentAmount: parsed.data.currentAmount,
         deadline:      parsed.data.deadline ? new Date(parsed.data.deadline) : undefined,
         notes:         parsed.data.notes,
+        priority:      parsed.data.priority,
         status:        'ACTIVE',
       },
     });

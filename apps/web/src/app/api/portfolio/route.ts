@@ -6,13 +6,24 @@ import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 
+// Story 15.25: tightened from the original `z.string()` on `assetClass`
+// (any string reached Prisma, which would only reject it with a raw
+// enum-mismatch error at the DB layer — now caught earlier as a clear
+// 400) and `purchaseDate` (any string reached `new Date(...)`, which
+// silently produces an Invalid Date for garbage input instead of
+// rejecting it). Also adds `exchange`/`notes` — both real columns on
+// PortfolioItem (see prisma/schema.prisma) that this schema never
+// accepted, even though a matching schema already existed, unused, in
+// packages/shared/src/schemas/portfolio.ts.
 const createSchema = z.object({
-  assetClass:   z.string(),
+  assetClass:   z.enum(['STOCK_BRVM', 'STOCK_INTL', 'CRYPTO', 'REAL_ESTATE', 'BOND', 'SAVINGS_ACCOUNT', 'OTHER']),
   name:         z.string().min(1),
   ticker:       z.string().min(1),
+  exchange:     z.string().max(50).optional(),
   quantity:     z.number().positive(),
   averageCost:  z.number().positive(),
-  purchaseDate: z.string(),
+  purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format attendu : AAAA-MM-JJ'),
+  notes:        z.string().max(500).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -55,12 +66,14 @@ export async function POST(req: NextRequest) {
     const item = await prisma.portfolioItem.create({
       data: {
         userId:       session.user.id,
-        assetClass:   parsed.data.assetClass as any,
+        assetClass:   parsed.data.assetClass,
         name:         parsed.data.name,
         ticker:       parsed.data.ticker,
+        exchange:     parsed.data.exchange,
         quantity:     parsed.data.quantity,
         averageCost:  parsed.data.averageCost,
         purchaseDate: new Date(parsed.data.purchaseDate),
+        notes:        parsed.data.notes,
       },
     });
     return NextResponse.json(item, { status: 201 });

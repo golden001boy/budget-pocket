@@ -99,6 +99,45 @@ describe('POST /api/goals', () => {
     );
   });
 
+  it('passes priority through when provided, previously silently dropped even though it is a real column (story 15.25)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.financialGoal.create.mockResolvedValue({ id: 'g1', priority: 9 });
+
+    await POST(makeRequest('http://localhost/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Voiture', type: 'PURCHASE', targetAmount: 5000, priority: 9 }),
+    }));
+
+    expect(mockPrisma.financialGoal.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ priority: 9 }) }),
+    );
+  });
+
+  it('leaves priority undefined when omitted, so Prisma\'s own column default (1) applies rather than a schema-imposed one', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.financialGoal.create.mockResolvedValue({ id: 'g1' });
+
+    await POST(makeRequest('http://localhost/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Voiture', type: 'PURCHASE', targetAmount: 5000 }),
+    }));
+
+    const callArgs = mockPrisma.financialGoal.create.mock.calls[0][0];
+    expect(callArgs.data.priority).toBeUndefined();
+  });
+
+  it('rejects a priority outside 1-10 with 400', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+
+    const response = await POST(makeRequest('http://localhost/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Voiture', type: 'PURCHASE', targetAmount: 5000, priority: 11 }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockPrisma.financialGoal.create).not.toHaveBeenCalled();
+  });
+
   it('returns a clean 500 JSON instead of crashing when Prisma throws (story 15.24)', async () => {
     mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
     mockPrisma.financialGoal.create.mockRejectedValue(new Error('Can\'t reach database server'));

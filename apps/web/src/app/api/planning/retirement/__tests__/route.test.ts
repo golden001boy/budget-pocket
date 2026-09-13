@@ -92,6 +92,47 @@ describe('POST /api/planning/retirement', () => {
     );
   });
 
+  it('rejects a targetRetirementAge that is not after currentAge (story 15.25)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+
+    const response = await POST(makeRequest('http://localhost/api/planning/retirement', {
+      method: 'POST',
+      body: JSON.stringify({ ...validBody, currentAge: 70, targetRetirementAge: 65 }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockPrisma.retirementPlan.upsert).not.toHaveBeenCalled();
+  });
+
+  it('accepts inflationRate and notes, previously dropped even though both are real columns (story 15.25)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.retirementPlan.upsert.mockResolvedValue({ userId: 'user-1' });
+
+    await POST(makeRequest('http://localhost/api/planning/retirement', {
+      method: 'POST',
+      body: JSON.stringify({ ...validBody, inflationRate: 4.5, notes: 'Plan B si le taux baisse' }),
+    }));
+
+    expect(mockPrisma.retirementPlan.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ inflationRate: 4.5, notes: 'Plan B si le taux baisse' }),
+      }),
+    );
+  });
+
+  it('defaults inflationRate to 3 when omitted, same convention as expectedReturnRate defaulting to 8', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.retirementPlan.upsert.mockResolvedValue({ userId: 'user-1' });
+
+    await POST(makeRequest('http://localhost/api/planning/retirement', {
+      method: 'POST', body: JSON.stringify(validBody),
+    }));
+
+    expect(mockPrisma.retirementPlan.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ inflationRate: 3, expectedReturnRate: 8 }) }),
+    );
+  });
+
   it('returns a clean 500 JSON instead of crashing when Prisma throws (story 15.24)', async () => {
     mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
     mockPrisma.retirementPlan.upsert.mockRejectedValue(new Error('Can\'t reach database server'));

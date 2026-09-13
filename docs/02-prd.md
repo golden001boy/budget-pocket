@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (20 ✅ + 4 🟡 sur 24)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (21 ✅ + 4 🟡 sur 25)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -175,7 +175,8 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.21 | 401 JSON propre sur les routes API protégées (au lieu d'une redirection 307) + résilience `/api/auth/mobile` | Should | S | ✅ | Gap noté depuis 15.2, jamais transformé en story |
 | 15.22 | Couverture de tests unitaires pour les 9 routes CRUD principales | Should | M | ✅ | Gap noté depuis 15.9 : "routes API n'ont aucun test à ce jour" |
 | 15.23 | Validation Zod + résilience sur `POST /api/advisor/scenarios` | Must | S | ✅ | Règle #5 non-négociable (CLAUDE.md) : trouvé sans validation du tout |
-| 15.24 | `try/catch` sur les 10 routes CRUD restantes (accounts/budgets/goals/portfolio/transactions/profile/retirement/taxes) | Must | M | ✅ | Même fragilité que le bug `/api/auth/mobile` de 15.21, trouvée systémique |
+| 15.24 | `try/catch` sur les 12 routes restantes (CRUD + analysis) qui n'en avaient pas | Must | M | ✅ | Même fragilité que le bug `/api/auth/mobile` de 15.21, trouvée systémique |
+| 15.25 | Champs Prisma réels jamais exposés (retraite/objectifs/portefeuille) | Should | S | ✅ | Même schéma que 15.23 : schémas partagés complets mais inutilisés |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1569,6 +1570,88 @@ préfixé par le nom de la route/méthode, puis `{ error: 'Erreur serveur'
 et
 [analysis/forecast/__tests__/route.test.ts](../apps/web/src/app/api/analysis/forecast/__tests__/route.test.ts)
 (nouveaux).
+
+---
+
+### Story 15.25 — Champs Prisma réels jamais exposés par l'API (retraite/objectifs/portefeuille) · ✅ Done
+
+**Story** : En tant qu'utilisateur, je veux pouvoir renseigner tous les
+champs que l'app propose déjà dans son schéma de données (taux
+d'inflation d'un plan retraite, priorité d'un objectif, bourse/notes d'une
+position de portefeuille), afin de ne pas perdre silencieusement une
+donnée que je pensais avoir enregistrée.
+
+**Constat, trouvé en auditant les schémas `packages/shared` inutilisés
+après la découverte du même problème sur `scenario.ts` en story 15.23** :
+trois autres schémas partagés (`retirement.ts`, `goal.ts`, `portfolio.ts`)
+existent, complets et cohérents avec Prisma, mais ne sont **pas** ceux
+réellement importés par leurs routes — chacune utilise un schéma local
+plus restreint, qui omet des colonnes bien réelles :
+- `RetirementPlan.inflationRate` et `.notes` — jamais acceptés par
+  `POST /api/planning/retirement`.
+- `FinancialGoal.priority` — jamais acceptée par `POST /api/goals` (alors
+  que `PATCH /api/goals/[id]` l'accepte déjà via `updateGoalSchema`,
+  importé du même `packages/shared`).
+- `PortfolioItem.exchange` et `.notes` — jamais acceptés par
+  `POST /api/portfolio`, dont le `assetClass` était aussi un `z.string()`
+  non contraint (une valeur invalide atteignait Prisma au lieu d'être
+  rejetée avec un `400` clair) et le `purchaseDate` un `z.string()` sans
+  format imposé.
+
+**Décision de cadrage** : ne pas importer les schémas partagés tels
+quels — chacun diverge légèrement du schéma local déjà en production
+(bornes, defaults). Ajout ciblé des champs/validations manquants dans
+chaque schéma local, sans toucher au comportement déjà existant.
+
+**Critères d'acceptation**
+- [x] `planning/retirement` — `inflationRate` (défaut 3, même convention
+      que `expectedReturnRate` déjà par défaut à 8) et `notes` ajoutés ;
+      contrainte `.refine()` reprise du schéma partagé
+      (`targetRetirementAge` doit dépasser `currentAge`).
+- [x] `goals` (POST) — `priority` (1-10, **sans** défaut Zod, pour laisser
+      le défaut Prisma natif (1) s'appliquer si omis plutôt que d'imposer
+      silencieusement le défaut 5 du schéma partagé).
+- [x] `portfolio` — `exchange`/`notes` ajoutés ; `assetClass` resserré au
+      vrai enum Prisma (7 valeurs) ; `purchaseDate` contraint au format
+      `AAAA-MM-JJ`.
+- [x] Vérifié qu'aucun consommateur ne casse avec le resserrement de
+      `assetClass` : seul
+      [`AddPortfolioItemForm.tsx`](../apps/web/src/components/investments/AddPortfolioItemForm.tsx)
+      appelle ce `POST` (mobile ne fait que lire `/api/portfolio`), et
+      n'envoie déjà que des valeurs du vrai enum.
+- [x] Test unitaire — 20 nouveaux au total sur les trois fichiers
+      (validation croisée retraite, valeurs par défaut, `priority`
+      transmis/omis/hors bornes, `exchange`/`notes` acceptés,
+      `assetClass`/`purchaseDate` invalides rejetés).
+- [x] `pnpm test` (195/195) et `pnpm type-check` (4/4) verts.
+- [x] `pnpm build` (production réelle, 50/50 pages) vert.
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo :
+      plan retraite créé avec `inflationRate`/`notes` réels ; `400` clair
+      sur un âge de retraite antérieur à l'âge actuel ; objectif créé avec
+      `priority: 9` persistée ; position de portefeuille créée avec
+      `exchange`/`notes` réels ; `assetClass` invalide rejeté `400` avec
+      le message d'erreur détaillé listant les 7 valeurs valides.
+
+**Incident pendant le nettoyage post-vérification, corrigé** : le plan
+retraite créé pour tester `inflationRate`/`notes` a été écrit via
+`upsert` (comme le fait la route) — **sur la ligne déjà existante du
+compte de démo** (`scripts/seed.ts` en crée une), pas une nouvelle ligne.
+Le nettoyage a supprimé cette ligne par réflexe (`delete`) sans vérifier
+au préalable qu'il s'agissait d'un upsert plutôt qu'un insert, effaçant
+le plan retraite seedé du compte de démo. **Restauré immédiatement**
+avec les valeurs exactes de `scripts/seed.ts`
+(`currentAge: 32, targetRetirementAge: 55, monthlyContribution: 80000,
+currentSavings: 850000, expectedReturnRate: 8, targetMonthlyIncome:
+500000`) — `inflationRate`/`notes` retombent sur leurs défauts (3/`null`),
+identiques à l'état seedé d'origine. Aucune donnée réelle affectée (compte
+de démo uniquement), mais signalé ici en toute transparence plutôt que
+passé sous silence — la leçon retenue : vérifier si une écriture de test
+est un `upsert` avant de supprimer par réflexe ce qu'on croit avoir créé.
+
+**Implémentation** :
+[api/planning/retirement/route.ts](../apps/web/src/app/api/planning/retirement/route.ts),
+[api/goals/route.ts](../apps/web/src/app/api/goals/route.ts),
+[api/portfolio/route.ts](../apps/web/src/app/api/portfolio/route.ts).
 
 ---
 

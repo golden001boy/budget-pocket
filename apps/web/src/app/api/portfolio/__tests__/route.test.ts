@@ -22,7 +22,7 @@ function makeRequest(url: string, init?: RequestInit) {
 }
 
 const validBody = {
-  assetClass: 'STOCK', name: 'Apple', ticker: 'AAPL',
+  assetClass: 'STOCK_INTL', name: 'Apple', ticker: 'AAPL',
   quantity: 10, averageCost: 150, purchaseDate: '2026-01-01',
 };
 
@@ -98,6 +98,45 @@ describe('POST /api/portfolio', () => {
     expect(response.status).toBe(201);
     expect(mockPrisma.portfolioItem.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userId: 'user-1', ticker: 'AAPL' }) }),
+    );
+  });
+
+  it('rejects an assetClass outside the real enum with 400, previously reached Prisma unchecked (story 15.25)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+
+    // 'STOCK' (used by this suite's own validBody fixture until this
+    // story) is not a real AssetClass value — it only ever "worked"
+    // because assetClass was a bare z.string() before this story.
+    const response = await POST(makeRequest('http://localhost/api/portfolio', {
+      method: 'POST', body: JSON.stringify({ ...validBody, assetClass: 'STOCK' }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockPrisma.portfolioItem.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a purchaseDate that is not YYYY-MM-DD with 400', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+
+    const response = await POST(makeRequest('http://localhost/api/portfolio', {
+      method: 'POST', body: JSON.stringify({ ...validBody, purchaseDate: 'not-a-date' }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockPrisma.portfolioItem.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts exchange and notes, previously dropped even though both are real columns (story 15.25)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.portfolioItem.create.mockResolvedValue({ id: 'p1' });
+
+    await POST(makeRequest('http://localhost/api/portfolio', {
+      method: 'POST',
+      body: JSON.stringify({ ...validBody, exchange: 'NASDAQ', notes: 'Position long terme' }),
+    }));
+
+    expect(mockPrisma.portfolioItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ exchange: 'NASDAQ', notes: 'Position long terme' }) }),
     );
   });
 
