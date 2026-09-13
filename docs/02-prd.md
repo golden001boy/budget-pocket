@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (23 ✅ + 4 🟡 sur 27)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (24 ✅ + 4 🟡 sur 28)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -179,6 +179,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.25 | Champs Prisma réels jamais exposés (retraite/objectifs/portefeuille) | Should | S | ✅ | Même schéma que 15.23 : schémas partagés complets mais inutilisés |
 | 15.26 | Câbler un test runner (`jest-expo`) pour `apps/mobile` | Should | M | ✅ | Gap noté depuis 15.9 : "apps/mobile n'a pas de runner du tout" |
 | 15.27 | Tests pour `formatCurrency`/`convertToXOF` (`packages/shared`) | Could | S | ✅ | Logique argent réelle, utilisée partout, jamais testée |
+| 15.28 | Tests pour `projectForecast` (régression linéaire, prévisions financières) | Should | S | ✅ | Testé uniquement par mock dans la story 15.24, jamais directement |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1784,6 +1785,34 @@ runner dédié.
 
 **Implémentation** :
 [lib/__tests__/currencies.test.ts](../apps/web/src/lib/__tests__/currencies.test.ts).
+
+---
+
+### Story 15.28 — Tests pour `projectForecast` · ✅ Done
+
+**Story** : couvrir directement l'algorithme de prévision financière
+(`lib/analytics/forecast.ts` — régression linéaire simple sur revenus/
+dépenses, accumulation de patrimoine net projeté, niveau de confiance).
+Jusqu'ici testé uniquement **par mock** dans
+`analysis/forecast/route.test.ts` (story 15.24) — l'implémentation réelle
+n'avait jamais été exercée.
+
+**Critères d'acceptation**
+- [x] 10 tests : tableau vide sous 2 snapshots, nombre de points égal à
+      `monthsAhead`, projection plate quand la tendance est nulle,
+      extrapolation d'une tendance croissante (pas juste la moyenne),
+      jamais de revenu/dépense négatif même sur tendance fortement
+      baissière (`Math.max(0, ...)`), accumulation correcte du
+      patrimoine net projeté mois après mois, `netWorth` manquant traité
+      comme `0` sans planter, retour à janvier l'année suivante après
+      décembre, tri chronologique de snapshots donnés dans le désordre
+      (projette bien depuis le mois le plus récent, pas depuis l'ordre du
+      tableau), niveaux de confiance `low`/`medium`/`high` selon le
+      nombre de mois d'historique.
+- [x] `pnpm test` (212 web + 12 mobile) et `pnpm type-check` (4/4) verts.
+
+**Implémentation** :
+[lib/analytics/__tests__/forecast.test.ts](../apps/web/src/lib/analytics/__tests__/forecast.test.ts).
 
 ---
 

@@ -30,7 +30,7 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 23 ✅ + 4 🟡 sur 27, plus aucune story 🔴. 15.7
+sécurité/prod) est 🟡 24 ✅ + 4 🟡 sur 28, plus aucune story 🔴. 15.7
 (backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
 documentés (MFA reporté, voir ADR-008). **Dette technique signalée, non
 traitée** (deux découvertes, décisions volontairement laissées à vous) :
@@ -41,7 +41,7 @@ fonctionnerait pas contre ce backend ; cinq répertoires de route API sous
 `admin/users`) — détail et options dans
 [docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
 
-**Stories 15.14 à 15.27 traitées le 2026-09-13** dans une session `/goal`
+**Stories 15.14 à 15.28 traitées le 2026-09-13** dans une session `/goal`
 en continuation autonome (« poursuis jusqu'à épuisement de token de cette
 session »), **sans pause pour confirmation avec vous** — contrairement au
 précédent établi par 15.10/15.12. Résumé (détail complet story par story
@@ -93,6 +93,11 @@ dans [docs/05-status.md](docs/05-status.md), section Gate Phase 6) :
   argent réelle jamais testée — 7 tests, testés depuis `apps/web` (même
   convention qu'`authSchemas.test.ts`, `packages/shared` n'a pas de runner
   propre). ✅
+- **15.28** `projectForecast` (régression linéaire des prévisions
+  financières) n'avait jamais été testé directement, seulement par mock
+  en 15.24 — 10 tests couvrant tendance, plancher à zéro, accumulation du
+  patrimoine net, rollover d'année, tri chronologique, niveaux de
+  confiance. ✅
 
 15.17–15.21 vérifiées en direct contre la vraie BDD Neon avec le compte de
 démo (connexions mobile réelles, écritures de test supprimées après coup),
