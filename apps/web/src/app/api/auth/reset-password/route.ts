@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { resetPasswordSchema } from '@budget-pocket/shared';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
 import { hashPasswordResetToken } from '@/lib/passwordReset';
+import { logSensitiveAction } from '@/lib/auditLog';
 
 export async function POST(req: Request) {
   try {
@@ -42,6 +43,8 @@ export async function POST(req: Request) {
         data:  { usedAt: new Date() },
       }),
     ]);
+
+    logSensitiveAction({ action: 'password_reset_completed', userId: resetToken.userId, ip });
 
     return NextResponse.json({ data: { message: 'Mot de passe mis à jour.' } });
   } catch (error) {

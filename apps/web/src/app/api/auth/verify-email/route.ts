@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyEmailSchema } from '@budget-pocket/shared';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
 import { hashEmailVerificationToken } from '@/lib/emailVerification';
+import { logSensitiveAction } from '@/lib/auditLog';
 
 export async function POST(req: Request) {
   try {
@@ -38,6 +39,8 @@ export async function POST(req: Request) {
         data:  { usedAt: new Date() },
       }),
     ]);
+
+    logSensitiveAction({ action: 'email_verified', userId: verificationToken.userId, ip });
 
     return NextResponse.json({ data: { message: 'Email confirmé.' } });
   } catch (error) {

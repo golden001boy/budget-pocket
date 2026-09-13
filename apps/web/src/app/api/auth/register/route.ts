@@ -5,6 +5,7 @@ import { registerSchema } from '@budget-pocket/shared';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
 import { generateEmailVerificationToken, EMAIL_VERIFICATION_TOKEN_TTL_SECONDS } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/lib/email';
+import { logSensitiveAction } from '@/lib/auditLog';
 
 export async function POST(req: Request) {
   try {
@@ -51,6 +52,8 @@ export async function POST(req: Request) {
     });
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
     await sendVerificationEmail(user.email, `${baseUrl}/verify-email?token=${rawToken}`);
+
+    logSensitiveAction({ action: 'register', userId: user.id, email: user.email, ip });
 
     return NextResponse.json({ data: user }, { status: 201 });
   } catch (error) {

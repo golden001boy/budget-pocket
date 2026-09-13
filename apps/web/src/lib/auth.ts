@@ -6,6 +6,7 @@ import {
   rateLimit, getClientIp, loginRateLimitKey, accountLoginRateLimitKey,
   LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS, ACCOUNT_LOGIN_ATTEMPT_LIMIT,
 } from './rateLimit';
+import { logSensitiveAction } from './auditLog';
 
 // 7 days rather than 30 (story 15.8, auth hardening): bounds how long a
 // stolen/leaked session token stays valid if the device goes unused. Active
@@ -34,22 +35,32 @@ export const authOptions: NextAuthOptions = {
         const limit = await rateLimit(loginRateLimitKey(credentials.email, ip), LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
         if (!limit.success) {
           console.warn(`[auth] rate limited login attempt for ${credentials.email} from ${ip}`);
+          logSensitiveAction({ action: 'login_failure', email: credentials.email, ip, reason: 'rate_limited_ip' });
           return null;
         }
 
         const accountLimit = await rateLimit(accountLoginRateLimitKey(credentials.email), ACCOUNT_LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
         if (!accountLimit.success) {
           console.warn(`[auth] account-wide rate limit hit for ${credentials.email} (last attempt from ${ip})`);
+          logSensitiveAction({ action: 'login_failure', email: credentials.email, ip, reason: 'rate_limited_account' });
           return null;
         }
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email.toLowerCase().trim() },
         });
-        if (!user) return null;
+        if (!user) {
+          logSensitiveAction({ action: 'login_failure', email: credentials.email, ip, reason: 'no_such_account' });
+          return null;
+        }
 
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!valid) return null;
+        if (!valid) {
+          logSensitiveAction({ action: 'login_failure', userId: user.id, email: user.email, ip, reason: 'wrong_password' });
+          return null;
+        }
+
+        logSensitiveAction({ action: 'login_success', userId: user.id, email: user.email, ip });
 
         return {
           id:            user.id,

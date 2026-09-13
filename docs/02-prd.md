@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (14 ✅ + 4 🟡 sur 18)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (15 ✅ + 4 🟡 sur 19)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -170,6 +170,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.16 | Corriger le goulot `/dashboard` trouvé en story 15.13 | Should | M | ✅ | Gate Phase 6 §9.3 (suivi 15.13) |
 | 15.17 | Ne pas exposer le détail interne des erreurs sur `/api/health` | Should | S | ✅ | Gate Phase 6 §9.2, BE-09 |
 | 15.18 | Pagination sur `/api/advisor/scenarios` et `/api/planning/taxes` | Should | S | ✅ | Gate Phase 6 §9.1 (résidu de 15.3) |
+| 15.19 | Journalisation centralisée des actions sensibles (auth) | Should | S | ✅ | Gate Phase 6 §9.3, BE-08 |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1155,6 +1156,87 @@ non aligné avec le client mobile).
 [api/advisor/scenarios/route.ts](../apps/web/src/app/api/advisor/scenarios/route.ts),
 [api/planning/taxes/route.ts](../apps/web/src/app/api/planning/taxes/route.ts),
 [apps/mobile/app/(tabs)/advisor/index.tsx](../apps/mobile/app/(tabs)/advisor/index.tsx).
+
+---
+
+### Story 15.19 — Journalisation centralisée des actions sensibles (auth) · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que les actions sensibles liées à
+l'authentification (connexion, inscription, reset de mot de passe,
+vérification email) soient journalisées de façon structurée et
+centralisée, afin de pouvoir enquêter sur un incident (compte compromis,
+brute force) après coup (Gate Phase 6 §9.3, BE-08).
+
+**Constat** : jusqu'ici, ces événements n'étaient soit pas journalisés du
+tout, soit journalisés en texte libre au cas par cas (`console.warn`
+ad hoc dans `auth.ts` pour le rate limiting uniquement). Aucun format
+commun, aucune couverture des succès de connexion, inscription, reset de
+mot de passe ou vérification email.
+
+**Cadrage** : pas de changement de rôle à journaliser dans le périmètre
+réel de l'app — la console admin (`/admin/users`, Epic 12.2) est en
+lecture seule à ce jour, aucune mutation de rôle n'existe encore dans le
+code. Le catalogue de failles (BE-08) cite "login, changement de rôle"
+comme exemples, pas comme une liste exhaustive obligatoire — le périmètre
+retenu est donc les événements d'authentification réels du projet.
+
+**Critères d'acceptation**
+- [x] [`lib/auditLog.ts`](../apps/web/src/lib/auditLog.ts) — une fonction
+      `logSensitiveAction()`, format JSON structuré à une ligne
+      (`{ type: 'audit', action, userId, email, ip, reason, at }`), pas de
+      sink externe (pas de compte Sentry/Datadog disponible, même
+      situation que Sentry sans DSN depuis 15.4) — objectif : standardiser
+      la *forme* maintenant, brancher un vrai sink plus tard sans toucher
+      aux appelants.
+- [x] Branché sur 7 événements réels, dans 6 fichiers :
+      `login_success`/`login_failure` (web `lib/auth.ts` **et** mobile
+      `api/auth/mobile`, avec la raison exacte — `rate_limited_ip`,
+      `rate_limited_account`, `no_such_account`, `wrong_password`),
+      `register`, `password_reset_requested` (journalisé uniquement côté
+      serveur, sans changer la réponse volontairement identique de
+      `forgot-password` — pas de canal d'énumération ouvert),
+      `password_reset_completed`, `email_verified`,
+      `email_verification_resent`.
+- [x] Test unitaire — 6 nouveaux : 2 pour
+      [`auditLog.test.ts`](../apps/web/src/lib/__tests__/auditLog.test.ts)
+      (forme du JSON, champs optionnels absents → `null` plutôt qu'omis) et
+      4 pour
+      [`auth/mobile/route.test.ts`](../apps/web/src/app/api/auth/mobile/__tests__/route.test.ts)
+      (chaque branche de `login_failure` + `login_success`, premier test
+      de ce fichier).
+- [x] `pnpm type-check` (4/4) et `pnpm test` (84/84) verts.
+- [x] **Vérifié en direct contre la vraie BDD Neon avec le compte de démo**
+      (`demo@budget-pocket.app`) — pas seulement en unitaire : mot de passe
+      erroné → `login_failure` loggé avec `reason: wrong_password` et le
+      vrai `userId`, `401` renvoyé ; mot de passe correct (`demo1234`) →
+      `login_success` loggé avec le vrai `userId`, JWT émis, `200` renvoyé.
+      Les deux lignes JSON confirmées dans les logs du serveur de dev.
+- [ ] **Non fait, hors périmètre** : aucun sink externe branché (cohérent
+      avec l'absence de compte Sentry/Datadog) ; aucune UI de consultation
+      des logs (recherche/dashboard) — la story couvre la journalisation,
+      pas son exploitation.
+
+**Découverte pendant cette story, sans rapport avec la journalisation en
+elle-même** : en vérifiant l'audit log en direct, la BDD Neon s'est révélée
+**joignable** dans cette session — contrairement à ce qu'indiquait
+`/api/health` plus tôt dans la même session (`db: error`). De même,
+`git ls-remote origin` (GitHub), non joignable en tout début de session
+(stories 15.14/15.15), a été retesté avec succès pendant cette story. Voir
+la correction dans la section "Prochaine action recommandée" plus haut
+dans ce document — l'accès réseau de ce sandbox n'était pas bloqué en
+continu comme documenté à tort dans les stories précédentes, probablement
+une latence de démarrage (cold-start du compute Neon Free, qui se met en
+veille) plutôt qu'un vrai blocage réseau.
+
+**Implémentation** :
+[lib/auditLog.ts](../apps/web/src/lib/auditLog.ts),
+[lib/auth.ts](../apps/web/src/lib/auth.ts),
+[api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts),
+[api/auth/register/route.ts](../apps/web/src/app/api/auth/register/route.ts),
+[api/auth/forgot-password/route.ts](../apps/web/src/app/api/auth/forgot-password/route.ts),
+[api/auth/reset-password/route.ts](../apps/web/src/app/api/auth/reset-password/route.ts),
+[api/auth/verify-email/route.ts](../apps/web/src/app/api/auth/verify-email/route.ts),
+[api/auth/resend-verification/route.ts](../apps/web/src/app/api/auth/resend-verification/route.ts).
 
 ---
 

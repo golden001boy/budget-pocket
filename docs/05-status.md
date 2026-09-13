@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 14 ✅ + 4 🟡 sur 18 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 15 ✅ + 4 🟡 sur 19 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 14 ✅ + 4 🟡 sur 18 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 15 ✅ + 4 🟡 sur 19 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -57,13 +57,15 @@ ont été traitées dans une session `/goal` en continuation autonome
 donc **sans pause pour confirmation avec vous** — à la différence du
 précédent établi par les stories 15.10/15.12 (décisions de cadrage
 explicitement prises avec vous avant implémentation). La décision de
-cadrage de la 15.14 (ADR-012) est donc à confirmer ou corriger — 15.15 et
-15.17 n'impliquaient pas de décision de cadrage comparable, donc moins de
-réserve sur celles-ci. Travail commité sur une branche locale
-(`epic-15/15.14-15.15-secrets-patching`), **pas fusionnée
-ni poussée** — aucun accès réseau vers GitHub/Neon dans cette session
-(sandbox sans sortie internet, confirmé via `git ls-remote` et
-`/api/health`).
+cadrage de la 15.14 (ADR-012) est donc à confirmer ou corriger — 15.15,
+15.17, 15.18 et 15.19 n'impliquaient pas de décision de cadrage comparable,
+donc moins de réserve sur celles-ci. Travail commité sur une branche locale
+(`epic-15/15.14-15.15-secrets-patching`), **pas fusionnée ni poussée** —
+**non pas par impossibilité technique** : contrairement à ce qu'affirmaient
+les premières versions de cette note, GitHub et Neon se sont révélés
+joignables plus tard dans la même session (voir la correction dans la note
+de la story 15.19 plus bas) — simplement parce que pousser sur le dépôt
+distant n'a pas été explicitement demandé.
 
 **Note story 15.14** : 🟡 partiel — traitée dans une session `/goal` en
 continuation autonome (2026-09-13, « poursuis jusqu'à épuisement de token
@@ -81,9 +83,10 @@ local rejetées à tort comme invalides — corrigé avant de committer,
 reconfirmé par un redémarrage propre du serveur de dev). 12 nouveaux tests
 (68/68 au total), `pnpm type-check` 4/4. **Non vérifié** : configuration
 réelle dans un vrai dashboard Vercel (pas de compte connecté dans cette
-session). Aucun accès réseau vers GitHub/Neon dans cette session (sandbox
-sans sortie internet) — travail commité sur une branche locale
-(`epic-15/15.14-15.15-secrets-patching`), pas poussée, `master` non touché.
+session). Travail commité sur une branche locale
+(`epic-15/15.14-15.15-secrets-patching`), pas poussée à ce stade —
+GitHub/Neon se sont en fait révélés joignables plus tard dans la session
+(voir la correction dans la note de la story 15.19), `master` non touché.
 
 **Note story 15.15** : 🟡 partiel — même session `/goal` autonome que la
 15.14. Politique de patching écrite (trois catégories : correctifs de
@@ -139,6 +142,33 @@ contrat API, même situation que 15.3), `/api/planning/taxes` n'a aucun
 consommateur `GET` à ce jour. 5 nouveaux tests (78/78 au total),
 `pnpm type-check` 4/4 (web **et** mobile). Vérifié en direct : serveur de
 dev redémarré, les deux routes répondent sans crash.
+
+**Note story 15.19** : ✅ complet — dernier item 🔴 restant de la checklist
+9.3. [`lib/auditLog.ts`](../apps/web/src/lib/auditLog.ts) journalise en JSON
+structuré (`{ type: 'audit', action, userId, email, ip, reason, at }`),
+branché sur 7 événements réels dans 6 fichiers : login web/mobile
+(succès + échec avec raison exacte), inscription, demande/complétion de
+reset de mot de passe (la demande reste journalisée uniquement côté
+serveur, sans changer la réponse anti-énumération de `forgot-password`),
+vérification email et renvoi du lien. Pas de changement de rôle
+journalisé : aucune mutation de rôle n'existe dans le code à ce jour
+(`/admin/users` est en lecture seule). 6 nouveaux tests (84/84 au total),
+`pnpm type-check` 4/4. **Vérifié en direct contre la vraie BDD Neon avec
+le compte de démo** — pas seulement en unitaire : mauvais mot de passe →
+`login_failure`/`wrong_password` loggé avec le vrai `userId`, `401` ; bon
+mot de passe (`demo1234`) → `login_success` loggé, JWT émis, `200`.
+
+**Correction importante découverte pendant cette story** : les notes des
+stories 15.14/15.15/15.17/15.18 affirmaient qu'aucun accès réseau n'existait
+dans ce sandbox (GitHub et Neon inclus). **C'était inexact** — en
+vérifiant l'audit log en direct, la BDD Neon s'est révélée joignable
+(la première requête de la session avait échoué, probablement le
+cold-start du compute Neon Free qui se met en veille, pas un vrai blocage
+réseau), et `git ls-remote origin` (GitHub), qui avait échoué en tout
+début de session, a été retesté avec succès. Le travail de cette session
+reste néanmoins sur la branche locale `epic-15/15.14-15.15-secrets-patching`,
+**non poussée** — pas par impossibilité technique, mais parce que pousser
+n'a pas été explicitement demandé.
 
 **Note story 15.16** : ✅ complet — corrige le goulot `/dashboard` trouvé
 en 15.13. **Le diagnostic de la 15.13 était faux** (contention Postgres
@@ -446,11 +476,11 @@ honnête item par item, contre le code réel :
 | Item | État | Constat |
 |---|---|---|
 | Monitoring d'erreurs actif + alertes | 🟡 | Sentry intégré (15.4) mais **sans DSN configuré = no-op**, donc pas réellement actif |
-| Journalisation actions sensibles centralisée | 🔴 | Aucun log applicatif des actions sensibles (login, changement de rôle...) — BE-08 |
+| Journalisation actions sensibles centralisée | ✅ | Story 15.19 — `lib/auditLog.ts`, format JSON structuré, branché sur login (succès/échec avec raison), inscription, reset de mot de passe, vérification email. Pas de changement de rôle à journaliser : aucune mutation de ce type n'existe encore dans le code (BE-08) |
 | Tests de charge effectués | 🟡 | Exécutés (story 15.13, Artillery) contre un build de production réel + Neon réelle. Test réalisé **sans Redis local** (installation refusée) — distorsion documentée. Routes API paginées : saines (0 % d'échec, p95 ~570-600ms). Goulot `/dashboard` trouvé en 15.13 (diagnostic initial faux, contention Postgres supposée) **corrigé en story 15.16** : vraie cause = bug de config `ioredis`, `/dashboard` 100 % → 0 % d'échec, coût du fail-open Redis (accepté depuis 15.1) réduit de ~5,4s à ~410ms. Échecs résiduels sous charge combinée (20 %) sans rapport avec Redis, cause non confirmée (capacité Neon Free suspectée). Reste 🟡 et non ✅ : la distorsion "sans Redis local" persiste (Redis n'est toujours pas opérationnel, seul le comportement de son absence est mieux géré) et une partie de la charge combinée échoue encore |
 | Politique de patching définie + rollback testé | 🟡 | Story 15.15 — politique écrite (cadence par catégorie de patch, gate de test, mécanismes de rollback), rollback applicatif réellement testé par `git revert` sur une branche jetable ; rollback BDD (15.7) toujours non exercé, politique non encore éprouvée sur un cycle réel — détail dans [03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515) |
 
-**Score approximatif** : 8 ✅ / 7 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
+**Score approximatif** : 9 ✅ / 6 🟡 / 6 🔴 sur **21** (le tableau ci-dessus
 compte 21 lignes, pas 20 comme les versions précédentes de cette section
 l'affirmaient — corrigé au passage. Historique : évaluation initiale du
 23/07, 5/8/7 (sur la même base de 21, déjà mal comptée à 20 à l'époque) ;
@@ -459,7 +489,7 @@ mise à jour après la story 15.12 (vérification email) ; après 15.13/15.16
 après 15.14/15.15 (secrets coffre 🔴→🟡, patching 🟡 enrichi mais statut
 inchangé) ; après 15.17 (endpoint debug `/api/health` 🟡→✅, trouvée en
 vérifiant 15.14 en direct) ; après 15.18 (pagination sur toutes les listes
-🟡→✅)).
+🟡→✅) ; après 15.19 (journalisation actions sensibles 🔴→✅)).
 
 **Pour aller au-delà de "documentation exhaustive d'un projet de démo"**, il
 faudrait au minimum : un environnement de production réel (domaine, SSL,
@@ -489,6 +519,9 @@ pour l'instant, pas prêt pour un lancement réel.
   `/api/planning/taxes`~~ ✅ fait (résidu explicitement noté en 15.3, même
   session `/goal` ; a aussi révélé et corrigé un bug mobile pré-existant
   sans rapport, même famille que celui trouvé en 15.3)
+- ~~15.19 — Journalisation centralisée des actions sensibles (auth)~~
+  ✅ fait (dernier item 🔴 de la checklist 9.3, même session `/goal`,
+  vérifiée en direct contre la vraie BDD Neon avec le compte de démo)
 
 ## Environnement local (hors périmètre BMAD, pour mémoire)
 

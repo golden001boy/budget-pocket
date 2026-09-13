@@ -4,6 +4,7 @@ import { forgotPasswordSchema } from '@budget-pocket/shared';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
 import { generatePasswordResetToken, PASSWORD_RESET_TOKEN_TTL_SECONDS } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/lib/email';
+import { logSensitiveAction } from '@/lib/auditLog';
 
 // Always the same response, whether or not the email is registered — a
 // different response (or a different response time, notably) would let an
@@ -60,6 +61,11 @@ export async function POST(req: Request) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
     const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
     await sendPasswordResetEmail(user.email, resetUrl);
+
+    // Logged server-side only — the response above stays identical whether
+    // or not the account exists, so this doesn't open an enumeration
+    // side-channel (BE-01/API-01 pattern, see comment on GENERIC_RESPONSE).
+    logSensitiveAction({ action: 'password_reset_requested', userId: user.id, email: user.email, ip });
 
     return GENERIC_RESPONSE;
   } catch (error) {
