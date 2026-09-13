@@ -1,9 +1,10 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-07-26 (story 15.16 — correction du goulot
-`/dashboard` trouvé en 15.13 ; diagnostic initial de la 15.13 invalidé et
-corrigé)
+**Dernière mise à jour** : 2026-09-13 (story 15.14 — coffre de secrets :
+décision de cadrage Vercel + validation Zod des variables d'environnement
+au boot ; décision prise en session `/goal` autonome, sans vous — voir note
+ci-dessous)
 
 ## Vue d'ensemble des phases
 
@@ -12,7 +13,7 @@ corrigé)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 12 ✅ + 2 🟡 + 2 🔴 sur 16 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 12 ✅ + 3 🟡 + 1 🔴 sur 16 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,19 +35,40 @@ corrigé)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 12 ✅ + 2 🟡 + 2 🔴 sur 16 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16 ✅ ; 15.7, 15.8 🟡 ; 15.14–15.15 🔴 non commencées) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 12 ✅ + 3 🟡 + 1 🔴 sur 16 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16 ✅ ; 15.7, 15.8, 15.14 🟡 ; 15.15 🔴 non commencée) |
 
 ## Prochaine action recommandée
 
 15.11 (reset de mot de passe), 15.12 (vérification email), 15.13 (tests de
 charge) et 15.16 (correctif du goulot dashboard trouvé en 15.13) faites.
-Les deux derniers Must de la checklist Phase 6 §9.1 sont traités ; il
-reste 15.14 (coffre de secrets) et 15.15 (politique de patching), toutes
-deux Could, créées suite à `bmad prelaunch` (2026-07-23, détail dans la
-section Gate Phase 6 plus bas). Le MFA (volet non traité de 15.8, voir
-ADR-008) reste sans story dédiée. Voir
+Les deux derniers Must de la checklist Phase 6 §9.1 sont traités.
+**15.14 (coffre de secrets) traitée partiellement** (🟡, voir note
+ci-dessous) ; il reste **15.15** (politique de patching), Could, créée
+suite à `bmad prelaunch` (2026-07-23, détail dans la section Gate Phase 6
+plus bas). Le MFA (volet non traité de 15.8, voir ADR-008) reste sans
+story dédiée. Voir
 [04-tests.md §7](04-tests.md#7-synthèse--priorités-avant-bmad-prelaunch)
 pour le détail complet.
+
+**Note story 15.14** : 🟡 partiel — traitée dans une session `/goal` en
+continuation autonome (2026-09-13, « poursuis jusqu'à épuisement de token
+de cette session »), donc **la décision de cadrage a été prise sans vous**,
+contrairement à ce que la story prévoyait explicitement ("à trancher avec
+vous avant de commencer") et contrairement au précédent établi par 15.10/
+15.12. Décision retenue : variables d'environnement chiffrées Vercel comme
+coffre dédié (pas de Vault/AWS Secrets Manager), voir
+[03-architecture.md ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514)
+— **à confirmer ou corriger avec vous**. Garde-fou de code livré et
+vérifié : [lib/env.ts](../apps/web/src/lib/env.ts) valide au boot
+(`instrumentation.ts`) que les secrets requis sont présents/bien formés ;
+un vrai bug a été attrapé en le branchant (clés Stripe vides du `.env`
+local rejetées à tort comme invalides — corrigé avant de committer,
+reconfirmé par un redémarrage propre du serveur de dev). 12 nouveaux tests
+(68/68 au total), `pnpm type-check` 4/4. **Non vérifié** : configuration
+réelle dans un vrai dashboard Vercel (pas de compte connecté dans cette
+session). Aucun accès réseau vers GitHub/Neon dans cette session (sandbox
+sans sortie internet) — travail commité sur une branche locale
+(`epic-15/15.14-15.15-secrets-patching`), pas poussée, `master` non touché.
 
 **Note story 15.16** : ✅ complet — corrige le goulot `/dashboard` trouvé
 en 15.13. **Le diagnostic de la 15.13 était faux** (contention Postgres
@@ -346,7 +368,7 @@ honnête item par item, contre le code réel :
 | CSRF protégé partout | 🟡 | Cookie `SameSite=Lax` par défaut NextAuth ; pas de token CSRF explicite sur les routes API custom (FE-04) |
 | Headers de sécurité présents | ✅ | CSP/X-Frame-Options/etc déployés (FE-06) |
 | Aucun endpoint debug exposé | 🟡 | Aucun `/debug` trouvé, mais `/api/health` expose le message d'erreur Prisma brut (BE-09) |
-| Secrets depuis un coffre dédié | 🔴 | `.env` local uniquement, pas de Vault/AWS Secrets Manager (déjà noté §5.2 item j) |
+| Secrets depuis un coffre dédié | 🟡 | Story 15.14 — décision de cadrage prise (variables d'env chiffrées Vercel plutôt que Vault/AWS Secrets Manager, [ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514), à confirmer avec vous) + validation Zod des secrets au boot (`lib/env.ts`) ; non vérifié sur un vrai compte Vercel |
 | Pipeline CI/CD protégé | ✅ | Story 15.6, confirmé actif |
 | Scan SCA sans vulnérabilité critique | ✅ | `pnpm audit` à **0 vulnérabilité** (story 15.10) |
 

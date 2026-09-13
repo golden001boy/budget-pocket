@@ -584,6 +584,62 @@ plus grande échelle réelle, mais ce n'est pas ce qui a résolu le goulot
 mesuré ici (voir Story 15.16 pour la distinction claire entre les deux
 changements).
 
+### ADR-012 — Coffre de secrets : variables d'environnement Vercel plutôt que Vault/AWS Secrets Manager (story 15.14)
+
+**Contexte** : Gate Phase 6 §9.2.j ("Secrets depuis un coffre dédié") était
+🔴 — `.env` local uniquement, aucun coffre-fort. La story indiquait
+explicitement une décision de cadrage à trancher avant implémentation.
+
+**Décision prise de façon autonome, pas avec vous** : cette story a été
+traitée dans une session `/goal` en continuation autonome (« poursuis
+jusqu'à épuisement de token de cette session », 2026-09-13), sans pause
+pour confirmation — contrairement aux stories précédentes (15.10, 15.12)
+où le cadrage avait explicitement été discuté avec vous avant
+implémentation. Marqué ici pour transparence, à rouvrir si vous jugez le
+choix ci-dessous incorrect.
+
+**Choix retenu** : les **variables d'environnement chiffrées de Vercel**
+(Project Settings → Environment Variables, scopées par environnement
+Development/Preview/Production, chiffrées au repos) constituent le coffre
+dédié pour ce projet, plutôt que d'introduire Vault ou AWS Secrets Manager.
+
+**Raisonnement** :
+- La cible de déploiement est déjà Vercel ([§10](#10-cible-de-déploiement),
+  `vercel.json`) — aucun autre runtime cloud n'est en jeu à ce jour.
+- Aucune prod réelle n'existe encore (Gate Phase 6 : "Environnements
+  dev/staging/prod séparés" reste 🔴) — introduire un service tiers payant
+  ou une infra à opérer (Vault) avant même d'avoir un déploiement réel
+  serait prématuré et non vérifiable dans cette session (pas d'accès à un
+  compte Vercel/Vault pour le confirmer en direct, même limitation que
+  Sentry/GitHub sur des stories antérieures).
+- Un vrai coffre tiers (Vault, AWS Secrets Manager) reste la bonne
+  escalade si le projet dépasse un seul provider de déploiement, a besoin
+  d'audit de rotation fin, ou de partage de secrets entre plusieurs
+  services/équipes — aucun de ces besoins n'existe aujourd'hui.
+
+**Ce qui a été livré en plus de la décision de cadrage** (la partie
+vérifiable en code, sans accès à un compte Vercel réel) :
+[`lib/env.ts`](../apps/web/src/lib/env.ts) — schéma Zod validant la forme
+des variables d'environnement serveur au boot (`DATABASE_URL`,
+`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `CRON_SECRET` requises ; Stripe/Redis/
+Resend/Sentry/IA/marché optionnelles mais bien formées si présentes —
+chaîne vide traitée comme absente, même convention que Sentry sans DSN).
+Appelé depuis `instrumentation.ts` (runtime `nodejs` uniquement, avant
+l'init Sentry) : un déploiement mal configuré échoue immédiatement au
+boot avec une erreur agrégée listant tous les champs en cause, plutôt que
+de tomber en panne plus tard au premier appel touchant la variable
+manquante. Un bug réel a été attrapé en écrivant ce garde-fou : la
+première version du schéma rejetait les clés Stripe vides comme des
+erreurs, alors que ce projet les traite délibérément comme "non
+configuré" (même logique que Sentry/Resend) — corrigé avant de committer
+(`emptyToUndefined`, testé dans
+[`env.test.ts`](../apps/web/src/lib/__tests__/env.test.ts)).
+
+**Non fait, hors périmètre vérifiable ici** : confirmation en direct que
+les variables sont effectivement configurées comme "Production" scopées
+dans un vrai dashboard Vercel — nécessiterait un compte Vercel connecté,
+non disponible dans cette session.
+
 ## 7. Mapping Story → Fichiers affectés
 
 Voir chaque fichier `specs/epic-XX-*.md` — chaque story y liste ses fichiers
@@ -610,7 +666,7 @@ Utilisés dans [02-prd.md](02-prd.md) et [05-status.md](05-status.md) :
 | g | **TLS** | HTTPS imposé sur comms externes | 🟡 Dépend de l'hébergeur (Vercel force HTTPS) ; non vérifié en local ; aucune vérification explicite dans le code |
 | h | **CORS** | Configuration restrictive, pas de `*` | ✅ Aucune configuration CORS explicite trouvée — API et front sont same-origin par design, donc pas d'exposition cross-origin |
 | i | **CSP** | Content Security Policy stricte | ✅ Déployée globalement dans [next.config.mjs](../apps/web/next.config.mjs) (`default-src 'self'`, etc.) |
-| j | **Coffre secrets** | Variables d'env via gestionnaire dédié | 🔴 `.env` local uniquement, pas de coffre-fort (Vault/AWS Secrets Manager) — acceptable en dev, bloquant pour la Phase 6 |
+| j | **Coffre secrets** | Variables d'env via gestionnaire dédié | 🟡 Décision de cadrage prise (story 15.14, [ADR-012](#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514)) : variables d'env chiffrées Vercel plutôt que Vault/AWS Secrets Manager, plus validation Zod au boot (`lib/env.ts`) ; non vérifié en direct sur un vrai compte Vercel |
 
 Détail complet des tests de validation par item : [04-tests.md](04-tests.md).
 

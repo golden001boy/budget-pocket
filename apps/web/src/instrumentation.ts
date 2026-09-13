@@ -7,6 +7,14 @@ import * as Sentry from '@sentry/nextjs';
 // unset — it just skips setting up a transport, no error, nothing sent.
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // Story 15.14: fail fast with one clear, aggregated error if a required
+    // secret is missing/malformed, instead of a confusing failure deep
+    // inside whichever request handler first touches it. Nodejs runtime
+    // only — the edge runtime (middleware) never touches the secrets this
+    // checks (DATABASE_URL, Stripe, cron) and shares the same process.env
+    // on Vercel regardless, so validating it twice would be redundant.
+    const { assertServerEnv } = await import('./lib/env');
+    assertServerEnv();
     await import('../sentry.server.config');
   }
   if (process.env.NEXT_RUNTIME === 'edge') {
