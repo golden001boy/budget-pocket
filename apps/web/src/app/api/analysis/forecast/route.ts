@@ -8,7 +8,7 @@ import { cacheGetOrSet, CACHE_TTL } from '@/lib/cache';
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const months = Math.min(

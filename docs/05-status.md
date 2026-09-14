@@ -802,8 +802,12 @@ session (signaler en §13/ici plutôt que trancher seul une question de
 conception), et parce qu'ils n'ont pas encore passé l'étape de
 vérification.
 
-**Aucun fichier de code n'a été modifié par cette revue.** Seul ce document
-est touché par ce point de reprise.
+**Mise à jour (même session, après ce point de reprise)** : les deux
+dérives listées ci-dessous comme "trouvées" ont depuis été corrigées
+directement (§Prochaine action, points 3 et 4 exécutés) — voir le
+paragraphe qui suit cette section pour le détail. Le reste (relancer les
+3 angles interrompus, dédupliquer/vérifier l'ensemble) n'a **pas** été
+fait et reste à faire dans une session future.
 
 ### Angles terminés (5/8) — findings bruts, non vérifiés
 
@@ -857,22 +861,32 @@ dans la prochaine session, pas à reprendre en l'état.
 
 1. Relancer les 3 angles interrompus (`code-review high master..HEAD` à
    nouveau, ou cibler les 3 angles manquants seulement si le skill le
-   permet).
+   permet). **Toujours à faire.**
 2. Dédupliquer l'ensemble des 8 angles puis faire passer l'étape de
    vérification prévue par le skill (confirmer chaque finding contre le
-   code réel, éliminer les faux positifs).
-3. Pour les deux bugs de divergence réels déjà confirmés ci-dessus (GET
+   code réel, éliminer les faux positifs). **Toujours à faire.**
+3. ~~Pour les deux bugs de divergence réels déjà confirmés ci-dessus (GET
    `advisor/scenarios` sans `try/catch`, message 401 non uniforme) : ce sont
    des corrections de code mineures et sans ambiguïté (règle #3 — en cas de
    divergence code/doc ou de bug de cohérence, on corrige le code), pas des
    décisions de conception — les corriger directement une fois vérifiées,
-   sans repasser par une pause de confirmation.
-4. Pour le thème de fond ("pas de wrapper de route partagé") : **c'est une
-   décision de conception** (introduire un HOF `withApiRoute`/middleware
-   partagé toucherait ~12 fichiers de routes) — à documenter en
+   sans repasser par une pause de confirmation.~~ **Fait** (même session,
+   après ce point de reprise) : `GET /api/advisor/scenarios` enveloppé
+   dans un `try/catch` identique à `POST` ; les 9 occurrences de
+   `'Non autorisé'` (analysis/snapshot, analysis/forecast,
+   transactions/route, transactions/[id], budgets) uniformisées vers
+   `'Unauthorized'` (forme déjà majoritaire — 21 occurrences — et attendue
+   par `middleware.test.ts`). Aucun test ne dépendait de la chaîne
+   française. Revérifié : `pnpm test` 247/247, `pnpm type-check` 4/4,
+   `pnpm build` 50/50 pages, tous verts après le changement.
+4. ~~Pour le thème de fond ("pas de wrapper de route partagé") : **c'est une
+   décision de conception**~~ **Fait** : documenté comme quatrième
+   découverte dans
    [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
-   comme une quatrième découverte plutôt qu'à trancher seul, cohérent avec
-   le traitement des trois découvertes précédentes de cette section.
+   plutôt que tranché seul — la décision du wrapper (HOF par handler vs.
+   middleware centralisé vs. statu quo) reste à vous.
 5. Revérifier `pnpm test` / `pnpm type-check` / `pnpm build` après toute
    correction, committer avec un message décrivant précisément ce qui a été
-   trouvé/corrigé (pas juste "code review fixes").
+   trouvé/corrigé (pas juste "code review fixes"). **Fait pour les points 3
+   et 4** (voir ci-dessus) ; à refaire après le point 1/2 quand ils seront
+   traités.

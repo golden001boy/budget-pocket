@@ -943,11 +943,12 @@ signalé pour une story de suivi.
 
 ## 13. Dette technique identifiée (non traitée, signalée pour décision)
 
-Trois découvertes de fin de session, aucune transformée en story — une
+Quatre découvertes de fin de session, aucune transformée en story — une
 décision de produit/architecture est nécessaire avant d'agir
 (garder/réparer/supprimer pour la première, construire ou non pour la
-deuxième, choisir la méthode de calcul pour la troisième), donc listées
-ici plutôt que corrigées unilatéralement.
+deuxième, choisir la méthode de calcul pour la troisième, choisir la forme
+du wrapper partagé pour la quatrième), donc listées ici plutôt que
+corrigées unilatéralement.
 
 **Le package `packages/api-client` est du code mort dans toute la
 codebase, et son mécanisme d'authentification ne fonctionnerait de toute
@@ -1063,3 +1064,57 @@ dans les tests eux-mêmes
 ([`retirement.test.ts`](../apps/web/src/lib/simulators/__tests__/retirement.test.ts),
 [`stockGrowth.test.ts`](../apps/web/src/lib/simulators/__tests__/stockGrowth.test.ts))
 par des assertions qui vérifient l'écart plutôt que de le masquer.
+
+### Aucun wrapper de route API partagé — `try/catch`/rate-limit/session recopiés à la main dans ~12 fichiers
+
+Trouvé par une revue de code holistique (`code-review high master..HEAD`)
+lancée après la story 15.29 sur l'ensemble de la branche (voir le point de
+reprise dans [05-status.md](05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14)),
+remonté indépendamment par 4 des 5 sous-agents ("angles") qui ont terminé
+avant que la revue ne soit interrompue par une limite de session.
+
+**Constat** : `apps/web/src` n'a aucun helper de type `withAuth`,
+`apiHandler` ou HOF de route équivalent (confirmé : recherche exhaustive,
+aucun résultat). Trois blocs identiques sont donc recopiés à la main, route
+par route, plutôt que factorisés une seule fois :
+
+- Le bloc session (`getServerSession` puis `if (!session) return 401`),
+  dans ~21 handlers.
+- Le bloc rate limit (`checkMutationRateLimit` puis `if (!limit.success)
+  return 429`, story 15.20), dans ~13 handlers de mutation.
+- Le bloc `try { ... } catch (error) { console.error(...); return 500 }`
+  (story 15.24), dans ~21 handlers à travers ~12 fichiers.
+
+**La duplication a déjà produit deux dérives concrètes**, corrigées
+directement (règle #3 — divergence, pas décision de conception) dans le
+cadre de ce même point de reprise, sans attendre un arbitrage :
+`GET /api/advisor/scenarios` avait été oublié par le passage `try/catch`
+de la story 15.24 alors que `POST` du même fichier l'avait déjà (corrigé) ;
+le message d'erreur 401 divergeait entre `'Non autorisé'` (9 occurrences,
+budgets/transactions/analysis) et `'Unauthorized'` (21 occurrences,
+accounts/goals/portfolio/planning/user/cron/advisor) — uniformisé sur
+`'Unauthorized'`, la forme majoritaire et déjà attendue par
+`middleware.test.ts`. Ces deux corrections ne changent le comportement
+d'aucun chemin nominal.
+
+De la même famille, déjà signalée séparément dans cette section (première
+découverte ci-dessus, sous un angle différent) : les schémas Zod complets
+mais inutilisés de `packages/shared` (`retirement.ts`, `portfolio.ts`,
+`goal.ts`) restent non importés par leurs routes, qui maintiennent chacune
+un schéma local légèrement divergent — la même cause racine (pas de
+convention partagée forçant la réutilisation) que le problème décrit ici.
+
+**Non traité ici** — introduire un wrapper partagé (HOF `withApiRoute`,
+ou middleware Next.js étendu) toucherait la totalité des ~12 fichiers de
+routes API du projet ; c'est une décision d'architecture qui va au-delà
+d'une correction de bug isolée (il faut choisir la forme du wrapper —
+HOF par handler ? middleware centralisé ? — et son contrat d'erreur),
+donc laissée à votre arbitrage plutôt que tranchée seule, cohérent avec le
+traitement des trois découvertes précédentes. Options possibles : (a) un
+HOF `withApiRoute(handler, { rateLimit: boolean })` enveloppant
+session+try/catch+rate-limit optionnel, appelé une fois par export dans
+chaque `route.ts` ; (b) centraliser dans `middleware.ts` (déjà doté d'un
+`config.matcher` qui couvre la plupart de ces chemins, mais pas tous —
+`/api/user/profile` n'y figure pas, protégé uniquement par son propre
+contrôle inline) ; (c) ne rien changer et accepter le coût de maintenance
+déjà mesuré (deux dérives trouvées en une seule revue).

@@ -47,9 +47,15 @@ options dans
 **⚠️ Point de reprise en attente (2026-09-14)** : une revue de code
 holistique `code-review high master..HEAD` (auto-initiée, non demandée),
 lancée après la 15.29, s'est arrêtée **avant sa fin** sur une limite de
-session (3 des 8 angles sur une limite de session, findings non
-dédupliqués/non vérifiés). Aucun code n'a été touché. Détail complet et
-prochaines actions dans
+session (3 des 8 angles interrompus, à relancer ; les 5 autres ont rendu
+des findings non dédupliqués/non vérifiés). Deux dérives déjà confirmées
+par cette revue ont depuis été corrigées dans la même session (`GET
+/api/advisor/scenarios` sans `try/catch`, message 401 non uniforme —
+uniformisé sur `'Unauthorized'`), et la question de fond qu'elle a soulevée
+(aucun wrapper de route API partagé) ajoutée comme quatrième découverte en
+[03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
+Reste à faire : relancer les 3 angles interrompus, dédupliquer/vérifier
+l'ensemble. Détail dans
 [docs/05-status.md §Point de reprise](docs/05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14)
 — à lire avant toute nouvelle story.
 

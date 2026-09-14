@@ -28,18 +28,28 @@ const createScenarioSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
-  const { skip, take, page, pageSize } = parsePagination(searchParams);
-  const where = { userId: session.user.id };
+    const { searchParams } = new URL(req.url);
+    const { skip, take, page, pageSize } = parsePagination(searchParams);
+    const where = { userId: session.user.id };
 
-  const [scenarios, total] = await Promise.all([
-    prisma.scenario.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
-    prisma.scenario.count({ where }),
-  ]);
-  return NextResponse.json({ data: scenarios, meta: buildPaginationMeta(total, page, pageSize) });
+    const [scenarios, total] = await Promise.all([
+      prisma.scenario.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
+      prisma.scenario.count({ where }),
+    ]);
+    return NextResponse.json({ data: scenarios, meta: buildPaginationMeta(total, page, pageSize) });
+  } catch (error) {
+    // Checkpoint 2026-09-14 (holistic code review): story 15.24's
+    // try/catch sweep targeted 12 files/21 handlers but missed this GET,
+    // the one handler in this file left without it despite POST below
+    // having one since that same story — same fragility class it was
+    // meant to eliminate everywhere.
+    console.error('[advisor/scenarios:GET]', error);
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {

@@ -10,7 +10,7 @@ import { checkMutationRateLimit } from '@/lib/rateLimit';
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const { skip, take, page, pageSize } = parsePagination(searchParams);
@@ -49,7 +49,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const limit = await checkMutationRateLimit(session.user.id);
     if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
