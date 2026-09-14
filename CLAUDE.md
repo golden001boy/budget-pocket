@@ -30,18 +30,21 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 24 ✅ + 4 🟡 sur 28, plus aucune story 🔴. 15.7
+sécurité/prod) est 🟡 25 ✅ + 4 🟡 sur 29, plus aucune story 🔴. 15.7
 (backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
 documentés (MFA reporté, voir ADR-008). **Dette technique signalée, non
-traitée** (deux découvertes, décisions volontairement laissées à vous) :
+traitée** (trois découvertes, décisions volontairement laissées à vous) :
 `packages/api-client` est du code mort avec un mécanisme d'auth qui ne
 fonctionnerait pas contre ce backend ; cinq répertoires de route API sous
 `apps/web/src/app/api` n'ont jamais eu de `route.ts`
 (`accounts/[id]`, `portfolio/[id]`, `alerts/[id]`, `admin/stats`,
-`admin/users`) — détail et options dans
+`admin/users`) ; `retirement.ts`/`stockGrowth.ts` divergent de ~2,5-3 %
+entre leur total final et le dernier point de `projectionByYear` (sans
+impact aujourd'hui, ce champ n'est rendu nulle part dans l'UI) — détail et
+options dans
 [docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
 
-**Stories 15.14 à 15.28 traitées le 2026-09-13** dans une session `/goal`
+**Stories 15.14 à 15.29 traitées le 2026-09-13** dans une session `/goal`
 en continuation autonome (« poursuis jusqu'à épuisement de token de cette
 session »), **sans pause pour confirmation avec vous** — contrairement au
 précédent établi par 15.10/15.12. Résumé (détail complet story par story
@@ -98,6 +101,12 @@ dans [docs/05-status.md](docs/05-status.md), section Gate Phase 6) :
   en 15.24 — 10 tests couvrant tendance, plancher à zéro, accumulation du
   patrimoine net, rollover d'année, tri chronologique, niveaux de
   confiance. ✅
+- **15.29** dernier trou "simulateurs" noté depuis 15.9 — 23 tests sur
+  `realEstate.ts`/`retirement.ts`/`stockGrowth.ts`. A trouvé un écart réel
+  (~2,5-3 %) entre le total final et le dernier point de
+  `projectionByYear` sur 2 des 3 simulateurs (formule fermée vs. boucle
+  annuelle) — sans impact aujourd'hui (champ non rendu dans l'UI),
+  documenté dans les tests et en §13. ✅
 
 15.17–15.21 vérifiées en direct contre la vraie BDD Neon avec le compte de
 démo (connexions mobile réelles, écritures de test supprimées après coup),

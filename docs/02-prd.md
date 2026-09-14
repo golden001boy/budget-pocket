@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (24 ✅ + 4 🟡 sur 28)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (25 ✅ + 4 🟡 sur 29)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -180,6 +180,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.26 | Câbler un test runner (`jest-expo`) pour `apps/mobile` | Should | M | ✅ | Gap noté depuis 15.9 : "apps/mobile n'a pas de runner du tout" |
 | 15.27 | Tests pour `formatCurrency`/`convertToXOF` (`packages/shared`) | Could | S | ✅ | Logique argent réelle, utilisée partout, jamais testée |
 | 15.28 | Tests pour `projectForecast` (régression linéaire, prévisions financières) | Should | S | ✅ | Testé uniquement par mock dans la story 15.24, jamais directement |
+| 15.29 | Tests pour les 3 simulateurs (immobilier/retraite/bourse) | Should | S | ✅ | Gap "simulateurs" noté depuis 15.9, jamais comblé jusqu'ici |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1813,6 +1814,68 @@ n'avait jamais été exercée.
 
 **Implémentation** :
 [lib/analytics/__tests__/forecast.test.ts](../apps/web/src/lib/analytics/__tests__/forecast.test.ts).
+
+---
+
+### Story 15.29 — Tests pour les 3 simulateurs (immobilier/retraite/bourse) · ✅ Done
+
+**Story** : couvrir `lib/simulators/realEstate.ts`, `retirement.ts` et
+`stockGrowth.ts` — logique financière réelle (amortissement de prêt,
+capitalisation composée, rente future) utilisée par le conseiller IA
+(`ScenarioList.tsx`), jamais testée. C'est précisément le mot
+"simulateurs" cité comme trou de couverture depuis la story 15.9, jamais
+comblé explicitement jusqu'ici (les stories suivantes avaient fermé
+"routes API"/"analytique" mais pas celui-ci).
+
+**Découverte pendant l'écriture des tests, non un bug caché mais un
+écart réel** : `retirement.ts` et `stockGrowth.ts` renvoient chacun deux
+chiffres qui devraient représenter la même quantité mais divergent de
+~2,5 à 3 % — le total final (`projectedSavings`/`finalValue`, calculé
+par une formule fermée qui capitalise chaque contribution mensuelle dès
+son propre mois) et le dernier point de `projectionByYear` (calculé par
+une boucle an-par-an qui ajoute les 12 contributions de l'année en une
+seule fois en fin d'année, sous-capitalisant par rapport à la formule
+fermée). Vérifié avec un script Node isolé avant d'écrire les assertions,
+pour ne pas figer une fausse égalité dans un test. **Sans impact visible
+aujourd'hui** : `projectionByYear`/`amortizationTable` sont calculés mais
+**ne sont rendus nulle part dans l'UI actuelle** (recherché explicitement
+— seuls `finalValue`/`projectedSavings`/`totalGain`/`totalInvested` sont
+affichés par `ScenarioList.tsx`) — mais deviendrait visible dès qu'un
+graphique consommerait ces données (le total affiché ne correspondrait
+plus au dernier point du graphique). Documenté dans les tests eux-mêmes
+(assertions qui vérifient l'écart plutôt que de le masquer) et dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
+plutôt que "corrigé" unilatéralement — les deux méthodes de calcul sont
+défendables (capitalisation mensuelle précise vs. approximation annuelle
+plus simple à lire sur un graphique), le choix appartient à qui
+construira ce graphique.
+
+**Critères d'acceptation**
+- [x] `realEstate.ts` — 7 tests : formule d'amortissement standard vérifiée
+      indépendamment, taux zéro (répartition égale), cohérence
+      totalPaid/totalInterest/monthlyPayment, `breakEvenMonths`/`annualROI`
+      `null` sans loyer, positifs avec loyer, table d'amortissement
+      plafonnée à 12 lignes, cohérence principal+intérêt≈paiement et
+      solde strictement décroissant.
+- [x] `retirement.ts` — 8 tests : `yearsToRetirement`, somme simple à taux
+      zéro, croissance au-delà de la somme simple à taux positif,
+      cohérence `isFunded`/`fundingGap`, `fundingGap` jamais négatif,
+      projection annuelle de la bonne longueur démarrant à
+      `currentSavings`, écart documenté `projectionByYear` vs
+      `projectedSavings` (voir ci-dessus), plancher à 4 % du taux de
+      retrait sûr.
+- [x] `stockGrowth.ts` — 8 tests : somme simple à taux zéro, défaut de
+      `initialAmount` à 0, gain positif à taux positif, capitalisation
+      composée (pas linéaire) sur plus d'années, projection annuelle de
+      la bonne longueur, écart documenté `projectionByYear` vs
+      `finalValue`, montants investis strictement croissants, pas de
+      division par zéro quand rien n'est investi.
+- [x] `pnpm test` (235 web + 12 mobile) et `pnpm type-check` (4/4) verts.
+
+**Implémentation** :
+[lib/simulators/__tests__/realEstate.test.ts](../apps/web/src/lib/simulators/__tests__/realEstate.test.ts),
+[lib/simulators/__tests__/retirement.test.ts](../apps/web/src/lib/simulators/__tests__/retirement.test.ts),
+[lib/simulators/__tests__/stockGrowth.test.ts](../apps/web/src/lib/simulators/__tests__/stockGrowth.test.ts).
 
 ---
 

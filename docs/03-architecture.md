@@ -943,10 +943,11 @@ signalé pour une story de suivi.
 
 ## 13. Dette technique identifiée (non traitée, signalée pour décision)
 
-Deux découvertes de fin de session, toutes deux non transformées en story
-— une décision de produit/architecture est nécessaire avant d'agir
+Trois découvertes de fin de session, aucune transformée en story — une
+décision de produit/architecture est nécessaire avant d'agir
 (garder/réparer/supprimer pour la première, construire ou non pour la
-seconde), donc listées ici plutôt que corrigées unilatéralement.
+deuxième, choisir la méthode de calcul pour la troisième), donc listées
+ici plutôt que corrigées unilatéralement.
 
 **Le package `packages/api-client` est du code mort dans toute la
 codebase, et son mécanisme d'authentification ne fonctionnerait de toute
@@ -1023,3 +1024,42 @@ bug, donc hors périmètre d'une correction unilatérale. Si un besoin réel
 dans l'UI), la story correspondante devra explicitement définir le
 contrat (validation, ownership check, codes d'erreur) plutôt que de
 supposer que le scaffold vide en donne un indice fiable.
+
+### `projectionByYear` diverge du total final dans 2 des 3 simulateurs financiers
+
+Trouvé en écrivant les tests de la story 15.29 (`lib/simulators/`) — un
+écart numérique réel, pas un bug caché qui casse quoi que ce soit
+aujourd'hui, mais qui le deviendrait dès qu'un graphique consommerait ce
+champ.
+
+**Constat** : `retirement.ts` (`computeRetirement`) et `stockGrowth.ts`
+(`computeStockGrowth`) renvoient chacun deux chiffres qui devraient
+représenter la même quantité mais qui divergent de ~2,5 à 3 % dans des cas
+réalistes (vérifié avec un script Node isolé avant d'écrire les
+assertions, pour ne pas figer une fausse égalité dans un test) :
+
+- Le total final (`projectedSavings`/`finalValue`) est calculé par une
+  formule fermée de valeur future d'annuité, qui capitalise chaque
+  contribution mensuelle dès son propre mois.
+- Le dernier point de `projectionByYear` est calculé par une boucle
+  an-par-an qui ajoute les 12 contributions de l'année **en une seule
+  fois en fin d'année** (`value * (1+tauxMensuel)^12 + montantMensuel *
+  12`) — une sous-capitalisation systématique par rapport à la formule
+  fermée, qui s'accumule sur toute la durée de la projection.
+
+**Sans impact visible aujourd'hui** : recherché explicitement dans
+`apps/web/src` — `projectionByYear` (et l'équivalent `amortizationTable`
+de `realEstate.ts`, qui n'a pas ce problème car il recalcule mois par
+mois) ne sont **rendus nulle part dans l'UI actuelle**. Seuls
+`finalValue`/`projectedSavings`/`totalGain`/`totalInvested` sont affichés
+par `ScenarioList.tsx`. Le jour où un graphique consommera
+`projectionByYear`, son dernier point ne correspondra plus au total
+affiché juste à côté.
+
+**Non corrigé ici** — deux méthodes de calcul défendables (capitalisation
+mensuelle précise vs. approximation annuelle plus simple à faire lire sur
+un graphique), le choix appartient à qui construira ce graphique. Documenté
+dans les tests eux-mêmes
+([`retirement.test.ts`](../apps/web/src/lib/simulators/__tests__/retirement.test.ts),
+[`stockGrowth.test.ts`](../apps/web/src/lib/simulators/__tests__/stockGrowth.test.ts))
+par des assertions qui vérifient l'écart plutôt que de le masquer.

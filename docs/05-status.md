@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 24 ✅ + 4 🟡 sur 28 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 25 ✅ + 4 🟡 sur 29 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 24 ✅ + 4 🟡 sur 28 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26, 15.27, 15.28 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 25 ✅ + 4 🟡 sur 29 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26, 15.27, 15.28, 15.29 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -264,6 +264,27 @@ réelle puis les 9 routes concernées (`accounts`, `budgets`, `goals`,
 avec de vraies données — et une coupure BDD transitoire réelle pendant la
 vérification a reconfirmé, en prime, le `500` propre de la story 15.21.
 
+**Note story 15.29** : ✅ complet — dernier trou de couverture explicitement
+nommé depuis la story 15.9 ("simulateurs... n'ont aucun test"), jamais
+comblé jusqu'ici. `lib/simulators/realEstate.ts` (7 tests : formule
+d'amortissement vérifiée indépendamment, taux zéro, cohérence
+totalPaid/totalInterest, `breakEvenMonths`/`annualROI` null sans loyer,
+table d'amortissement plafonnée à 12 lignes, solde strictement
+décroissant), `retirement.ts` (8 tests) et `stockGrowth.ts` (8 tests) —
+23 tests au total. **Découverte réelle en écrivant les tests, pas un bug
+caché mais un écart documenté** : `retirement.ts` et `stockGrowth.ts`
+divergent de ~2,5-3 % entre leur total final (formule fermée, capitalise
+chaque mois) et le dernier point de `projectionByYear` (boucle
+an-par-an, ajoute 12 mois de contributions en une fois) — vérifié avec un
+script Node isolé avant d'écrire les assertions. **Sans impact
+aujourd'hui** : `projectionByYear` n'est rendu nulle part dans l'UI
+actuelle (recherché explicitement) — deviendrait visible dès qu'un
+graphique l'utiliserait. Documenté dans les tests eux-mêmes et dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
+(troisième découverte) plutôt que "corrigé" unilatéralement — deux
+méthodes de calcul défendables, le choix appartient à qui construira ce
+graphique. 235 (web) + 12 (mobile), `pnpm type-check` 4/4.
+
 **Note story 15.28** : ✅ complet — `lib/analytics/forecast.ts`
 (`projectForecast`, régression linéaire sur revenus/dépenses,
 accumulation de patrimoine net, niveau de confiance) n'avait jamais été
@@ -355,6 +376,14 @@ répertoires sous `apps/web/src/app/api` n'ont jamais eu de `route.ts`
 web ou mobile ne les appelle (les pages admin lisent déjà Prisma
 directement). Construire ces routes serait du développement de
 fonctionnalité neuve, pas un correctif — détail dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
+
+**Troisième découverte, pendant la story 15.29** : `retirement.ts` et
+`stockGrowth.ts` divergent de ~2,5-3 % entre leur total final et le
+dernier point de `projectionByYear` (voir la note de la story 15.29
+ci-dessus pour le détail) — sans impact aujourd'hui car ce champ n'est
+rendu nulle part dans l'UI, mais signalé pour qui construira un graphique
+dessus. Détail dans
 [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
 
 **Note story 15.22** : ✅ complet — termine le gap noté depuis la story
