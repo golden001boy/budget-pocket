@@ -1069,9 +1069,9 @@ par des assertions qui vérifient l'écart plutôt que de le masquer.
 
 Trouvé par une revue de code holistique (`code-review high master..HEAD`)
 lancée après la story 15.29 sur l'ensemble de la branche (voir le point de
-reprise dans [05-status.md](05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14)),
-remonté indépendamment par 4 des 5 sous-agents ("angles") qui ont terminé
-avant que la revue ne soit interrompue par une limite de session.
+reprise dans [05-status.md](05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14),
+8 angles au total, tous terminés), remonté indépendamment par 4 des 8
+sous-agents ("angles").
 
 **Constat** : `apps/web/src` n'a aucun helper de type `withAuth`,
 `apiHandler` ou HOF de route équivalent (confirmé : recherche exhaustive,
@@ -1103,6 +1103,23 @@ mais inutilisés de `packages/shared` (`retirement.ts`, `portfolio.ts`,
 `goal.ts`) restent non importés par leurs routes, qui maintiennent chacune
 un schéma local légèrement divergent — la même cause racine (pas de
 convention partagée forçant la réutilisation) que le problème décrit ici.
+
+**Effet de bord mesuré, pas corrigé ici non plus** : l'angle "efficiency"
+de la même revue a relevé que `rateLimit()`
+([lib/rateLimit.ts](../apps/web/src/lib/rateLimit.ts)) fait
+systématiquement un aller-retour Redis (`ttl()`) supplémentaire pour
+remplir `resetAt`/`remaining` — confirmé : ces deux champs ne sont lus
+nulle part en dehors des mocks de test (`grep` exhaustif sur `apps/` et
+`packages/`), sur les ~13 handlers de mutation plus les deux points d'entrée
+de login. Non corrigé ici, volontairement, pour deux raisons : (1) le
+supprimer changerait le contrat `RateLimitResult` que `resetAt`/`remaining`
+pourraient légitimement servir plus tard (ex. un header `Retry-After` sur
+un `429`, jamais construit) — même situation que les schémas partagés
+inutilisés ci-dessus, pas une simple faute de frappe ; (2) le coût mesuré
+du fail-open Redis (~410ms, [ADR-011](#adr-011--vraie-cause-du-goulot-dashboard--backoff-de-reconnexion-ioredis-pas-postgres-story-1516))
+inclut déjà cet aller-retour — le retirer changerait un chiffre documenté
+sans nouvelle mesure pour le remplacer. À trancher avec la question du
+wrapper partagé ci-dessus plutôt que corrigé isolément.
 
 **Non traité ici** — introduire un wrapper partagé (HOF `withApiRoute`,
 ou middleware Next.js étendu) toucherait la totalité des ~12 fichiers de
