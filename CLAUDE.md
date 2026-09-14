@@ -44,6 +44,15 @@ impact aujourd'hui, ce champ n'est rendu nulle part dans l'UI) — détail et
 options dans
 [docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
 
+**⚠️ Point de reprise en attente (2026-09-14)** : une revue de code
+holistique `code-review high master..HEAD` (auto-initiée, non demandée),
+lancée après la 15.29, s'est arrêtée **avant sa fin** sur une limite de
+session (3 des 8 angles sur une limite de session, findings non
+dédupliqués/non vérifiés). Aucun code n'a été touché. Détail complet et
+prochaines actions dans
+[docs/05-status.md §Point de reprise](docs/05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14)
+— à lire avant toute nouvelle story.
+
 **Stories 15.14 à 15.29 traitées le 2026-09-13** dans une session `/goal`
 en continuation autonome (« poursuis jusqu'à épuisement de token de cette
 session »), **sans pause pour confirmation avec vous** — contrairement au

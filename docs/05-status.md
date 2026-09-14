@@ -781,3 +781,98 @@ pour l'instant, pas prêt pour un lancement réel.
   seul point encore bloquant pour qualifier pleinement la story 15.1
   (comportement "bloque après N tentatives"). L'app dégrade proprement sans
   lui (cache uniquement).
+
+## Point de reprise pour la prochaine session — revue de code holistique interrompue (2026-09-14)
+
+**Contexte** : après la story 15.29 (commit `6be4ed2`) et la mise à jour de
+[04-tests.md](04-tests.md) (commit `64e9a42`), toutes deux clean et
+vérifiées (`pnpm test` 247/247, `pnpm type-check` 4/4, `pnpm build` 50/50
+pages), j'ai lancé de ma propre initiative — **non demandé par vous**, en
+continuation du `/goal` de la session précédente — une revue de code
+`code-review high master..HEAD` sur l'intégralité de la branche
+(21 commits, ~6700 lignes, 62 fichiers), en raison de sa taille. C'est une
+démarche QA, pas une story BMAD. **Elle s'est arrêtée avant sa fin** :
+3 des 8 sous-agents ("angles") ont échoué en cours de route sur une limite
+de session (`rate_limit`, pas une erreur de fond), sans avoir produit de
+findings exploitables. 5 ont terminé et rendu des findings bruts,
+**non dédupliqués et non vérifiés** (l'étape de vérification prévue par le
+skill `code-review` n'a jamais eu lieu). Aucun de ces findings n'a été
+appliqué au code — conformément au principe suivi tout du long cette
+session (signaler en §13/ici plutôt que trancher seul une question de
+conception), et parce qu'ils n'ont pas encore passé l'étape de
+vérification.
+
+**Aucun fichier de code n'a été modifié par cette revue.** Seul ce document
+est touché par ce point de reprise.
+
+### Angles terminés (5/8) — findings bruts, non vérifiés
+
+Thème dominant, remonté indépendamment par 4 des 5 angles (reuse,
+simplification, efficiency, altitude) : **aucun wrapper de route partagé
+n'existe** dans `apps/web/src` (confirmé : ni `withAuth`, ni `apiHandler`,
+ni équivalent). Le bloc `try/catch` + réponse 500 JSON (story 15.24) et le
+bloc `checkMutationRateLimit` + réponse 429 (story 15.20) sont recopiés à
+la main dans respectivement ~21 et ~13 handlers à travers ~12 fichiers de
+routes. Conséquences concrètes déjà observées, pas seulement théoriques :
+
+- **Incohérence réelle trouvée** : `apps/web/src/app/api/advisor/scenarios/route.ts`
+  — `GET` n'a pas de `try/catch` alors que `POST` en a un, dans le même
+  fichier (la story 15.24 visait explicitement "même patron partout" et l'a
+  raté sur ce handler).
+- **Incohérence réelle trouvée** : message d'erreur 401 non uniforme —
+  `"Non autorisé"` (budgets, transactions, analysis, planning) vs.
+  `"Unauthorized"` (accounts, goals, portfolio, user/profile) — dérive de
+  copier-coller entre stories, pas un choix délibéré.
+- **Trois schémas Zod partagés dans `packages/shared`
+  (`retirement.ts`, `portfolio.ts`, `goal.ts` — déjà signalés en
+  [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
+  comme "construits mais jamais câblés") restent non importés** dans leurs
+  routes respectives, qui maintiennent chacune leur propre schéma local
+  légèrement divergent (bornes/défauts différents) — la duplication
+  continue de grandir story après story plutôt que d'être résorbée.
+- **Angle efficiency** : `checkMutationRateLimit`/`rateLimit()`
+  (`lib/rateLimit.ts`) fait un aller-retour Redis (`ttl()`) systématique
+  pour remplir `resetAt`, valeur qu'aucun des ~14 call-sites de mutation
+  ajoutés en 15.20 ne lit jamais — un aller-retour réseau gratuit sur
+  chaque écriture de l'API, potentiellement notable vu la connectivité
+  Neon/Redis déjà documentée comme intermittente dans ce sandbox.
+- **Angle CLAUDE.md conventions** : aucune violation confirmée des 6 règles
+  non-négociables (validation serveur, ADR, schéma BDD, etc.) — liste
+  vérifiée route par route, résultat `[]`.
+
+Le détail complet (fichier/ligne/scénario d'échec par finding) est dans les
+sorties brutes des sous-agents, pas reproduit ici in extenso ; à
+redemander/relancer si besoin au lieu de faire confiance à ce résumé seul.
+
+### Angles interrompus (3/8) — à relancer, pas de findings utilisables
+
+`line-by-line diff scan`, `removed-behavior auditor`, `cross-file tracer`
+ont été coupés par la limite de session avant de conclure (dernier message
+de chacun : en train d'inspecter `transactions/[id]/route.ts`,
+`user/profile/route.ts`, et l'interaction 15.20-rate-limit/15.21-401
+respectivement). Rien d'exploitable n'en est ressorti — à relancer entiers
+dans la prochaine session, pas à reprendre en l'état.
+
+### Prochaine action recommandée (dans l'ordre)
+
+1. Relancer les 3 angles interrompus (`code-review high master..HEAD` à
+   nouveau, ou cibler les 3 angles manquants seulement si le skill le
+   permet).
+2. Dédupliquer l'ensemble des 8 angles puis faire passer l'étape de
+   vérification prévue par le skill (confirmer chaque finding contre le
+   code réel, éliminer les faux positifs).
+3. Pour les deux bugs de divergence réels déjà confirmés ci-dessus (GET
+   `advisor/scenarios` sans `try/catch`, message 401 non uniforme) : ce sont
+   des corrections de code mineures et sans ambiguïté (règle #3 — en cas de
+   divergence code/doc ou de bug de cohérence, on corrige le code), pas des
+   décisions de conception — les corriger directement une fois vérifiées,
+   sans repasser par une pause de confirmation.
+4. Pour le thème de fond ("pas de wrapper de route partagé") : **c'est une
+   décision de conception** (introduire un HOF `withApiRoute`/middleware
+   partagé toucherait ~12 fichiers de routes) — à documenter en
+   [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
+   comme une quatrième découverte plutôt qu'à trancher seul, cohérent avec
+   le traitement des trois découvertes précédentes de cette section.
+5. Revérifier `pnpm test` / `pnpm type-check` / `pnpm build` après toute
+   correction, committer avec un message décrivant précisément ce qui a été
+   trouvé/corrigé (pas juste "code review fixes").
