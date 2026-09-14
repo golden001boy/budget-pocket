@@ -914,9 +914,22 @@ ci-dessous.
    statu quo) laissée à vous.
 5. ~~Corriger le bug `transactions.data` trouvé par le cross-file tracer
    relancé~~ **Fait** (voir ci-dessus).
-6. Revérifier `pnpm test` / `pnpm type-check` / `pnpm build` après toute
-   correction, committer avec un message précis. **Fait pour tous les
-   correctifs de code de ce point de reprise** (`pnpm build` 50/50 pages
-   reconfirmé après les points 3/4 ; `pnpm test`/`pnpm type-check` verts
-   après le point 5, `pnpm build` non re-relancé après ce dernier correctif
-   mobile-only mais sans risque côté web — à confirmer si besoin).
+6. ~~Revérifier `pnpm test` / `pnpm type-check` / `pnpm build` après toute
+   correction~~ **Fait** : `pnpm build` reconfirmé une dernière fois (50/50
+   pages, exit 0) après tous les correctifs de ce point de reprise.
+7. ~~Vérifier qu'aucun autre écran mobile n'a la même classe de bug que le
+   point 5~~ **Fait** : les 4 seuls appels `mfetchJson<...>` d'écran dans
+   `apps/mobile/app` (advisor, expenses, accueil/`index.tsx`,
+   investments) lisent maintenant tous correctement `{ data: ... }`,
+   vérifié contre la forme réelle renvoyée par chacune des 4 routes
+   correspondantes (`advisor/scenarios`, `transactions`,
+   `analysis/snapshot`, `portfolio`). Aucune autre occurrence de cette
+   classe de bug ne subsiste.
+
+**Ce point de reprise est maintenant clos** : les 8 angles ont tourné, les
+3 bugs réels qu'ils ont trouvés sont corrigés et vérifiés, le thème de fond
+et son effet de bord mesuré sont documentés en §13 pour votre arbitrage,
+et plus aucune régression du même type ne subsiste ailleurs dans
+`apps/mobile`. Il ne reste, de cette revue, que des décisions de
+conception volontairement laissées à vous (§13, découvertes 1 à 4) — pas
+de travail de vérification en attente.
