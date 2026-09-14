@@ -23,9 +23,9 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | BE-04 | Exposition de données sensibles | 🟡 | ✅ Couvert | Aucun secret sous `NEXT_PUBLIC_*` ; `passwordHash` jamais sérialisé dans les réponses API (vérifié sur `auth/mobile`, `admin/users`) |
 | BE-05 | Mauvaise configuration sécurité | 🟡 | 🟡 Partiel | Headers de sécurité déployés (CSP, X-Frame-Options, Referrer-Policy — voir FE-06) ; pas de scan de config automatisé |
 | BE-06 | Défaillance cryptographique | 🟡 | 🟡 Partiel | bcrypt pour les mots de passe (bon) ; TLS dépend de l'hébergeur (Vercel), non vérifié explicitement en code |
-| BE-07 | Conception non sécurisée | 🟡 | 🟡 Partiel | Rate limiting Redis sur login (web+mobile) et inscription (story 15.1, ✅) ; le reste des routes API mutatives n'a toujours aucune limite |
-| BE-08 | Journalisation insuffisante | 🟢 | 🔴 Gap | Logs Prisma par défaut uniquement ; pas de journalisation applicative des actions sensibles (login, changement de rôle, suppression de compte) |
-| BE-09 | Gestion des erreurs inadéquate | 🟢 | 🟡 Partiel | La plupart des routes renvoient `{ error: "message générique" }` ; `/api/health` expose le message Prisma brut (`PrismaClientInitializationError: ...`) — acceptable pour un endpoint de santé interne non public, à surveiller si exposé |
+| BE-07 | Conception non sécurisée | 🟡 | ✅ Couvert | Rate limiting Redis sur login (web+mobile) et inscription (story 15.1) ; étendu aux 14 handlers de mutation restants (`accounts`/`budgets`/`goals`/`portfolio`/`transactions`/`profile`/`scenarios`/`taxes`/`retirement`), 60 req/min/utilisateur, story 15.20. Résiduel : pas de limite de taille de payload (voir API-04) |
+| BE-08 | Journalisation insuffisante | 🟢 | ✅ Couvert | `lib/auditLog.ts` (story 15.19) — JSON structuré, branché sur login (succès/échec avec raison), inscription, reset de mot de passe, vérification email. Pas de changement de rôle à journaliser : aucune mutation de ce type n'existe dans le code (console admin en lecture seule) |
+| BE-09 | Gestion des erreurs inadéquate | 🟢 | ✅ Couvert | `/api/health` ne renvoie plus le message Prisma brut (story 15.17) — BDD/Redis vérifiés indépendamment, erreurs journalisées côté serveur uniquement. `try/catch` généralisé à quasi toutes les routes (stories 15.21/15.23/15.24) — un crash inattendu renvoie désormais `{ error: 'Erreur serveur' }` plutôt qu'un 500 brut non-JSON |
 
 ## 2. Couche Frontend (FE-01 à FE-08)
 
@@ -46,10 +46,10 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 |---|---|---|---|---|
 | API-01 | BOLA | 🔴 | ✅ Couvert | Voir BE-01 |
 | API-02 | Broken Authentication | 🔴 | 🟡 Partiel | Voir BE-02 |
-| API-03 | Broken Object Property Level Auth | 🟡 | ✅ Couvert | Les schémas Zod whitelistent les champs acceptés sur toutes les routes mutatives connues, y compris `goals/[id]` PATCH depuis la story 15.2 |
-| API-04 | Unrestricted Resource Consumption | 🟡 | 🟡 Partiel | Login/inscription limités (story 15.1, ✅) ; listes paginées et `pageSize` plafonné à 100 sur `accounts`/`budgets`/`goals`/`portfolio`/`transactions` (story 15.3, ✅) ; pas de limite de taille de payload sur les routes mutatives |
+| API-03 | Broken Object Property Level Auth | 🟡 | ✅ Couvert | Les schémas Zod whitelistent les champs acceptés sur toutes les routes mutatives connues, y compris `goals/[id]` PATCH depuis la story 15.2. `POST /api/advisor/scenarios` n'avait aucune validation avant la story 15.23 (trouvé sans schéma du tout) — corrigé |
+| API-04 | Unrestricted Resource Consumption | 🟡 | 🟡 Partiel | Login/inscription limités (story 15.1) ; listes paginées et `pageSize` plafonné à 100 sur les 7 routes de liste, y compris `advisor/scenarios`/`planning/taxes` (stories 15.3/15.18) ; rate limiting par utilisateur (60/min) sur les 14 handlers de mutation (story 15.20). Résiduel, non traité : pas de limite de taille de payload (`Content-Length`) sur les routes mutatives |
 | API-05 | Broken Function Level Auth | 🔴 | ✅ Couvert | `middleware.ts` protège `/admin/*` par rôle (`token.role !== 'ADMIN'` → redirect) et toutes les routes API sensibles par le matcher |
-| API-06 | Unrestricted Access to Business Flows | 🟡 | 🟡 Partiel | Brute force de connexion/spam d'inscription limités (story 15.1, ✅) ; pas de protection anti-bot ni de limite métier sur les autres flux (ex. création de transactions en masse) |
+| API-06 | Unrestricted Access to Business Flows | 🟡 | 🟡 Partiel | Brute force de connexion/spam d'inscription limités (story 15.1) ; création de transactions/objectifs/etc. désormais limitée à 60/min/utilisateur (story 15.20). Résiduel, non traité : pas de protection anti-bot (captcha) — nécessite un choix de fournisseur, hors périmètre d'une correction unilatérale |
 | API-07 | SSRF | 🟡 | ✅ Couvert | Les seuls appels sortants (`CoinGecko`, scraper BRVM) ciblent des URLs codées en dur, aucune URL fournie par l'utilisateur n'est fetchée côté serveur |
 | API-08 | Security Misconfiguration | 🟡 | ✅ Couvert | Pas de CORS explicite (donc pas de wildcard `*`), pas d'endpoint de debug trouvé, `ignoreBuildErrors`/`ignoreDuringBuilds` sont un choix de build, pas une brèche |
 | API-09 | Improper Inventory Management | 🟢 | 🟡 Partiel | Pas de doc API formelle (OpenAPI/Swagger) — [03-architecture.md §5](03-architecture.md) sert d'inventaire actuel mais n'est pas généré depuis le code |
@@ -69,7 +69,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 |---|---|---|---|---|
 | PROD-01 | Absence de monitoring utile | 🟡 | 🟡 Partiel | `@sentry/nextjs` intégré (client/serveur/edge + frontière d'erreur globale, story 15.4), vérifié no-op sans DSN et sans régression (build + tests + type-check). **Non vérifié** : réception réelle d'un événement dans un projet Sentry — nécessite un compte/DSN fourni par l'utilisateur |
 | PROD-02 | Exposition d'envs non-prod | 🟡 | 🟡 Partiel | Aucun endpoint `/debug`/`/test` trouvé ; pas d'environnement staging déployé à ce jour donc rien à exposer, mais aucune politique écrite non plus |
-| PROD-03 | Mauvaise gestion des mises à jour | 🟢 | 🟡 Partiel | Politique de backup/rollback BDD documentée avec précision (mécanisme Neon confirmé via doc officielle, fenêtre PITR réelle 6h sur le plan Free) — story 15.7 ; **test de restauration réel non exécuté** (accès console Neon requis, non disponible pour l'agent) ; pas de politique de patching écrite |
+| PROD-03 | Mauvaise gestion des mises à jour | 🟢 | 🟡 Partiel | Politique de backup/rollback BDD documentée avec précision (mécanisme Neon confirmé via doc officielle, fenêtre PITR réelle 6h sur le plan Free) — story 15.7 ; **test de restauration réel non exécuté** (accès console Neon requis, non disponible pour l'agent). Politique de patching écrite (cadence par catégorie, gate de test, mécanismes de rollback applicatif) et **rollback applicatif réellement testé** par `git revert` — story 15.15 ; rollback BDD reste non exercé (même limite que 15.7) |
 
 *Tests de charge (Gate Phase 6 §9.3, hors catalogue PROD-01/03 ci-dessus,*
 *pas de gap dédié dans BMAD_FRAMEWORK_v2.md §8.5) : voir §6 ci-dessous.*
@@ -94,27 +94,44 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
   compilant plusieurs routes en même temps) comme facteur principal.
   Non corrigé — hors périmètre des stories 15.13/15.16 (tests de charge),
   resterait à cadrer comme story dédiée si jugé prioritaire.
-- **Unitaires** : câblés depuis la story 15.9 (`apps/web/jest.config.js`,
-  `pnpm test`/`pnpm --filter web run test`). 52 tests, 6 fichiers —
-  [rateLimit.test.ts](../apps/web/src/lib/__tests__/rateLimit.test.ts)
-  (+ `accountLoginRateLimitKey`, story 15.8),
-  [authSchemas.test.ts](../apps/web/src/lib/__tests__/authSchemas.test.ts)
-  (+ `registerSchema` story 15.8, + `forgotPasswordSchema`/`resetPasswordSchema`
-  story 15.11, + `verifyEmailSchema` story 15.12),
-  [pagination.test.ts](../apps/web/src/lib/__tests__/pagination.test.ts)
-  (story 15.3),
-  [tokens.test.ts](../apps/web/src/lib/__tests__/tokens.test.ts) (story
-  15.12 — génération/hash de token partagé, déplacé depuis
-  `passwordReset.test.ts` lors de la refactorisation DRY),
-  [passwordReset.test.ts](../apps/web/src/lib/__tests__/passwordReset.test.ts)
-  (story 15.11, allégé en 15.12) et
-  [emailVerification.test.ts](../apps/web/src/lib/__tests__/emailVerification.test.ts)
-  (story 15.12).
-  **Couverture encore très partielle** : les simulateurs (`retirement.ts`,
-  `realEstate.ts`, `stockGrowth.ts`), l'analytique (`forecast.ts`,
-  `snapshot.ts`) et les handlers de routes API (logique métier au-delà du
-  parsing de pagination) n'ont toujours aucun test. `apps/mobile` n'a pas de
-  runner (nécessiterait `jest-expo`, hors périmètre de 15.9).
+- **Unitaires** : câblés depuis la story 15.9 pour `apps/web`
+  (`apps/web/jest.config.js`) et depuis la story 15.26 pour `apps/mobile`
+  (`apps/mobile/jest.config.js`, `jest-expo`) — `pnpm test` (racine) lance
+  les deux via Turborepo. **247 tests au total** (235 `apps/web` + 12
+  `apps/mobile`), largement étendu au fil des stories 15.17 à 15.29 de
+  cette session par rapport aux 52 tests/6 fichiers d'origine (story
+  15.9-15.12). Répartition par domaine plutôt que fichier par fichier
+  (trop nombreux désormais) :
+  - **Auth/tokens** : `rateLimit.test.ts` (+ `checkMutationRateLimit`,
+    story 15.20), `authSchemas.test.ts`, `tokens.test.ts`,
+    `passwordReset.test.ts`, `emailVerification.test.ts`, `env.test.ts`
+    (story 15.14 — validation Zod des secrets au boot), `auditLog.test.ts`
+    (story 15.19).
+  - **Middleware** : `middleware.test.ts` (story 15.21 — `401` JSON sur
+    `/api/*` non authentifié au lieu d'une redirection `307`).
+  - **Routes API** : un fichier `__tests__/route.test.ts` par route pour
+    les 9 routes CRUD principales (`accounts`, `budgets`, `goals` +
+    `[id]`, `portfolio`, `transactions` + `[id]`, `user/profile`,
+    `planning/retirement`, `planning/taxes`) + `advisor/scenarios`,
+    `health`, `auth/mobile`, `analysis/snapshot`, `analysis/forecast` —
+    stories 15.17/15.18/15.20 à 15.24.
+  - **Logique métier pure** : `lib/analytics/forecast.test.ts` (story
+    15.28), `lib/analytics/snapshot.test.ts`,
+    `lib/simulators/{realEstate,retirement,stockGrowth}.test.ts` (story
+    15.29 — dernier trou "simulateurs" explicitement fermé),
+    `lib/__tests__/currencies.test.ts` (story 15.27, code de
+    `packages/shared` testé depuis `apps/web` faute de runner propre à ce
+    package).
+  - **Mobile** : `lib/mfetch.test.ts` (primitive réseau centrale) et
+    `contexts/AuthContext.test.tsx` (session complète — login/logout/
+    restauration), story 15.26.
+  **Couverture non encore comblée** : `packages/api-client` (code mort,
+  voir [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision),
+  pas de valeur à tester du code inutilisé) ; `lib/ai/*` (fonctionnalité
+  Epic 9.3 désactivée, non branchée) ; `lib/market-data/coingecko.ts` et
+  `lib/scrapers/brvm.ts` (appels externes, valeur limitée sans un vrai
+  contrat d'API à mocker) ; aucun test de composant/écran complet côté
+  mobile (navigation réelle) ; CI ne couvre toujours qu'`apps/web`.
 - **Sécurité** : aucun test automatisé des items du catalogue §8 — cet audit
   est une revue de code manuelle, pas une exécution de suite de tests.
 - **Charge** : Artillery (story 15.13, correctif en story 15.16), scénarios
@@ -158,8 +175,10 @@ Ordre recommandé (Critique → Haute → Moyenne) :
    `next` fermé par la story 15.10 — 14 → 0)
 6. ~~PROD-01 — monitoring Sentry (story 15.4)~~ ✅ (intégré, capture réelle
    non vérifiée faute de compte Sentry)
-7. 🟡 PROD-03 — politique backup/rollback (story 15.7) — documentée, test de
-   restauration réel en attente (accès console Neon requis)
+7. 🟡 PROD-03 — politique backup/rollback (story 15.7) et politique de
+   patching + rollback applicatif testé (story 15.15) — documentées,
+   rollback applicatif vérifié par `git revert` ; test de restauration
+   BDD réel en attente (accès console Neon requis)
 8. ~~Perf : pagination manquante (story 15.3)~~ ✅ (`accounts`/`budgets`/
    `goals`/`portfolio`/`transactions`, contrat `{ data, meta }` commun)
 9. 🟡 BE-02 — hardening auth (story 15.8) ✅ (rate limit compte, session 7j,
@@ -183,3 +202,60 @@ Ordre recommandé (Critique → Haute → Moyenne) :
     (cause réelle : bug de configuration `ioredis`, pas Postgres comme
     supposé en 15.13 ; corrige au passage le coût fail-open Redis accepté
     depuis 15.1/ADR-004 — ~5,4s → ~410ms)
+
+**Stories 15.17 à 15.29 (session `/goal` autonome, 2026-09-13/14)** —
+toutes créées en cours de route (non prévues par l'évaluation initiale du
+23/07), chacune motivée par un incident ou un gap trouvé en vérifiant une
+autre story en direct plutôt que planifiée à l'avance :
+
+15. ~~BE-09 — fuite du message d'erreur Prisma brut sur `/api/health`
+    (story 15.17)~~ ✅ (BDD/Redis vérifiés indépendamment, erreurs
+    journalisées côté serveur uniquement)
+16. ~~Perf résiduel — pagination sur `advisor/scenarios`/`planning/taxes`
+    (story 15.18)~~ ✅ (dernières routes de liste sans pagination ; a
+    aussi révélé et corrigé un bug mobile pré-existant, écran Conseiller
+    affichant toujours zéro scénario)
+17. ~~BE-08 — journalisation des actions sensibles (story 15.19)~~ ✅
+    (`lib/auditLog.ts`, branché sur login/inscription/reset mdp/
+    vérification email)
+18. ~~BE-07 / API-04 / API-06 résidu — rate limiting étendu aux routes de
+    mutation (story 15.20)~~ ✅ (14 handlers restants, 60/min/utilisateur)
+19. ~~Gap noté depuis 15.2 — `401` JSON propre au lieu d'une redirection
+    `307` sur les routes API protégées (story 15.21)~~ ✅ + résilience
+    `auth/mobile` (ne crashe plus brut sur une coupure BDD transitoire)
+20. ~~Prérequis §6 — couverture de tests pour les 9 routes CRUD sans
+    aucun test (story 15.22)~~ ✅ (59 tests, aucun changement de
+    comportement)
+21. ~~API-03 — validation Zod manquante sur `POST /api/advisor/scenarios`
+    (story 15.23)~~ ✅ (trouvée sans schéma du tout, corrigée + résilience)
+22. ~~BE-09 résidu — `try/catch` manquant sur 12 routes restantes (story
+    15.24)~~ ✅ (audit systémique après 15.21/15.23, même patron partout)
+23. ~~Champs Prisma réels jamais exposés par l'API — `inflationRate`,
+    `priority`, `exchange`, `notes` (story 15.25)~~ ✅ (schémas partagés
+    complets mais inutilisés, câblés dans les schémas locaux)
+24. ~~Prérequis §6 — `apps/mobile` sans runner de test (story 15.26)~~ ✅
+    (`jest-expo`, correctif `transformIgnorePatterns` pnpm documenté en
+    [ADR-013](03-architecture.md#adr-013--transformignorepatterns-pnpm-compatible-pour-jest-expo-story-1526))
+25. ~~Prérequis §6 — `packages/shared` (`formatCurrency`/`convertToXOF`)
+    jamais testé (story 15.27)~~ ✅
+26. ~~Prérequis §6 — `projectForecast` testé uniquement par mock (story
+    15.28)~~ ✅ (testé directement)
+27. ~~Prérequis §6 — simulateurs financiers jamais testés (story
+    15.29)~~ ✅ (dernier gap "simulateurs" nommé depuis la story 15.9 ;
+    a aussi trouvé un écart réel ~2,5-3 % entre `projectionByYear` et le
+    total final sur 2 des 3 simulateurs — sans impact aujourd'hui, champ
+    non rendu dans l'UI, voir [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision))
+
+**Reste non résolu après ces 27 items** : PROD-03/story 15.7 (test de
+restauration Neon réel, accès console requis) ; BE-02/story 15.8 volet
+MFA (ADR-008, reporté) ; story 15.14 (coffre de secrets — décision de
+cadrage Vercel prise sans confirmation, voir
+[ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514)) ;
+story 15.15 (politique de patching écrite, rollback applicatif testé,
+rollback BDD toujours non exercé) ; API-06 anti-bot (choix de fournisseur
+requis) ; API-04 limite de taille de payload ; FE-04 CSRF explicite au-delà
+de `SameSite=Lax` ; PROD-01 réception réelle d'un événement Sentry (DSN
+requis) ; trois éléments de dette technique documentés sans story
+([03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)) :
+`packages/api-client` (code mort), 5 répertoires de route API vides, écart
+`projectionByYear` sur 2 simulateurs.
