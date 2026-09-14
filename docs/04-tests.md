@@ -245,8 +245,21 @@ autre story en direct plutôt que planifiée à l'avance :
     a aussi trouvé un écart réel ~2,5-3 % entre `projectionByYear` et le
     total final sur 2 des 3 simulateurs — sans impact aujourd'hui, champ
     non rendu dans l'UI, voir [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision))
+28. ~~Revue de code holistique post-15.29 (`code-review high
+    master..HEAD`, hors périmètre `bmad prelaunch`, auto-initiée)~~ ✅
+    partiel — interrompue par une limite de session avant sa fin (3 des 8
+    angles à relancer, non dédupliquée/non vérifiée dans son ensemble,
+    voir [05-status.md §Point de reprise](05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14)).
+    Deux dérives réelles qu'elle a trouvées ont été corrigées directement :
+    `GET /api/advisor/scenarios` sans `try/catch` (oublié par le passage
+    systématique de la story 15.24) et message 401 non uniforme
+    (`'Non autorisé'` vs `'Unauthorized'`, uniformisé sur ce dernier). Son
+    thème de fond (aucun wrapper de route API partagé, cause probable des
+    deux dérives ci-dessus et du problème des schémas Zod dupliqués
+    déjà noté au point 23) documenté comme quatrième découverte en
+    [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
 
-**Reste non résolu après ces 27 items** : PROD-03/story 15.7 (test de
+**Reste non résolu après ces 28 items** : PROD-03/story 15.7 (test de
 restauration Neon réel, accès console requis) ; BE-02/story 15.8 volet
 MFA (ADR-008, reporté) ; story 15.14 (coffre de secrets — décision de
 cadrage Vercel prise sans confirmation, voir
@@ -255,7 +268,9 @@ story 15.15 (politique de patching écrite, rollback applicatif testé,
 rollback BDD toujours non exercé) ; API-06 anti-bot (choix de fournisseur
 requis) ; API-04 limite de taille de payload ; FE-04 CSRF explicite au-delà
 de `SameSite=Lax` ; PROD-01 réception réelle d'un événement Sentry (DSN
-requis) ; trois éléments de dette technique documentés sans story
+requis) ; la revue de code holistique elle-même, à terminer (point 28
+ci-dessus) ; quatre éléments de dette technique documentés sans story
 ([03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)) :
 `packages/api-client` (code mort), 5 répertoires de route API vides, écart
-`projectionByYear` sur 2 simulateurs.
+`projectionByYear` sur 2 simulateurs, absence de wrapper de route API
+partagé.
