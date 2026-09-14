@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     // route — no top-level try/catch meant a malformed request or a
     // transient DB error surfaced as a bare 500 instead of the graceful
     // JSON shape every other mutation route in this project returns.
-    console.error('[advisor/scenarios]', error);
+    console.error('[advisor/scenarios:POST]', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }
