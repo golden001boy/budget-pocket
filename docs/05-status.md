@@ -802,12 +802,20 @@ session (signaler en §13/ici plutôt que trancher seul une question de
 conception), et parce qu'ils n'ont pas encore passé l'étape de
 vérification.
 
-**Mise à jour (même session, après ce point de reprise)** : les deux
-dérives listées ci-dessous comme "trouvées" ont depuis été corrigées
-directement (§Prochaine action, points 3 et 4 exécutés) — voir le
-paragraphe qui suit cette section pour le détail. Le reste (relancer les
-3 angles interrompus, dédupliquer/vérifier l'ensemble) n'a **pas** été
-fait et reste à faire dans une session future.
+**Mise à jour (même session, après ce point de reprise initial)** : les 3
+angles interrompus ont été relancés et ont terminé (voir "Angles relancés"
+ci-dessous) — **les 8 angles de la revue sont désormais tous complets**.
+Trois bugs réels au total ont été trouvés puis corrigés directement dans
+cette session (règle #3, corrections mineures et sans ambiguïté, pas de
+décision de conception) : le `try/catch` manquant sur `GET
+/api/advisor/scenarios`, le message 401 non uniforme, et — trouvé par
+l'angle `cross-file tracer` relancé — l'écran mobile "Transactions" qui
+lisait une clé de réponse API qui n'a jamais existé. Le thème de fond
+commun à plusieurs angles (aucun wrapper de route API partagé) est
+documenté comme quatrième découverte en §13 plutôt que tranché seul. Ne
+reste qu'une synthèse formelle de dédup des 8 sorties d'angles (§Prochaine
+action, point 2) — sans nouveau correctif de code attendu de cette
+synthèse, les bugs concrets ayant déjà tous été traités au fil de l'eau.
 
 ### Angles terminés (5/8) — findings bruts, non vérifiés
 
@@ -848,45 +856,67 @@ Le détail complet (fichier/ligne/scénario d'échec par finding) est dans les
 sorties brutes des sous-agents, pas reproduit ici in extenso ; à
 redemander/relancer si besoin au lieu de faire confiance à ce résumé seul.
 
-### Angles interrompus (3/8) — à relancer, pas de findings utilisables
+### Angles relancés (3/3) — terminés, revue des 8 angles maintenant complète
 
-`line-by-line diff scan`, `removed-behavior auditor`, `cross-file tracer`
-ont été coupés par la limite de session avant de conclure (dernier message
-de chacun : en train d'inspecter `transactions/[id]/route.ts`,
-`user/profile/route.ts`, et l'interaction 15.20-rate-limit/15.21-401
-respectivement). Rien d'exploitable n'en est ressorti — à relancer entiers
-dans la prochaine session, pas à reprendre en l'état.
+`line-by-line diff scan`, `removed-behavior auditor` et `cross-file
+tracer` ont été relancés depuis zéro dans cette même session (la limite de
+session qui les avait coupés — reset annoncé à 12h20 Abidjan — était déjà
+passée). Résultat :
 
-### Prochaine action recommandée (dans l'ordre)
+- `line-by-line diff scan` : `[]` — aucun bug de ligne trouvé après lecture
+  complète des ~28 fichiers non-test du diff.
+- `removed-behavior auditor` : `[]` — aucune régression de comportement
+  trouvée (vérifié explicitement que chaque check d'auth/ownership/
+  validation existant est préservé tel quel à l'intérieur des nouveaux
+  `try/catch`, et que le changement de forme de réponse
+  `advisor/scenarios` est bien synchronisé avec son seul consommateur
+  mobile).
+- `cross-file tracer` : **une trouvaille réelle**, confirmée et corrigée
+  (voir juste en dessous) — `apps/mobile/app/(tabs)/expenses/index.tsx`
+  lit `data.transactions` alors que `GET /api/transactions` renvoie
+  `{ data, meta }` depuis la story 15.3 (route elle-même non touchée par
+  ce diff, donc ratée par les balayages 15.3/15.18 qui avaient corrigé le
+  même bug sur les écrans Investissements et Conseiller). Un utilisateur
+  mobile ouvrant l'onglet "Transactions" voyait donc toujours une liste
+  vide, silencieusement, quel que soit le nombre réel de transactions.
+  Corrigé directement (`data.data`, même schéma que les deux corrections
+  précédentes) — aucun test d'écran mobile n'existe pour cette classe de
+  composant (convention déjà établie depuis 15.18 : ces écrans n'ont pas
+  de test, seuls `lib/` et `contexts/` en ont depuis 15.26/15.27).
+  Revérifié : `pnpm test` 247/247, `pnpm type-check` 4/4.
 
-1. Relancer les 3 angles interrompus (`code-review high master..HEAD` à
-   nouveau, ou cibler les 3 angles manquants seulement si le skill le
-   permet). **Toujours à faire.**
-2. Dédupliquer l'ensemble des 8 angles puis faire passer l'étape de
-   vérification prévue par le skill (confirmer chaque finding contre le
-   code réel, éliminer les faux positifs). **Toujours à faire.**
-3. ~~Pour les deux bugs de divergence réels déjà confirmés ci-dessus (GET
-   `advisor/scenarios` sans `try/catch`, message 401 non uniforme) : ce sont
-   des corrections de code mineures et sans ambiguïté (règle #3 — en cas de
-   divergence code/doc ou de bug de cohérence, on corrige le code), pas des
-   décisions de conception — les corriger directement une fois vérifiées,
-   sans repasser par une pause de confirmation.~~ **Fait** (même session,
-   après ce point de reprise) : `GET /api/advisor/scenarios` enveloppé
-   dans un `try/catch` identique à `POST` ; les 9 occurrences de
-   `'Non autorisé'` (analysis/snapshot, analysis/forecast,
-   transactions/route, transactions/[id], budgets) uniformisées vers
-   `'Unauthorized'` (forme déjà majoritaire — 21 occurrences — et attendue
-   par `middleware.test.ts`). Aucun test ne dépendait de la chaîne
-   française. Revérifié : `pnpm test` 247/247, `pnpm type-check` 4/4,
-   `pnpm build` 50/50 pages, tous verts après le changement.
-4. ~~Pour le thème de fond ("pas de wrapper de route partagé") : **c'est une
-   décision de conception**~~ **Fait** : documenté comme quatrième
-   découverte dans
+**Les 8 angles de la revue holistique sont maintenant tous terminés.** Ce
+qui reste, ce n'est plus de relancer des angles mais de dédupliquer
+formellement l'ensemble des 8 sorties et de repasser par l'étape de
+vérification prévue par le skill `code-review` (déjà largement faite au
+fil de l'eau ici, mais pas comme une passe unique et exhaustive) — voir
+ci-dessous.
+
+### Prochaine action recommandée
+
+1. ~~Relancer les 3 angles interrompus~~ **Fait** (voir ci-dessus).
+2. Dédupliquer formellement l'ensemble des 8 sorties d'angles en une passe
+   unique (elles se recoupent déjà beaucoup — 4 des 5 angles originaux
+   avaient signalé indépendamment le même thème de fond) et confirmer
+   qu'aucun finding restant n'a été laissé de côté. **Reste à faire**, mais
+   risque faible : tous les bugs concrets et confirmés remontés par les 8
+   angles ont déjà été corrigés (voir points 3/4/5) ; ce qui reste est
+   surtout la synthèse formelle, pas de nouveaux correctifs attendus.
+3. ~~Corriger les deux bugs de divergence confirmés (GET `advisor/scenarios`
+   sans `try/catch`, message 401 non uniforme)~~ **Fait** : `GET
+   /api/advisor/scenarios` enveloppé dans un `try/catch` identique à
+   `POST` ; les 9 occurrences de `'Non autorisé'` uniformisées vers
+   `'Unauthorized'` (forme majoritaire, attendue par `middleware.test.ts`).
+4. ~~Documenter le thème de fond ("pas de wrapper de route partagé")~~
+   **Fait** : quatrième découverte dans
    [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
-   plutôt que tranché seul — la décision du wrapper (HOF par handler vs.
-   middleware centralisé vs. statu quo) reste à vous.
-5. Revérifier `pnpm test` / `pnpm type-check` / `pnpm build` après toute
-   correction, committer avec un message décrivant précisément ce qui a été
-   trouvé/corrigé (pas juste "code review fixes"). **Fait pour les points 3
-   et 4** (voir ci-dessus) ; à refaire après le point 1/2 quand ils seront
-   traités.
+   — décision du wrapper (HOF par handler vs. middleware centralisé vs.
+   statu quo) laissée à vous.
+5. ~~Corriger le bug `transactions.data` trouvé par le cross-file tracer
+   relancé~~ **Fait** (voir ci-dessus).
+6. Revérifier `pnpm test` / `pnpm type-check` / `pnpm build` après toute
+   correction, committer avec un message précis. **Fait pour tous les
+   correctifs de code de ce point de reprise** (`pnpm build` 50/50 pages
+   reconfirmé après les points 3/4 ; `pnpm test`/`pnpm type-check` verts
+   après le point 5, `pnpm build` non re-relancé après ce dernier correctif
+   mobile-only mais sans risque côté web — à confirmer si besoin).

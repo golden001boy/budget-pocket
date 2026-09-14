@@ -44,20 +44,22 @@ impact aujourd'hui, ce champ n'est rendu nulle part dans l'UI) — détail et
 options dans
 [docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
 
-**⚠️ Point de reprise en attente (2026-09-14)** : une revue de code
-holistique `code-review high master..HEAD` (auto-initiée, non demandée),
-lancée après la 15.29, s'est arrêtée **avant sa fin** sur une limite de
-session (3 des 8 angles interrompus, à relancer ; les 5 autres ont rendu
-des findings non dédupliqués/non vérifiés). Deux dérives déjà confirmées
-par cette revue ont depuis été corrigées dans la même session (`GET
-/api/advisor/scenarios` sans `try/catch`, message 401 non uniforme —
-uniformisé sur `'Unauthorized'`), et la question de fond qu'elle a soulevée
-(aucun wrapper de route API partagé) ajoutée comme quatrième découverte en
+**Revue de code holistique post-15.29 — 8/8 angles terminés (2026-09-14)** :
+`code-review high master..HEAD` (auto-initiée, non demandée), lancée après
+la 15.29, avait été interrompue par une limite de session à mi-parcours ;
+les 3 angles coupés ont été relancés dans la même session et ont terminé.
+Trois bugs réels trouvés et corrigés directement (règle #3, aucune
+décision de conception nécessaire) : `GET /api/advisor/scenarios` sans
+`try/catch` ; message 401 non uniforme (uniformisé sur `'Unauthorized'`) ;
+l'écran mobile "Transactions" lisait `data.transactions` au lieu de
+`data.data` (même bug que 15.3/15.18, jamais corrigé sur cet écran-là,
+liste toujours vide en silence). Le thème de fond soulevé par 4 des 8
+angles (aucun wrapper de route API partagé) documenté comme quatrième
+découverte en
 [03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
-Reste à faire : relancer les 3 angles interrompus, dédupliquer/vérifier
-l'ensemble. Détail dans
-[docs/05-status.md §Point de reprise](docs/05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14)
-— à lire avant toute nouvelle story.
+Reste seulement une synthèse formelle de dédup des 8 sorties d'angles (pas
+de nouveau correctif attendu). Détail dans
+[docs/05-status.md §Point de reprise](docs/05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14).
 
 **Stories 15.14 à 15.29 traitées le 2026-09-13** dans une session `/goal`
 en continuation autonome (« poursuis jusqu'à épuisement de token de cette

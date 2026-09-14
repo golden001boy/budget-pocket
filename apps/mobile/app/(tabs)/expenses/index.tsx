@@ -22,8 +22,17 @@ export default function ExpensesScreen() {
 
   const load = useCallback(async () => {
     try {
-      const data = await mfetchJson<{ transactions: TransactionDTO[]; total: number }>('/api/transactions?limit=50');
-      setTxs(data.transactions);
+      // Checkpoint 2026-09-14 (holistic code review, cross-file tracer):
+      // GET /api/transactions returns { data, meta } (same contract as
+      // accounts/budgets/goals/portfolio since story 15.3), not
+      // { transactions, total } — this screen was reading a key that never
+      // existed, so `data.transactions` was always undefined and the list
+      // silently rendered empty regardless of what the user actually had.
+      // Same bug class the mobile Investments (15.3) and Advisor (15.18)
+      // screens were already found and fixed for; this screen was missed
+      // by both sweeps since it wasn't touched by this branch's diff.
+      const data = await mfetchJson<{ data: TransactionDTO[]; meta: { total: number } }>('/api/transactions?limit=50');
+      setTxs(data.data);
     } catch {
       // keep stale data
     } finally {
