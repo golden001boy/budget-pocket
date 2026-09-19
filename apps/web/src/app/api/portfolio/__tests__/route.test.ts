@@ -3,6 +3,7 @@ import { GET, POST } from '../route';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
+import { MAX_JSON_BODY_BYTES } from '@/lib/requestBody';
 
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
@@ -84,6 +85,17 @@ describe('POST /api/portfolio', () => {
     }));
 
     expect(response.status).toBe(400);
+    expect(mockPrisma.portfolioItem.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized body with 413 before it reaches validation (story 15.30)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+
+    const response = await POST(makeRequest('http://localhost/api/portfolio', {
+      method: 'POST', body: 'x'.repeat(MAX_JSON_BODY_BYTES + 1),
+    }));
+
+    expect(response.status).toBe(413);
     expect(mockPrisma.portfolioItem.create).not.toHaveBeenCalled();
   });
 

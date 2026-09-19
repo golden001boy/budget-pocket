@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
+import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
 import { z } from 'zod';
 
 // Story 15.23 (rule #5, "toute API valide ses inputs côté serveur, sans
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
     const limit = await checkMutationRateLimit(session.user.id);
     if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const parsed = createScenarioSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     const { type, name, inputs, results } = parsed.data;
@@ -83,6 +84,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(scenario, { status: 201 });
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
+    }
     // Story 15.23: same fragility class as the pre-15.21 auth/mobile
     // route — no top-level try/catch meant a malformed request or a
     // transient DB error surfaced as a bare 500 instead of the graceful

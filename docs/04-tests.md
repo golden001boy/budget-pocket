@@ -23,7 +23,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | BE-04 | Exposition de données sensibles | 🟡 | ✅ Couvert | Aucun secret sous `NEXT_PUBLIC_*` ; `passwordHash` jamais sérialisé dans les réponses API (vérifié sur `auth/mobile`, `admin/users`) |
 | BE-05 | Mauvaise configuration sécurité | 🟡 | 🟡 Partiel | Headers de sécurité déployés (CSP, X-Frame-Options, Referrer-Policy — voir FE-06) ; pas de scan de config automatisé |
 | BE-06 | Défaillance cryptographique | 🟡 | 🟡 Partiel | bcrypt pour les mots de passe (bon) ; TLS dépend de l'hébergeur (Vercel), non vérifié explicitement en code |
-| BE-07 | Conception non sécurisée | 🟡 | ✅ Couvert | Rate limiting Redis sur login (web+mobile) et inscription (story 15.1) ; étendu aux 14 handlers de mutation restants (`accounts`/`budgets`/`goals`/`portfolio`/`transactions`/`profile`/`scenarios`/`taxes`/`retirement`), 60 req/min/utilisateur, story 15.20. Résiduel : pas de limite de taille de payload (voir API-04) |
+| BE-07 | Conception non sécurisée | 🟡 | ✅ Couvert | Rate limiting Redis sur login (web+mobile) et inscription (story 15.1) ; étendu aux 14 handlers de mutation restants (`accounts`/`budgets`/`goals`/`portfolio`/`transactions`/`profile`/`scenarios`/`taxes`/`retirement`), 60 req/min/utilisateur, story 15.20. Limite de taille de payload (100 Ko) sur les 16 routes acceptant un corps JSON, story 15.30 — voir API-04 |
 | BE-08 | Journalisation insuffisante | 🟢 | ✅ Couvert | `lib/auditLog.ts` (story 15.19) — JSON structuré, branché sur login (succès/échec avec raison), inscription, reset de mot de passe, vérification email. Pas de changement de rôle à journaliser : aucune mutation de ce type n'existe dans le code (console admin en lecture seule) |
 | BE-09 | Gestion des erreurs inadéquate | 🟢 | ✅ Couvert | `/api/health` ne renvoie plus le message Prisma brut (story 15.17) — BDD/Redis vérifiés indépendamment, erreurs journalisées côté serveur uniquement. `try/catch` généralisé à quasi toutes les routes (stories 15.21/15.23/15.24) — un crash inattendu renvoie désormais `{ error: 'Erreur serveur' }` plutôt qu'un 500 brut non-JSON |
 
@@ -47,7 +47,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | API-01 | BOLA | 🔴 | ✅ Couvert | Voir BE-01 |
 | API-02 | Broken Authentication | 🔴 | 🟡 Partiel | Voir BE-02 |
 | API-03 | Broken Object Property Level Auth | 🟡 | ✅ Couvert | Les schémas Zod whitelistent les champs acceptés sur toutes les routes mutatives connues, y compris `goals/[id]` PATCH depuis la story 15.2. `POST /api/advisor/scenarios` n'avait aucune validation avant la story 15.23 (trouvé sans schéma du tout) — corrigé |
-| API-04 | Unrestricted Resource Consumption | 🟡 | 🟡 Partiel | Login/inscription limités (story 15.1) ; listes paginées et `pageSize` plafonné à 100 sur les 7 routes de liste, y compris `advisor/scenarios`/`planning/taxes` (stories 15.3/15.18) ; rate limiting par utilisateur (60/min) sur les 14 handlers de mutation (story 15.20). Résiduel, non traité : pas de limite de taille de payload (`Content-Length`) sur les routes mutatives |
+| API-04 | Unrestricted Resource Consumption | 🟡 | ✅ Couvert | Login/inscription limités (story 15.1) ; listes paginées et `pageSize` plafonné à 100 sur les 7 routes de liste, y compris `advisor/scenarios`/`planning/taxes` (stories 15.3/15.18) ; rate limiting par utilisateur (60/min) sur les 14 handlers de mutation (story 15.20) ; limite de taille de payload (100 Ko, `413` au-delà) sur les 16 routes qui acceptent un corps JSON (story 15.30). Résiduel non applicatif : les timeouts de requête dépendent de la plateforme d'hébergement (Vercel/Next.js), pas du code de l'app — même raisonnement que TLS sous BE-06 |
 | API-05 | Broken Function Level Auth | 🔴 | ✅ Couvert | `middleware.ts` protège `/admin/*` par rôle (`token.role !== 'ADMIN'` → redirect) et toutes les routes API sensibles par le matcher |
 | API-06 | Unrestricted Access to Business Flows | 🟡 | 🟡 Partiel | Brute force de connexion/spam d'inscription limités (story 15.1) ; création de transactions/objectifs/etc. désormais limitée à 60/min/utilisateur (story 15.20). Résiduel, non traité : pas de protection anti-bot (captcha) — nécessite un choix de fournisseur, hors périmètre d'une correction unilatérale |
 | API-07 | SSRF | 🟡 | ✅ Couvert | Les seuls appels sortants (`CoinGecko`, scraper BRVM) ciblent des URLs codées en dur, aucune URL fournie par l'utilisateur n'est fetchée côté serveur |
@@ -262,17 +262,22 @@ autre story en direct plutôt que planifiée à l'avance :
     [03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
     Reste seulement une synthèse formelle de dédup des 8 sorties, sans
     nouveau correctif attendu
+29. ~~API-04 résidu — limite de taille de payload sur les routes mutatives
+    (story 15.30)~~ ✅ (100 Ko, `413` avant toute validation/DB ; helper
+    trouvé non committé/non branché en début de session, terminé et câblé
+    sur les 16 routes concernées, voir
+    [02-prd.md](02-prd.md#story-1530--limite-de-taille-de-payload-sur-les-routes-mutatives--done))
 
-**Reste non résolu après ces 28 items** : PROD-03/story 15.7 (test de
+**Reste non résolu après ces 29 items** : PROD-03/story 15.7 (test de
 restauration Neon réel, accès console requis) ; BE-02/story 15.8 volet
 MFA (ADR-008, reporté) ; story 15.14 (coffre de secrets — décision de
 cadrage Vercel prise sans confirmation, voir
 [ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514)) ;
 story 15.15 (politique de patching écrite, rollback applicatif testé,
 rollback BDD toujours non exercé) ; API-06 anti-bot (choix de fournisseur
-requis) ; API-04 limite de taille de payload ; FE-04 CSRF explicite au-delà
-de `SameSite=Lax` ; PROD-01 réception réelle d'un événement Sentry (DSN
-requis) ; quatre éléments de dette technique documentés sans story
+requis) ; FE-04 CSRF explicite au-delà de `SameSite=Lax` ; PROD-01
+réception réelle d'un événement Sentry (DSN requis) ; quatre éléments de
+dette technique documentés sans story
 ([03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)) :
 `packages/api-client` (code mort), 5 répertoires de route API vides, écart
 `projectionByYear` sur 2 simulateurs, absence de wrapper de route API

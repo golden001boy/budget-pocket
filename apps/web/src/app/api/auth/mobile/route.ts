@@ -8,6 +8,7 @@ import {
   LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS, ACCOUNT_LOGIN_ATTEMPT_LIMIT,
 } from '@/lib/rateLimit';
 import { logSensitiveAction } from '@/lib/auditLog';
+import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
 
 // Kept in sync with SESSION_MAX_AGE_SECONDS in lib/auth.ts (story 15.8) — the
 // mobile client stores this token directly and has no refresh flow, so it
@@ -16,7 +17,7 @@ const MOBILE_TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 export async function POST(req: NextRequest) {
   try {
-    const body   = await req.json();
+    const body   = await readJsonBody(req);
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
@@ -77,6 +78,9 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
+    }
     // Story 15.21: this handler had no top-level try/catch — an unhandled
     // rejection (observed live: a transient Neon connection failure) meant
     // a plain, un-JSON 500 instead of the same graceful error shape every

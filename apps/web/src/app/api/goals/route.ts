@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
+import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
     const limit = await checkMutationRateLimit(session.user.id);
     if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
-    const body   = await req.json();
+    const body   = await readJsonBody(req);
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
@@ -75,6 +76,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(goal, { status: 201 });
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
+    }
     console.error('[goals:POST]', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }

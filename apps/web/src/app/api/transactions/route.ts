@@ -6,6 +6,7 @@ import { createTransactionSchema } from '@budget-pocket/shared';
 import { cacheDel } from '@/lib/cache';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
+import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
 
 export async function GET(req: Request) {
   try {
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
     const limit = await checkMutationRateLimit(session.user.id);
     if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const data = createTransactionSchema.safeParse(body);
     if (!data.success) {
       return NextResponse.json({ error: 'Données invalides', details: data.error.flatten() }, { status: 400 });
@@ -93,6 +94,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ data: serializeTransaction(tx) }, { status: 201 });
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
+    }
     console.error('[transactions:POST]', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }

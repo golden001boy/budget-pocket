@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (25 ✅ + 4 🟡 sur 29)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (26 ✅ + 4 🟡 sur 30)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -181,6 +181,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.27 | Tests pour `formatCurrency`/`convertToXOF` (`packages/shared`) | Could | S | ✅ | Logique argent réelle, utilisée partout, jamais testée |
 | 15.28 | Tests pour `projectForecast` (régression linéaire, prévisions financières) | Should | S | ✅ | Testé uniquement par mock dans la story 15.24, jamais directement |
 | 15.29 | Tests pour les 3 simulateurs (immobilier/retraite/bourse) | Should | S | ✅ | Gap "simulateurs" noté depuis 15.9, jamais comblé jusqu'ici |
+| 15.30 | Limite de taille de payload sur les routes mutatives | Should | S | ✅ | Résidu API-04 noté depuis 15.20, jamais traité jusqu'ici |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1876,6 +1877,80 @@ construira ce graphique.
 [lib/simulators/__tests__/realEstate.test.ts](../apps/web/src/lib/simulators/__tests__/realEstate.test.ts),
 [lib/simulators/__tests__/retirement.test.ts](../apps/web/src/lib/simulators/__tests__/retirement.test.ts),
 [lib/simulators/__tests__/stockGrowth.test.ts](../apps/web/src/lib/simulators/__tests__/stockGrowth.test.ts).
+
+---
+
+### Story 15.30 — Limite de taille de payload sur les routes mutatives · ✅ Done
+
+**Story** : En tant qu'opérateur de la plateforme, je veux qu'aucune route
+API ne puisse être forcée à bufferiser et parser un corps de requête
+arbitrairement volumineux avant validation, afin de fermer le dernier
+résidu documenté d'API-04 (Unrestricted Resource Consumption) : `POST`/
+`PATCH` acceptait `await req.json()` sans aucune limite de taille, et
+`Content-Length` ne peut pas servir de garde-fou côté serveur (un client
+peut l'omettre ou mentir dessus sans que Next.js rejette le mismatch).
+Résidu noté explicitement dans [04-tests.md](04-tests.md) (BE-07, API-04)
+depuis la story 15.20, jamais transformé en story jusqu'ici.
+
+**Contexte de reprise** : l'implémentation du garde-fou
+([lib/requestBody.ts](../apps/web/src/lib/requestBody.ts) —
+`readJsonBody()`, remplaçant direct de `req.json()` qui compte les octets
+réels du corps via `Buffer.byteLength` avant de parser) avait été écrite
+dans une session précédente mais laissée non committée, non branchée sur
+aucune route et sans test — trouvée comme fichier non suivi par git en
+début de session. Cette story termine ce travail : câblage sur toutes les
+routes concernées, gestion `413`, tests, documentation.
+
+**Choix de la limite** : 100 Ko (`MAX_JSON_BODY_BYTES`). Le plus gros
+payload légitime de l'app est le blob `inputs`/`results` d'un scénario
+conseiller (story 15.23) — quelques Ko en pratique — donc 100 Ko laisse
+une marge généreuse sans autoriser un corps de plusieurs Mo à être
+bufferisé.
+
+**Critères d'acceptation**
+- [x] `readJsonBody()` remplace `await req.json()` sur les 16 fichiers de
+      route qui acceptent un corps JSON : `accounts`, `budgets`, `goals` +
+      `goals/[id]`, `portfolio`, `transactions` + `transactions/[id]`,
+      `user/profile`, `planning/retirement`, `planning/taxes`,
+      `advisor/scenarios`, et les 5 routes `auth/*`
+      (`mobile`/`register`/`forgot-password`/`reset-password`/
+      `verify-email`).
+- [x] Chaque `catch` correspondant distingue désormais `PayloadTooLargeError`
+      (→ `413 { error: 'Corps de requête trop volumineux' }`) du reste
+      (→ `500` générique, comportement inchangé de la story 15.24) — un
+      corps trop gros n'atteint donc jamais la validation Zod ni Prisma.
+- [x] Comportement sur le chemin normal strictement inchangé : un corps
+      valide sous la limite est parsé exactement comme avant (`readJsonBody`
+      fait `JSON.parse(await req.text())`, identique à `req.json()` sous
+      le capot — même `SyntaxError` sur un JSON malformé).
+- [x] Test unitaire du helper — 7 tests
+      ([lib/__tests__/requestBody.test.ts](../apps/web/src/lib/__tests__/requestBody.test.ts)) :
+      corps valide sous la limite, corps au-delà de la limite par défaut,
+      corps exactement à la limite, `maxBytes` personnalisé, JSON malformé
+      sous la limite (toujours un `SyntaxError` simple), comptage en
+      octets et non en caractères (UTF-8 multi-octets), message de
+      `PayloadTooLargeError`.
+- [x] Test de régression `413` ajouté sur les 12 fichiers de test de route
+      déjà existants parmi les 16 modifiés (les 4 routes `auth/*` restantes
+      — `register`/`forgot-password`/`reset-password`/`verify-email` —
+      n'avaient aucun fichier de test avant cette story ; leur créer un
+      depuis zéro pour ce seul correctif aurait dépassé le périmètre de
+      cette story et dupliqué un gap déjà connu séparément — non traité
+      ici, signalé).
+- [x] `pnpm test` (254/254) et `pnpm type-check` (4/4) verts.
+- [x] `pnpm build` (production réelle, 50/50 pages) vert.
+
+**Non vérifié** : comportement réel contre la vraie BDD Neon avec un
+appel `curl` envoyant un corps de >100 Ko (couverture unitaire complète,
+pas de vérification bout en bout comme pour d'autres stories de cet
+epic — aucun changement de comportement attendu sur le chemin réseau
+lui-même, `readJsonBody` opère uniquement sur le texte déjà reçu).
+
+**Implémentation** :
+[lib/requestBody.ts](../apps/web/src/lib/requestBody.ts) (nouveau),
+[lib/__tests__/requestBody.test.ts](../apps/web/src/lib/__tests__/requestBody.test.ts)
+(nouveau), les 16 fichiers de route listés ci-dessus, plus les tests `413`
+ajoutés dans leurs 12 suites déjà existantes.
 
 ---
 

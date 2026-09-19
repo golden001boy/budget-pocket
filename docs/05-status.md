@@ -1,9 +1,9 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-09-13 (stories 15.14 et 15.15 — coffre de
-secrets + politique de patching/test de rollback ; les deux traitées dans
-la même session `/goal` autonome, sans vous — voir notes ci-dessous)
+**Dernière mise à jour** : 2026-09-19 (story 15.30 — limite de taille de
+payload sur les routes mutatives ; reprise d'un travail commencé dans une
+session précédente et laissé non committé, voir sa note ci-dessous)
 
 ## Vue d'ensemble des phases
 
@@ -12,7 +12,7 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 25 ✅ + 4 🟡 sur 29 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 26 ✅ + 4 🟡 sur 30 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,9 +34,36 @@ la même session `/goal` autonome, sans vous — voir notes ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 25 ✅ + 4 🟡 sur 29 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26, 15.27, 15.28, 15.29 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 26 ✅ + 4 🟡 sur 30 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26, 15.27, 15.28, 15.29, 15.30 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
+
+**Note story 15.30** (2026-09-19) : ✅ complet — dernier résidu documenté
+d'API-04 (limite de taille de payload), noté depuis la story 15.20, jamais
+transformé en story jusqu'ici. Le garde-fou lui-même
+([lib/requestBody.ts](../apps/web/src/lib/requestBody.ts) — `readJsonBody()`,
+remplaçant de `req.json()` qui rejette avec `PayloadTooLargeError` tout
+corps dépassant 100 Ko avant de le parser) avait été écrit dans une
+session précédente mais **laissé non committé et non branché sur aucune
+route** — trouvé comme fichier non suivi par `git status` en début de
+cette session. Terminé ici : câblé sur les 16 fichiers de route qui
+acceptent un corps JSON (`accounts`, `budgets`, `goals` + `goals/[id]`,
+`portfolio`, `transactions` + `transactions/[id]`, `user/profile`,
+`planning/retirement`, `planning/taxes`, `advisor/scenarios`, et les 5
+routes `auth/*`), chaque `catch` distinguant désormais `413` (payload trop
+gros) du `500` générique existant (story 15.24). 7 nouveaux tests sur le
+helper + un test de régression `413` dans les 12 suites de route déjà
+existantes parmi les 16 modifiées (254/254 au total), `pnpm type-check`
+(4/4), `pnpm build` (50/50 pages) verts. **Non couvert** : les 4 routes
+`auth/*` restantes (`register`/`forgot-password`/`reset-password`/
+`verify-email`) n'avaient aucun fichier de test avant cette story — leur
+en créer un uniquement pour ce correctif aurait dépassé le périmètre de la
+story, signalé plutôt que traité en silence (gap déjà connu
+séparément). **Non vérifié** : comportement réel contre la vraie BDD Neon
+avec un corps de requête effectivement surdimensionné (couverture
+unitaire complète, pas de vérification bout en bout comme pour d'autres
+stories de cet epic). Détail complet :
+[02-prd.md](02-prd.md#story-1530--limite-de-taille-de-payload-sur-les-routes-mutatives--done).
 
 **Toutes les stories de l'Epic 15 ont désormais au moins été entamées** —
 13 ✅, 4 🟡 (15.7, 15.8, 15.14, 15.15), plus aucune 🔴. Il ne reste donc

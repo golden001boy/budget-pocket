@@ -4,6 +4,7 @@ import { verifyEmailSchema } from '@budget-pocket/shared';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
 import { hashEmailVerificationToken } from '@/lib/emailVerification';
 import { logSensitiveAction } from '@/lib/auditLog';
+import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Trop de tentatives, réessayez plus tard' }, { status: 429 });
     }
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const data = verifyEmailSchema.safeParse(body);
     if (!data.success) {
       return NextResponse.json({ error: 'Données invalides', details: data.error.flatten() }, { status: 400 });
@@ -44,6 +45,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ data: { message: 'Email confirmé.' } });
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
+    }
     console.error('[verify-email]', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }

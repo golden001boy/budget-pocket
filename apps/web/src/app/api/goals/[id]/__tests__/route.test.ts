@@ -3,6 +3,7 @@ import { PATCH, DELETE } from '../route';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
+import { MAX_JSON_BODY_BYTES } from '@/lib/requestBody';
 
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
@@ -69,6 +70,19 @@ describe('PATCH /api/goals/[id]', () => {
     }), { params });
 
     expect(response.status).toBe(400);
+    expect(mockPrisma.financialGoal.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized body with 413 before it reaches validation (story 15.30)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mockPrisma.financialGoal.findFirst.mockResolvedValue({ id: 'g1' });
+
+    const response = await PATCH(makeRequest('http://localhost/api/goals/g1', {
+      method: 'PATCH',
+      body: 'x'.repeat(MAX_JSON_BODY_BYTES + 1),
+    }), { params });
+
+    expect(response.status).toBe(413);
     expect(mockPrisma.financialGoal.update).not.toHaveBeenCalled();
   });
 

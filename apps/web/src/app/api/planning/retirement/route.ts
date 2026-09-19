@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
+import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
 import { z } from 'zod';
 
 // Story 15.25: `inflationRate` and `notes` are real columns on
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     const limit = await checkMutationRateLimit(session.user.id);
     if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
-    const body   = await req.json();
+    const body   = await readJsonBody(req);
     const parsed = schema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
@@ -66,6 +67,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(plan);
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
+    }
     console.error('[planning/retirement:POST]', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }

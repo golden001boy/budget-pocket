@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateGoalSchema } from '@budget-pocket/shared';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
+import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const goal = await prisma.financialGoal.findFirst({ where: { id, userId: session.user.id } });
     if (!goal) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const body   = await req.json();
+    const body   = await readJsonBody(req);
     const parsed = updateGoalSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
@@ -33,6 +34,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
+    }
     // Story 15.24: same fragility class fixed in auth/mobile (15.21) and
     // advisor/scenarios (15.23) — a transient DB error (observed live
     // multiple times this session) previously surfaced as a bare,

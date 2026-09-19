@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { encode } from 'next-auth/jwt';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
 import { logSensitiveAction } from '@/lib/auditLog';
+import { MAX_JSON_BODY_BYTES } from '@/lib/requestBody';
 
 jest.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: jest.fn() } } }));
 jest.mock('bcryptjs', () => ({ compare: jest.fn() }));
@@ -30,6 +31,10 @@ function makeRequest(body: unknown) {
     method: 'POST',
     body: JSON.stringify(body),
   }) as any;
+}
+
+function makeRawRequest(rawBody: string) {
+  return new Request('http://localhost/api/auth/mobile', { method: 'POST', body: rawBody }) as any;
 }
 
 beforeEach(() => {
@@ -84,6 +89,15 @@ describe('POST /api/auth/mobile — audit logging (story 15.19)', () => {
     expect(mockLog).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'login_success', userId: 'u1', email: 'demo@budget-pocket.app' }),
     );
+  });
+});
+
+describe('POST /api/auth/mobile — payload size limit (story 15.30)', () => {
+  it('rejects an oversized body with 413 before it reaches the DB', async () => {
+    const response = await POST(makeRawRequest('x'.repeat(MAX_JSON_BODY_BYTES + 1)));
+
+    expect(response.status).toBe(413);
+    expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
   });
 });
 

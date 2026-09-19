@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
+import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -20,7 +21,7 @@ export async function PATCH(req: NextRequest) {
     const limit = await checkMutationRateLimit(session.user.id);
     if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
 
-    const body   = await req.json();
+    const body   = await readJsonBody(req);
     const parsed = schema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
@@ -32,6 +33,9 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
+    }
     // Story 15.24: same fragility class fixed in auth/mobile (15.21) and
     // advisor/scenarios (15.23) — a transient DB error (observed live
     // multiple times this session) previously surfaced as a bare,

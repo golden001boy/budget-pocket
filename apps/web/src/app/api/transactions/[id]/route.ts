@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { updateTransactionSchema } from '@budget-pocket/shared';
 import { cacheDel } from '@/lib/cache';
 import { checkMutationRateLimit } from '@/lib/rateLimit';
+import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -41,7 +42,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: 'Non trouvé' }, { status: 404 });
     }
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const data = updateTransactionSchema.safeParse(body);
     if (!data.success) {
       return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
@@ -65,6 +66,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await cacheDel(`snapshot:${session.user.id}:${tx.date.getFullYear()}:${tx.date.getMonth() + 1}`);
     return NextResponse.json({ data: serializeTx(updated) });
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
+    }
     console.error('[transactions/[id]:PATCH]', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
