@@ -77,7 +77,6 @@ export const config = {
     '/api/portfolio/:path*',
     '/api/analysis/:path*',
     '/api/advisor/:path*',
-    '/api/alerts/:path*',
     '/api/planning/:path*',
     '/api/stripe/:path*',
   ],
