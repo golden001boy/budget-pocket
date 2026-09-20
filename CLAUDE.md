@@ -191,16 +191,26 @@ uniquement ; `apps/mobile` reste sur React 18/Expo SDK 51). Voir
 pour le détail — notamment un bug de résolution `@types/react` sans rapport
 avec Next.js (`.npmrc` avait `resolve-peers-from-workspace-root=true`
 depuis le commit initial, jamais documenté) qui a fait le plus gros du
-travail de cette story. **Correction (2026-09-19)** : l'affirmation "0
-vulnérabilité" globale était devenue inexacte — `pnpm audit` sur
-l'ensemble du monorepo remonte désormais **49 vulnérabilités** (2
-critiques), toutes dans la chaîne d'outils de build `apps/mobile`
-(`joi` via `@react-native-community/cli`, dépendance de développement,
-pas de code embarqué dans l'app livrée), découvertes de nouvelles failles
-publiées depuis la story 15.10 (qui ne portait que sur `apps/web`).
-Confirmé indépendant de tout changement de cette session
-(`git stash` + re-audit). Non traité, pas de story créée — signalé pour
-décision si un lancement réel est planifié.
+travail de cette story. **Régression détectée puis corrigée (2026-09-19,
+même session)** : l'affirmation "0 vulnérabilité" globale était devenue
+inexacte — `pnpm audit` sur l'ensemble du monorepo remontait 49
+vulnérabilités, dont **2 critiques dans `next@15.5.21` lui-même**
+(RCE non authentifiée) — **pas** seulement dans la chaîne d'outils
+`apps/mobile` comme une première analyse trop rapide l'avait affirmé à
+tort dans cette même session (corrigé ici). `next` monté à `15.5.25`
+(tag `backport`, patch les deux RCE) + `sharp` à `^0.35.4` (transitif de
+`next`) + 15 autres paquets épinglés via `pnpm.overrides` (racine
+`package.json`) — `postcss`, `@xmldom/xmldom`, `js-yaml` (deux lignes,
+4.x et `artillery>js-yaml` en 3.x), `brace-expansion`, `fast-uri`,
+`nanoid`, `browserslist`, `baseline-browser-mapping`, `joi`, `qs`,
+`csv-parse`, `@faker-js/faker`, `fflate`, `undici` (deux overrides ciblés
+par parent : `@remix-run/node>undici` et `cheerio>undici`),
+`decode-uri-component`. **49 → 2**, les 2 restantes étant la même lib
+(`image-size`, transitif de Metro/RN, dev-only) sans version corrigée
+publiée à ce jour (`recommendation: None` dans l'avis officiel) — résiduel
+accepté, pas de correctif possible. `pnpm test` (313 web + 14 mobile),
+`pnpm type-check` (3/3) et `pnpm build` (50/50 pages) reconfirmés verts
+après la montée de version.
 
 **`master` est protégé** depuis la story 15.6 : PR requise + check
 `type-check-and-test` requis avant fusion. Un push direct sur `master` par

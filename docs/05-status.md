@@ -131,22 +131,23 @@ tentative (usage unique confirmé) → désactivation → compte restauré à so
 réelle. Détail complet :
 [02-prd.md](02-prd.md#story-1532--mfa-totp-optionnel-activable-par-lutilisateur--done).
 
-**Découverte non liée, signalée en passant, non corrigée** : en ajoutant
-les dépendances `otplib`/`qrcode` pour cette story, `pnpm audit` a révélé
-**49 vulnérabilités** (2 critiques, 29 hautes, 16 modérées, 2 basses) —
-contredisant l'affirmation précédente de ce document ("0 vulnérabilité
-depuis la story 15.10"), qui ne couvrait en réalité que `apps/web`.
-Confirmé **indépendant de cette story** (`git stash` + `pnpm audit` sans
-mes changements montre le même total) : dérive dans la chaîne d'outils de
-build `apps/mobile` (`joi` via `@react-native-community/cli`, dépendance
-de développement de React Native/Expo, pas du code embarqué dans l'app
-livrée aux utilisateurs) — de nouvelles failles ont été publiées dans ces
-paquets depuis la story 15.10, qui ne portait que sur `apps/web`
-(next.js/React). Non traité ici : hors périmètre de cette story, et une
-vraie remédiation toucherait la chaîne d'outils React Native/Expo,
-délibérément figée depuis l'ADR-009 (postscriptum) pour ne pas
-déstabiliser le mobile pendant la migration Next.js/React 19 du web.
-Mérite sa propre story si un lancement réel est planifié.
+**Découverte, puis corrigée dans la foulée sur demande explicite** : en
+ajoutant les dépendances `otplib`/`qrcode` pour cette story, `pnpm audit`
+a révélé **49 vulnérabilités** (2 critiques, 29 hautes, 16 modérées,
+2 basses). **Première analyse inexacte, corrigée** : j'avais d'abord
+affirmé que les 49 étaient toutes dans la chaîne d'outils de build
+`apps/mobile` (vu via un seul exemple, `joi`) — faux. En réalité 2 des
+vulnérabilités critiques étaient dans **`next@15.5.21` lui-même**
+(RCE non authentifiée, y compris sur serveurs Windows), une dépendance
+runtime réelle d'`apps/web`. Corrigé : `next` → `15.5.25` (tag `backport`,
+patché) + `sharp` → `^0.35.4` (transitif) + 15 autres paquets épinglés via
+`pnpm.overrides` (racine `package.json`) — détail complet dans
+[CLAUDE.md](../CLAUDE.md). **49 → 2** ; les 2 restantes sont la même lib
+(`image-size`, transitif de Metro/RN, dev-only) sans version corrigée
+publiée à ce jour (avis officiel : `recommendation: None`) — résiduel
+accepté, aucun correctif possible dans l'immédiat. `pnpm test` (313 web +
+14 mobile), `pnpm type-check` (3/3), `pnpm build` (50/50 pages)
+reconfirmés verts après la montée de version.
 13 ✅, 4 🟡 (15.7, 15.8, 15.14, 15.15), plus aucune 🔴. Il ne reste donc
 plus de story non commencée dans l'epic ; ce qui reste, c'est de
 transformer les quatre 🟡 en ✅ (voir leurs notes respectives ci-dessous) et
@@ -812,7 +813,7 @@ honnête item par item, contre le code réel :
 | Aucun endpoint debug exposé | ✅ | Story 15.17 — `/api/health` ne renvoie plus le message d'erreur Prisma brut, BDD/Redis vérifiés indépendamment, erreurs journalisées côté serveur uniquement (BE-09) |
 | Secrets depuis un coffre dédié | 🟡 | Story 15.14 — décision de cadrage confirmée avec vous le 2026-09-19 (variables d'env chiffrées Vercel plutôt que Vault/AWS Secrets Manager, [ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514--confirmé)) + validation Zod des secrets au boot (`lib/env.ts`) ; reste 🟡 uniquement faute de vérification sur un vrai compte Vercel |
 | Pipeline CI/CD protégé | ✅ | Story 15.6, confirmé actif |
-| Scan SCA sans vulnérabilité critique | ✅ | `pnpm audit` à **0 vulnérabilité** (story 15.10) |
+| Scan SCA sans vulnérabilité critique | ✅ | `pnpm audit` à 0 vulnérabilité sur `apps/web` (story 15.10) ; 2 critiques réapparues côté `next@15.5.21` (RCE) début de session du 2026-09-19, corrigées le jour même (`next` → 15.5.25 + 15 paquets épinglés via overrides, 49 → 2 vulnérabilités au niveau du monorepo) — voir [CLAUDE.md](../CLAUDE.md). Résiduel : 2 (même lib `image-size`, dev-only, pas de correctif publié) |
 
 ### 9.3 Observabilité & performance
 | Item | État | Constat |
