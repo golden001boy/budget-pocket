@@ -26,6 +26,13 @@ const serverEnvSchema = z.object({
   CRON_SECRET: z
     .string()
     .min(16, 'must be at least 16 characters — generate with `openssl rand -hex 32`'),
+  // Story 15.32 (MFA): encrypts TOTP secrets at rest (AES-256-GCM,
+  // lib/mfaCrypto.ts) — a TOTP secret can't be one-way hashed like a
+  // password since verifying a code requires recomputing the HMAC from the
+  // raw value, so it needs a reversible encryption key kept outside the DB.
+  MFA_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/i, 'must be 64 hex characters (32 bytes) — generate with `openssl rand -hex 32`'),
 
   // Everything below is optional infrastructure the app already degrades
   // gracefully without (Redis fail-open since 15.1/ADR-004, Resend/Sentry

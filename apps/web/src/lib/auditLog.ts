@@ -13,7 +13,10 @@ export type SensitiveAction =
   | 'password_reset_requested'
   | 'password_reset_completed'
   | 'email_verified'
-  | 'email_verification_resent';
+  | 'email_verification_resent'
+  | 'mfa_enabled'
+  | 'mfa_disabled'
+  | 'mfa_challenge_failed';
 
 export interface SensitiveActionEvent {
   action: SensitiveAction;

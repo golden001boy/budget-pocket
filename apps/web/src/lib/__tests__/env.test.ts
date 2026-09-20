@@ -5,6 +5,7 @@ const validEnv = {
   NEXTAUTH_SECRET: 'a'.repeat(32),
   NEXTAUTH_URL: 'http://localhost:3000',
   CRON_SECRET: 'b'.repeat(16),
+  MFA_ENCRYPTION_KEY: 'c'.repeat(64),
 };
 
 describe('parseServerEnv', () => {
@@ -24,7 +25,7 @@ describe('parseServerEnv', () => {
     expect(result.STRIPE_SECRET_KEY).toBe('sk_test_123');
   });
 
-  it.each(['DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'CRON_SECRET'])(
+  it.each(['DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'CRON_SECRET', 'MFA_ENCRYPTION_KEY'])(
     'rejects a missing required var: %s',
     (key) => {
       const broken = { ...validEnv };
@@ -45,6 +46,16 @@ describe('parseServerEnv', () => {
     expect(() => parseServerEnv({ ...validEnv, CRON_SECRET: 'short' })).toThrow(/CRON_SECRET/);
   });
 
+  it('rejects an MFA_ENCRYPTION_KEY that is not exactly 64 hex characters', () => {
+    expect(() => parseServerEnv({ ...validEnv, MFA_ENCRYPTION_KEY: 'not-hex' })).toThrow(/MFA_ENCRYPTION_KEY/);
+    expect(() => parseServerEnv({ ...validEnv, MFA_ENCRYPTION_KEY: 'a'.repeat(63) })).toThrow(/MFA_ENCRYPTION_KEY/);
+  });
+
+  it('accepts an uppercase-hex MFA_ENCRYPTION_KEY', () => {
+    const result = parseServerEnv({ ...validEnv, MFA_ENCRYPTION_KEY: 'F'.repeat(64) });
+    expect(result.MFA_ENCRYPTION_KEY).toBe('F'.repeat(64));
+  });
+
   it('treats an empty-string optional var as unset, same convention as Sentry/Resend no-op elsewhere', () => {
     const result = parseServerEnv({ ...validEnv, RESEND_API_KEY: '', NEXT_PUBLIC_SENTRY_DSN: '' });
     expect(result.RESEND_API_KEY).toBeUndefined();
@@ -57,7 +68,7 @@ describe('parseServerEnv', () => {
 
   it('aggregates every failing field into one error instead of stopping at the first', () => {
     expect(() => parseServerEnv({ DATABASE_URL: 'not-a-url' })).toThrow(
-      /DATABASE_URL[\s\S]*NEXTAUTH_SECRET[\s\S]*NEXTAUTH_URL[\s\S]*CRON_SECRET/,
+      /DATABASE_URL[\s\S]*NEXTAUTH_SECRET[\s\S]*NEXTAUTH_URL[\s\S]*CRON_SECRET[\s\S]*MFA_ENCRYPTION_KEY/,
     );
   });
 });
