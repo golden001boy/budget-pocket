@@ -7,6 +7,8 @@ import {
   LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS, ACCOUNT_LOGIN_ATTEMPT_LIMIT,
 } from './rateLimit';
 import { logSensitiveAction } from './auditLog';
+import { verifyTotpToken, consumeRecoveryCode } from './mfa';
+import { decryptSecret } from './mfaCrypto';
 
 // 7 days rather than 30 (story 15.8, auth hardening): bounds how long a
 // stolen/leaked session token stays valid if the device goes unused. Active
@@ -27,6 +29,11 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email:    { label: 'Email',         type: 'email'    },
         password: { label: 'Mot de passe',  type: 'password' },
+        // Story 15.32 (ADR-008 residual, MFA): optional — only required
+        // when the account has mfaEnabled. Left blank on the first submit;
+        // the login form re-submits with it once it sees the MFA_REQUIRED
+        // error below.
+        totp:     { label: 'Code de vérification', type: 'text' },
       },
       async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null;
@@ -58,6 +65,30 @@ export const authOptions: NextAuthOptions = {
         if (!valid) {
           logSensitiveAction({ action: 'login_failure', userId: user.id, email: user.email, ip, reason: 'wrong_password' });
           return null;
+        }
+
+        if (user.mfaEnabled && user.mfaSecret) {
+          const totp = credentials.totp?.trim();
+          if (!totp) {
+            // Thrown (not returned null) so the login page can tell "wrong
+            // password" apart from "needs a second factor" — NextAuth
+            // surfaces a thrown Error's message as `result.error` on the
+            // client, unlike a `null` return which always maps to the
+            // generic CredentialsSignin error.
+            throw new Error('MFA_REQUIRED');
+          }
+
+          const secret = decryptSecret(user.mfaSecret);
+          const totpValid = verifyTotpToken(totp, secret);
+          if (!totpValid) {
+            const remaining = await consumeRecoveryCode(totp, user.mfaRecoveryCodes);
+            if (!remaining) {
+              logSensitiveAction({ action: 'mfa_challenge_failed', userId: user.id, email: user.email, ip, reason: 'login' });
+              throw new Error('MFA_INVALID');
+            }
+            // Recovery codes are one-time use — persist the reduced set.
+            await prisma.user.update({ where: { id: user.id }, data: { mfaRecoveryCodes: remaining } });
+          }
         }
 
         logSensitiveAction({ action: 'login_success', userId: user.id, email: user.email, ip });

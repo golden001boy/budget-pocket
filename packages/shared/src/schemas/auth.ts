@@ -3,6 +3,10 @@ import { z } from 'zod';
 export const loginSchema = z.object({
   email: z.string().email('Email invalide'),
   password: z.string().min(1, 'Mot de passe requis'),
+  // Story 15.32 (MFA): only required when the account has mfaEnabled — the
+  // mobile client resubmits with it after a first attempt comes back with
+  // `error: 'mfa_required'`.
+  totp: z.string().optional(),
 });
 
 // Small denylist of the most commonly breached/guessed passwords (story

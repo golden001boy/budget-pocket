@@ -5,11 +5,14 @@ import { encode } from 'next-auth/jwt';
 import { rateLimit, getClientIp } from '@/lib/rateLimit';
 import { logSensitiveAction } from '@/lib/auditLog';
 import { MAX_JSON_BODY_BYTES } from '@/lib/requestBody';
+import { verifyTotpToken, consumeRecoveryCode } from '@/lib/mfa';
 
-jest.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: jest.fn() } } }));
+jest.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: jest.fn(), update: jest.fn() } } }));
 jest.mock('bcryptjs', () => ({ compare: jest.fn() }));
 jest.mock('next-auth/jwt', () => ({ encode: jest.fn() }));
 jest.mock('@/lib/auditLog', () => ({ logSensitiveAction: jest.fn() }));
+jest.mock('@/lib/mfa', () => ({ verifyTotpToken: jest.fn(), consumeRecoveryCode: jest.fn() }));
+jest.mock('@/lib/mfaCrypto', () => ({ decryptSecret: (s: string) => s }));
 jest.mock('@/lib/rateLimit', () => ({
   rateLimit: jest.fn(),
   getClientIp: jest.fn(() => '203.0.113.1'),
@@ -20,11 +23,13 @@ jest.mock('@/lib/rateLimit', () => ({
   ACCOUNT_LOGIN_ATTEMPT_LIMIT: 10,
 }));
 
-const mockPrisma = prisma as unknown as { user: { findUnique: jest.Mock } };
+const mockPrisma = prisma as unknown as { user: { findUnique: jest.Mock; update: jest.Mock } };
 const mockRateLimit = rateLimit as jest.Mock;
 const mockCompare = bcrypt.compare as jest.Mock;
 const mockEncode = encode as jest.Mock;
 const mockLog = logSensitiveAction as jest.Mock;
+const mockVerifyTotpToken = verifyTotpToken as jest.Mock;
+const mockConsumeRecoveryCode = consumeRecoveryCode as jest.Mock;
 
 function makeRequest(body: unknown) {
   return new Request('http://localhost/api/auth/mobile', {
@@ -89,6 +94,68 @@ describe('POST /api/auth/mobile — audit logging (story 15.19)', () => {
     expect(mockLog).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'login_success', userId: 'u1', email: 'demo@budget-pocket.app' }),
     );
+  });
+});
+
+describe('POST /api/auth/mobile — MFA (story 15.32)', () => {
+  const mfaUser = {
+    id: 'u1', email: 'demo@budget-pocket.app', passwordHash: 'hash',
+    name: 'Demo', role: 'PREMIUM', currency: 'XOF', onboardingDone: true, emailVerified: new Date(),
+    mfaEnabled: true, mfaSecret: 'encrypted-secret', mfaRecoveryCodes: ['h1', 'h2'],
+  };
+
+  beforeEach(() => {
+    mockCompare.mockResolvedValue(true);
+  });
+
+  it('returns 401 mfa_required without issuing a token when no totp is submitted', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(mfaUser);
+
+    const response = await POST(makeRequest({ email: mfaUser.email, password: 'whatever123' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ error: 'mfa_required' });
+    expect(mockEncode).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 with a distinct message when the totp code is wrong and no recovery code matches', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(mfaUser);
+    mockVerifyTotpToken.mockReturnValue(false);
+    mockConsumeRecoveryCode.mockResolvedValue(null);
+
+    const response = await POST(makeRequest({ email: mfaUser.email, password: 'whatever123', totp: '000000' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ error: 'Code invalide' });
+    expect(mockLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'mfa_challenge_failed', userId: 'u1' }),
+    );
+    expect(mockEncode).not.toHaveBeenCalled();
+  });
+
+  it('issues a token when the totp code is correct', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(mfaUser);
+    mockVerifyTotpToken.mockReturnValue(true);
+    mockEncode.mockResolvedValue('jwt-token');
+
+    const response = await POST(makeRequest({ email: mfaUser.email, password: 'whatever123', totp: '123456' }));
+
+    expect(response.status).toBe(200);
+    expect(mockConsumeRecoveryCode).not.toHaveBeenCalled();
+  });
+
+  it('issues a token and consumes the recovery code when a valid recovery code is submitted instead', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(mfaUser);
+    mockVerifyTotpToken.mockReturnValue(false);
+    mockConsumeRecoveryCode.mockResolvedValue(['h2']);
+    mockEncode.mockResolvedValue('jwt-token');
+
+    const response = await POST(makeRequest({ email: mfaUser.email, password: 'whatever123', totp: 'ABCD-1234' }));
+
+    expect(response.status).toBe(200);
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { mfaRecoveryCodes: ['h2'] } });
   });
 });
 

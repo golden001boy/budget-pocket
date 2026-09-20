@@ -9,6 +9,8 @@ import {
 } from '@/lib/rateLimit';
 import { logSensitiveAction } from '@/lib/auditLog';
 import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
+import { verifyTotpToken, consumeRecoveryCode } from '@/lib/mfa';
+import { decryptSecret } from '@/lib/mfaCrypto';
 
 // Kept in sync with SESSION_MAX_AGE_SECONDS in lib/auth.ts (story 15.8) — the
 // mobile client stores this token directly and has no refresh flow, so it
@@ -22,7 +24,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
     }
-    const { email, password } = parsed.data;
+    const { email, password, totp } = parsed.data;
 
     const ip = getClientIp(req.headers);
     const limit = await rateLimit(loginRateLimitKey(email, ip), LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS);
@@ -47,6 +49,24 @@ export async function POST(req: NextRequest) {
     if (!valid) {
       logSensitiveAction({ action: 'login_failure', userId: user.id, email: user.email, ip, reason: 'wrong_password' });
       return NextResponse.json({ error: 'Identifiants invalides' }, { status: 401 });
+    }
+
+    if (user.mfaEnabled && user.mfaSecret) {
+      const submittedTotp = totp?.trim();
+      if (!submittedTotp) {
+        return NextResponse.json({ error: 'mfa_required' }, { status: 401 });
+      }
+
+      const secret = decryptSecret(user.mfaSecret);
+      const totpValid = verifyTotpToken(submittedTotp, secret);
+      if (!totpValid) {
+        const remaining = await consumeRecoveryCode(submittedTotp, user.mfaRecoveryCodes);
+        if (!remaining) {
+          logSensitiveAction({ action: 'mfa_challenge_failed', userId: user.id, email: user.email, ip, reason: 'login_mobile' });
+          return NextResponse.json({ error: 'Code invalide' }, { status: 401 });
+        }
+        await prisma.user.update({ where: { id: user.id }, data: { mfaRecoveryCodes: remaining } });
+      }
     }
 
     logSensitiveAction({ action: 'login_success', userId: user.id, email: user.email, ip });
