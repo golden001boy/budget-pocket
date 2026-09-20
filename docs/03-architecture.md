@@ -601,7 +601,7 @@ plus grande échelle réelle, mais ce n'est pas ce qui a résolu le goulot
 mesuré ici (voir Story 15.16 pour la distinction claire entre les deux
 changements).
 
-### ADR-012 — Coffre de secrets : variables d'environnement Vercel plutôt que Vault/AWS Secrets Manager (story 15.14)
+### ADR-012 — Coffre de secrets : variables d'environnement Vercel plutôt que Vault/AWS Secrets Manager (story 15.14) · ✅ Confirmé
 
 **Contexte** : Gate Phase 6 §9.2.j ("Secrets depuis un coffre dédié") était
 🔴 — `.env` local uniquement, aucun coffre-fort. La story indiquait
@@ -612,8 +612,10 @@ traitée dans une session `/goal` en continuation autonome (« poursuis
 jusqu'à épuisement de token de cette session », 2026-09-13), sans pause
 pour confirmation — contrairement aux stories précédentes (15.10, 15.12)
 où le cadrage avait explicitement été discuté avec vous avant
-implémentation. Marqué ici pour transparence, à rouvrir si vous jugez le
-choix ci-dessous incorrect.
+implémentation. Marqué ici pour transparence à l'origine, **confirmé
+explicitement avec vous le 2026-09-19** — le choix ci-dessous reste tel
+quel, cette ADR n'est plus ouverte à réexamen sauf changement de contexte
+(ex. multi-provider, besoin d'audit de rotation fin).
 
 **Choix retenu** : les **variables d'environnement chiffrées de Vercel**
 (Project Settings → Environment Variables, scopées par environnement
@@ -734,7 +736,7 @@ Utilisés dans [02-prd.md](02-prd.md) et [05-status.md](05-status.md) :
 | g | **TLS** | HTTPS imposé sur comms externes | 🟡 Dépend de l'hébergeur (Vercel force HTTPS) ; non vérifié en local ; aucune vérification explicite dans le code |
 | h | **CORS** | Configuration restrictive, pas de `*` | ✅ Aucune configuration CORS explicite trouvée — API et front sont same-origin par design, donc pas d'exposition cross-origin |
 | i | **CSP** | Content Security Policy stricte | ✅ Déployée globalement dans [next.config.mjs](../apps/web/next.config.mjs) (`default-src 'self'`, etc.) |
-| j | **Coffre secrets** | Variables d'env via gestionnaire dédié | 🟡 Décision de cadrage prise (story 15.14, [ADR-012](#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514)) : variables d'env chiffrées Vercel plutôt que Vault/AWS Secrets Manager, plus validation Zod au boot (`lib/env.ts`) ; non vérifié en direct sur un vrai compte Vercel |
+| j | **Coffre secrets** | Variables d'env via gestionnaire dédié | 🟡 Décision de cadrage confirmée avec vous le 2026-09-19 (story 15.14, [ADR-012](#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514--confirmé)) : variables d'env chiffrées Vercel plutôt que Vault/AWS Secrets Manager, plus validation Zod au boot (`lib/env.ts`) ; reste 🟡 uniquement faute de vérification en direct sur un vrai compte Vercel |
 
 Détail complet des tests de validation par item : [04-tests.md](04-tests.md).
 
@@ -941,18 +943,17 @@ signalé pour une story de suivi.
   politique écrite, pas encore éprouvée sur un cycle réel (pas assez de
   temps écoulé depuis sa rédaction pour évaluer si elle est suivie).
 
-## 13. Dette technique identifiée (non traitée, signalée pour décision)
+## 13. Dette technique identifiée (décisions tranchées avec l'utilisateur le 2026-09-19)
 
-Quatre découvertes de fin de session, aucune transformée en story — une
-décision de produit/architecture est nécessaire avant d'agir
-(garder/réparer/supprimer pour la première, construire ou non pour la
-deuxième, choisir la méthode de calcul pour la troisième, choisir la forme
-du wrapper partagé pour la quatrième), donc listées ici plutôt que
-corrigées unilatéralement.
+Quatre découvertes de fin de session précédente, laissées non tranchées le
+temps de consulter l'utilisateur — les quatre décisions ont depuis été
+prises explicitement avec lui (2026-09-19) et implémentées. Section
+conservée telle quelle pour l'historique du constat ; le statut de chaque
+décision est noté dans son propre sous-titre.
 
 **Le package `packages/api-client` est du code mort dans toute la
 codebase, et son mécanisme d'authentification ne fonctionnerait de toute
-façon pas avec le backend actuel.**
+façon pas avec le backend actuel.** · ✅ Décision prise : supprimé.
 
 - [`createApiClient()`](../packages/api-client/src/client.ts) envoie un
   header `Authorization: Bearer <token>` sur chaque requête.
@@ -980,18 +981,21 @@ façon pas avec le backend actuel.**
   suggère) et l'utiliser pour un nouvel écran, en découvrant l'échec
   d'authentification seulement au runtime.
 
-**Non traité ici** — options possibles, à trancher avec vous : (a)
-supprimer le package si `mfetch.ts` est le pattern retenu durablement ;
-(b) réparer `createApiClient()` pour envoyer le même header `Cookie` que
-`mfetch.ts` et migrer les écrans vers lui, si un client HTTP partagé/typé
-reste souhaitable à terme ; (c) documenter clairement que c'est un
-scaffold non fini et laisser tel quel. Aucune de ces options n'a été
-choisie unilatéralement — contrairement aux corrections de bugs de cette
-session (ADR-012 mis à part, qui portait sur une story déjà en cours),
-celle-ci change la surface de code exposée à l'équipe mobile future,
-donc mérite votre arbitrage plutôt qu'une décision prise seule.
+**Décision (2026-09-19)** : option (a) — supprimé. `mfetch.ts` est le
+pattern réel et durable pour les appels API mobile (déjà utilisé par tous
+les écrans réels depuis le début) ; garder un second client HTTP mort
+n'apportait rien et restait un piège pour un futur développeur. Supprimés :
+tout `packages/api-client/` et son unique (et lui-même inutilisé)
+consommateur `apps/mobile/lib/api.ts`, plus la dépendance
+`@budget-pocket/api-client` retirée de `apps/web/package.json` et
+`apps/mobile/package.json`. `pnpm install` reconfirme le monorepo à 3
+packages (`shared`, `web`, `mobile`) au lieu de 4. Aucune régression
+possible : zéro import réel du package supprimé (confirmé avant
+suppression). Voir aussi
+[specs/epic-13-mobile.md](../specs/epic-13-mobile.md#story-134--shared-api-client)
+pour la story d'origine, marquée "Superseded".
 
-### Répertoires de route API vides (scaffold jamais implémenté)
+### Répertoires de route API vides (scaffold jamais implémenté) · ✅ Décision prise : supprimés
 
 Trouvé en listant récursivement `apps/web/src/app/api` en fin de session
 (15.24/15.20 n'avaient audité que les fichiers `route.ts` déjà présents,
@@ -1017,16 +1021,19 @@ pattern qu'`advisor`/`planning`), donc `admin/stats`/`admin/users` en
 tant que routes API n'ont jamais été nécessaires pour l'app telle qu'elle
 existe.
 
-**Non traité** : construire ces routes serait du développement de
-fonctionnalité neuve (CRUD par item sur comptes/positions de portefeuille,
-lecture d'une alerte par id, endpoints admin JSON) — pas un correctif de
-bug, donc hors périmètre d'une correction unilatérale. Si un besoin réel
-émerge (ex. bouton "modifier"/"supprimer" sur une position de portefeuille
-dans l'UI), la story correspondante devra explicitement définir le
-contrat (validation, ownership check, codes d'erreur) plutôt que de
-supposer que le scaffold vide en donne un indice fiable.
+**Décision (2026-09-19)** : les 5 répertoires vides sont supprimés
+(`accounts/[id]/` avec son sous-répertoire `sync/`, `portfolio/[id]/`,
+`alerts/` en entier — qui n'avait jamais eu de `route.ts` même à sa
+racine —, `admin/stats/`, `admin/users/`, ce dernier retiré une fois vidé
+de ses deux sous-répertoires). Le matcher de
+[middleware.ts](../apps/web/src/middleware.ts) a aussi perdu son entrée
+`/api/alerts/:path*`, qui ne protégeait plus rien de réel. Si un besoin
+réel émerge plus tard (ex. bouton "modifier"/"supprimer" sur une position
+de portefeuille dans l'UI), la story correspondante devra explicitement
+définir le contrat (validation, ownership check, codes d'erreur) plutôt
+que de repartir d'un scaffold vide qui ne donnait aucun indice fiable.
 
-### `projectionByYear` diverge du total final dans 2 des 3 simulateurs financiers
+### `projectionByYear` diverge du total final dans 2 des 3 simulateurs financiers · ✅ Décision prise : boucle alignée sur la formule fermée
 
 Trouvé en écrivant les tests de la story 15.29 (`lib/simulators/`) — un
 écart numérique réel, pas un bug caché qui casse quoi que ce soit
@@ -1057,15 +1064,20 @@ par `ScenarioList.tsx`. Le jour où un graphique consommera
 `projectionByYear`, son dernier point ne correspondra plus au total
 affiché juste à côté.
 
-**Non corrigé ici** — deux méthodes de calcul défendables (capitalisation
-mensuelle précise vs. approximation annuelle plus simple à faire lire sur
-un graphique), le choix appartient à qui construira ce graphique. Documenté
-dans les tests eux-mêmes
+**Décision (2026-09-19)** : capitalisation mensuelle précise retenue plutôt
+que l'approximation annuelle — la boucle `projectionByYear` de
+`retirement.ts` et `stockGrowth.ts` capitalise désormais chaque mois
+individuellement (au lieu d'ajouter les 12 contributions de l'année en un
+bloc en fin d'année), ce qui la rend mathématiquement identique à la
+formule fermée utilisée pour `projectedSavings`/`finalValue` — le dernier
+point de la projection coïncide maintenant exactement avec le total
+affiché, plutôt qu'à ~2,5-3% près. Les deux tests qui documentaient l'écart
 ([`retirement.test.ts`](../apps/web/src/lib/simulators/__tests__/retirement.test.ts),
 [`stockGrowth.test.ts`](../apps/web/src/lib/simulators/__tests__/stockGrowth.test.ts))
-par des assertions qui vérifient l'écart plutôt que de le masquer.
+ont été réécrits pour vérifier l'égalité exacte plutôt que la divergence.
+`realEstate.ts` n'a jamais eu ce problème (déjà mois par mois).
 
-### Aucun wrapper de route API partagé — `try/catch`/rate-limit/session recopiés à la main dans ~12 fichiers
+### Aucun wrapper de route API partagé — `try/catch`/rate-limit/session recopiés à la main dans ~12 fichiers · ✅ Décision prise : HOF `withApiRoute`/`withDynamicApiRoute`
 
 Trouvé par une revue de code holistique (`code-review high master..HEAD`)
 lancée après la story 15.29 sur l'ensemble de la branche (voir le point de
@@ -1121,17 +1133,44 @@ inclut déjà cet aller-retour — le retirer changerait un chiffre documenté
 sans nouvelle mesure pour le remplacer. À trancher avec la question du
 wrapper partagé ci-dessus plutôt que corrigé isolément.
 
-**Non traité ici** — introduire un wrapper partagé (HOF `withApiRoute`,
-ou middleware Next.js étendu) toucherait la totalité des ~12 fichiers de
-routes API du projet ; c'est une décision d'architecture qui va au-delà
-d'une correction de bug isolée (il faut choisir la forme du wrapper —
-HOF par handler ? middleware centralisé ? — et son contrat d'erreur),
-donc laissée à votre arbitrage plutôt que tranchée seule, cohérent avec le
-traitement des trois découvertes précédentes. Options possibles : (a) un
-HOF `withApiRoute(handler, { rateLimit: boolean })` enveloppant
-session+try/catch+rate-limit optionnel, appelé une fois par export dans
-chaque `route.ts` ; (b) centraliser dans `middleware.ts` (déjà doté d'un
-`config.matcher` qui couvre la plupart de ces chemins, mais pas tous —
-`/api/user/profile` n'y figure pas, protégé uniquement par son propre
-contrôle inline) ; (c) ne rien changer et accepter le coût de maintenance
-déjà mesuré (deux dérives trouvées en une seule revue).
+**Décision (2026-09-19)** : option (a) — HOF, pas middleware centralisé.
+[`lib/apiRoute.ts`](../apps/web/src/lib/apiRoute.ts) exporte deux
+fonctions plutôt qu'une seule polymorphe :
+
+- `withApiRoute(handler, { name, rateLimit? })` pour les routes sans
+  segment dynamique — la fonction retournée n'a qu'**un seul** paramètre
+  déclaré (`req`), jamais un second optionnel.
+- `withDynamicApiRoute<P>(handler, { name, rateLimit? })` pour les routes
+  avec un `[id]` — la fonction retournée a deux paramètres, tous deux
+  obligatoires (`req`, `{ params: Promise<P> }`).
+
+**Pourquoi deux fonctions et pas une seule avec un second paramètre
+optionnel/par défaut** : le validateur de types généré par Next.js
+(`.next/types/app/api/**/route.ts`, vérifié par `pnpm type-check`) exige
+que le second paramètre d'un handler exporté, s'il est déclaré, soit
+exactement `{ params: Promise<P> }` — sans `undefined` dans le type. Un
+paramètre optionnel (`ctx?: X`) ou avec valeur par défaut est toujours vu
+par TypeScript comme `X | undefined` via `Parameters<>`, ce qui casse ce
+contrat. Un handler avec strictement un seul paramètre déclaré (pas de
+second du tout) satisfait l'interface de Next par la règle standard
+d'arité des fonctions (un appelant peut toujours fournir plus
+d'arguments qu'une fonction n'en déclare) — c'est exactement ainsi que le
+code fonctionnait déjà avant ce wrapper.
+
+Les deux blocs dupliqués — session+401, rate-limit+429 (optionnel),
+`try/catch`→413/500 — vivent maintenant dans un seul endroit
+([`checkAuthAndRateLimit`](../apps/web/src/lib/apiRoute.ts)/
+`handleError`), appelé par les deux fonctions. Les 13 fichiers de routes
+concernés (`accounts`, `advisor/scenarios`, `analysis/forecast`,
+`analysis/snapshot`, `budgets`, `goals`, `goals/[id]`,
+`planning/retirement`, `planning/taxes`, `portfolio`, `transactions`,
+`transactions/[id]`, `user/profile`) sont migrés ; aucun changement de
+comportement sur le chemin nominal (16 tests de wrapper ajoutés, 267/267
+au total, `pnpm type-check` 3/3, `pnpm build` 50/50 pages). Les 5 routes
+`auth/*` et les 2 routes `stripe/*` restent hors périmètre du wrapper —
+contrat d'erreur différent (JSON non-authentifié par design pour les
+premières, redirection navigateur pour les secondes), pas la duplication
+que cette décision visait à résorber. L'aller-retour Redis superflu de
+`rateLimit()` relevé par l'angle "efficiency" (`resetAt`/`remaining`
+jamais lus) n'a pas été touché — indépendant du choix du wrapper, laissé
+tel quel comme documenté précédemment.

@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (26 ✅ + 4 🟡 sur 30)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (27 ✅ + 4 🟡 sur 31)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -182,6 +182,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.28 | Tests pour `projectForecast` (régression linéaire, prévisions financières) | Should | S | ✅ | Testé uniquement par mock dans la story 15.24, jamais directement |
 | 15.29 | Tests pour les 3 simulateurs (immobilier/retraite/bourse) | Should | S | ✅ | Gap "simulateurs" noté depuis 15.9, jamais comblé jusqu'ici |
 | 15.30 | Limite de taille de payload sur les routes mutatives | Should | S | ✅ | Résidu API-04 noté depuis 15.20, jamais traité jusqu'ici |
+| 15.31 | Dette technique §13 clôturée avec l'utilisateur (4 décisions) | Could | M | ✅ | api-client supprimé, 5 routes vides supprimées, `projectionByYear` aligné, wrapper `withApiRoute`/`withDynamicApiRoute` |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -1951,6 +1952,79 @@ lui-même, `readJsonBody` opère uniquement sur le texte déjà reçu).
 [lib/__tests__/requestBody.test.ts](../apps/web/src/lib/__tests__/requestBody.test.ts)
 (nouveau), les 16 fichiers de route listés ci-dessus, plus les tests `413`
 ajoutés dans leurs 12 suites déjà existantes.
+
+---
+
+### Story 15.31 — Dette technique §13 clôturée avec l'utilisateur (4 décisions) · ✅ Done
+
+**Story** : En tant que mainteneur, je veux que les quatre découvertes de
+fin de session documentées dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-décisions-tranchées-avec-lutilisateur-le-2026-09-19)
+— laissées volontairement non tranchées car chacune impliquait une
+décision de produit/architecture — soient explicitement décidées avec
+l'utilisateur puis implémentées, plutôt que rester indéfiniment en
+suspens dans la documentation.
+
+**Contexte** : demande explicite de l'utilisateur (« terminons avec
+l'epic 15 ») après consultation sur chacune des 4 décisions
+individuellement (options présentées, choix faits), plus deux décisions
+connexes (confirmation de l'ADR-012, scope de la story MFA — voir
+15.32/ADR-008). Cette story ne couvre que les 4 décisions du §13 ; MFA et
+la vérification Neon/Vercel réelle sont traitées séparément.
+
+**Décisions prises et implémentées**
+
+1. **`packages/api-client`** (code mort, auth Bearer incompatible avec ce
+   backend) — supprimé entièrement, avec son unique (et lui-même inutilisé)
+   consommateur `apps/mobile/lib/api.ts`. Dépendance retirée de
+   `apps/web/package.json` et `apps/mobile/package.json`, lockfile
+   régénéré (`pnpm install`) — le monorepo passe de 4 à 3 packages
+   (`shared`, `web`, `mobile`). [specs/epic-13-mobile.md](../specs/epic-13-mobile.md)
+   mis à jour (story 13.4 marquée "Superseded").
+2. **5 répertoires de route API vides** (`accounts/[id]/` + `sync/`,
+   `portfolio/[id]/`, `alerts/` en entier, `admin/stats/`, `admin/users/`)
+   — supprimés. `middleware.ts` a aussi perdu son entrée
+   `/api/alerts/:path*`, qui ne protégeait plus rien de réel.
+3. **`projectionByYear` divergent de ~2,5-3%** (`retirement.ts`,
+   `stockGrowth.ts`) — la boucle annuelle capitalise désormais chaque mois
+   individuellement au lieu d'ajouter les 12 contributions en un bloc en
+   fin d'année, la rendant mathématiquement identique à la formule fermée.
+   Les deux tests qui documentaient l'écart (story 15.29) réécrits pour
+   vérifier l'égalité exacte plutôt que la divergence.
+4. **Aucun wrapper de route API partagé** — `withApiRoute`/
+   `withDynamicApiRoute` (voir détail technique complet dans
+   [03-architecture.md §13, 4e découverte](03-architecture.md#aucun-wrapper-de-route-api-partagé--trycatchrate-limitsession-recopiés-à-la-main-dans-12-fichiers--décision-prise--hof-withapiroutewithdynamicapiroute)) —
+   deux fonctions plutôt qu'une seule polymorphe, contrainte découverte en
+   implémentant : le validateur de types généré par Next.js
+   (`.next/types/app/api/**/route.ts`) rejette un second paramètre de
+   handler optionnel/par défaut (toujours vu comme `X | undefined` par
+   `Parameters<>`), d'où deux entrées séparées selon que la route a ou non
+   un segment dynamique. 13 fichiers de routes migrés.
+
+**Critères d'acceptation**
+- [x] Les 4 décisions ci-dessus confirmées avec l'utilisateur avant
+      implémentation (aucune tranchée unilatéralement).
+- [x] `pnpm test` — 267/267 (16 nouveaux tests de wrapper, 2 tests de
+      simulateurs réécrits).
+- [x] `pnpm type-check` — 3/3 (le monorepo passe de 4 à 3 packages après
+      la suppression d'`api-client`).
+- [x] `pnpm build` (production réelle) — 50/50 pages, vert après un
+      rebuild complet (`.next` supprimé) pour régénérer les validateurs de
+      types de route Next.js sur les nouvelles signatures.
+- [x] Aucun changement de comportement sur le chemin nominal des 13 routes
+      migrées vers le wrapper — mêmes 401/429/400/404/2xx qu'avant,
+      vérifié par la suite de tests existante sans modification (les
+      mocks Jest ciblent les chemins de module, pas les sites d'import,
+      donc `apiRoute.ts` important les mêmes modules mockés continue de
+      fonctionner de façon transparente).
+
+**Implémentation** :
+[lib/apiRoute.ts](../apps/web/src/lib/apiRoute.ts) (nouveau),
+[lib/__tests__/apiRoute.test.ts](../apps/web/src/lib/__tests__/apiRoute.test.ts)
+(nouveau), les 13 fichiers de routes migrés, `middleware.ts`,
+`lib/simulators/retirement.ts` + `stockGrowth.ts` et leurs tests,
+suppression de `packages/api-client/` et `apps/mobile/lib/api.ts`,
+[specs/epic-13-mobile.md](../specs/epic-13-mobile.md).
 
 ---
 

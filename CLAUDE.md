@@ -30,19 +30,21 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 25 ✅ + 4 🟡 sur 29, plus aucune story 🔴. 15.7
+sécurité/prod) est 🟡 27 ✅ + 4 🟡 sur 31, plus aucune story 🔴. 15.7
 (backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
-documentés (MFA reporté, voir ADR-008). **Dette technique signalée, non
-traitée** (trois découvertes, décisions volontairement laissées à vous) :
-`packages/api-client` est du code mort avec un mécanisme d'auth qui ne
-fonctionnerait pas contre ce backend ; cinq répertoires de route API sous
-`apps/web/src/app/api` n'ont jamais eu de `route.ts`
-(`accounts/[id]`, `portfolio/[id]`, `alerts/[id]`, `admin/stats`,
-`admin/users`) ; `retirement.ts`/`stockGrowth.ts` divergent de ~2,5-3 %
-entre leur total final et le dernier point de `projectionByYear` (sans
-impact aujourd'hui, ce champ n'est rendu nulle part dans l'UI) — détail et
-options dans
-[docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
+documentés (MFA reporté, voir ADR-008 — story dédiée 15.32, cadrage décidé
+avec vous le 2026-09-19 : TOTP optionnel activable par l'utilisateur,
+implémentation à venir). **Dette technique du §13 — clôturée le 2026-09-19** (story
+15.31, 4 décisions prises explicitement avec vous puis implémentées, plus
+de statu quo) : `packages/api-client` (code mort) supprimé avec son seul
+consommateur (`apps/mobile/lib/api.ts`, lui-même inutilisé) ; les 5
+répertoires de route API vides supprimés (`accounts/[id]`, `portfolio/[id]`,
+`alerts/`, `admin/stats`, `admin/users`) ; l'écart `projectionByYear` sur
+`retirement.ts`/`stockGrowth.ts` corrigé (boucle mensuelle, plus seulement
+documenté) ; wrapper d'API partagé construit
+(`withApiRoute`/`withDynamicApiRoute`, [lib/apiRoute.ts](apps/web/src/lib/apiRoute.ts))
+et câblé sur 13 fichiers de routes. Détail complet dans
+[docs/03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-décisions-tranchées-avec-lutilisateur-le-2026-09-19).
 
 **Revue de code holistique post-15.29 — 8/8 angles terminés (2026-09-14)** :
 `code-review high master..HEAD` (auto-initiée, non demandée), lancée après
@@ -54,11 +56,10 @@ décision de conception nécessaire) : `GET /api/advisor/scenarios` sans
 l'écran mobile "Transactions" lisait `data.transactions` au lieu de
 `data.data` (même bug que 15.3/15.18, jamais corrigé sur cet écran-là,
 liste toujours vide en silence). Le thème de fond soulevé par 4 des 8
-angles (aucun wrapper de route API partagé) documenté comme quatrième
-découverte en
-[03-architecture.md §13](docs/03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision).
-Reste seulement une synthèse formelle de dédup des 8 sorties d'angles (pas
-de nouveau correctif attendu). Détail dans
+angles (aucun wrapper de route API partagé) — documenté comme quatrième
+découverte du §13 à l'époque, **résolu depuis par la story 15.31**
+(`withApiRoute`/`withDynamicApiRoute`, voir "État actuel" ci-dessus).
+Détail dans
 [docs/05-status.md §Point de reprise](docs/05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14).
 
 **Stories 15.14 à 15.29 traitées le 2026-09-13** dans une session `/goal`
@@ -67,9 +68,11 @@ session »), **sans pause pour confirmation avec vous** — contrairement au
 précédent établi par 15.10/15.12. Résumé (détail complet story par story
 dans [docs/05-status.md](docs/05-status.md), section Gate Phase 6) :
 - **15.14** coffre de secrets — variables d'env chiffrées Vercel retenues
-  plutôt que Vault/AWS Secrets Manager, décision **à confirmer avec vous**
-  ([ADR-012](docs/03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514)),
-  + validation Zod des secrets au boot (`lib/env.ts`). 🟡 partiel.
+  plutôt que Vault/AWS Secrets Manager, décision **confirmée avec vous le
+  2026-09-19**
+  ([ADR-012](docs/03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514--confirmé)),
+  + validation Zod des secrets au boot (`lib/env.ts`). 🟡 partiel (reste
+  non vérifié sur un vrai compte Vercel).
 - **15.15** politique de patching + rollback applicatif réellement testé
   (`git revert`, rollback BDD toujours non exercé). 🟡 partiel.
 - **15.17** `/api/health` ne fuit plus le message d'erreur Prisma brut. ✅
@@ -133,9 +136,15 @@ n'existait dans ce sandbox (GitHub, Neon) — inexact. La réalité, observée
 plusieurs fois pendant la session : une **connectivité intermittente**
 (Neon est passé joignable → injoignable → joignable sans action de ma
 part), cause exacte non confirmée (cold-start du compute Neon Free
-suspecté, instabilité du sandbox pas exclue). Travail commité sur une
-branche locale non poussée (`epic-15/15.14-15.15-secrets-patching`) — pas
-par impossibilité, mais parce que pousser n'a pas été demandé — voir
+suspecté, instabilité du sandbox pas exclue). Travail alors commité sur
+une branche locale non poussée (`epic-15/15.14-15.15-secrets-patching`) —
+**poussée depuis, le 2026-09-19, sur demande explicite** : PR
+[#1](https://github.com/golden001boy/budget-pocket/pull/1) ouverte
+(`epic-15/15.14-15.15-secrets-patching` → `master`, stories 15.14 à
+15.31), CI verte (`type-check-and-test`), mergeable, **toujours pas
+fusionnée** — la fusion elle-même a été bloquée par le mode auto de
+Claude Code ("Merge Without Review", jamais auto-approuvé) ; à faire par
+vous depuis GitHub, ou à autoriser explicitement. Voir
 [docs/05-status.md §Gate Phase 6](docs/05-status.md#gate-phase-6--évaluation-bmad-prelaunch-2026-07-23)
 pour le détail item par item (score **10 ✅ / 6 🟡 / 5 🔴 sur 21** — le
 dénombrement précédent ("20 items") était déjà inexact ; le projet reste

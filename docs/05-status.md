@@ -12,7 +12,7 @@ session précédente et laissé non committé, voir sa note ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 26 ✅ + 4 🟡 sur 30 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 27 ✅ + 4 🟡 sur 31 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ session précédente et laissé non committé, voir sa note ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 26 ✅ + 4 🟡 sur 30 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26, 15.27, 15.28, 15.29, 15.30 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 27 ✅ + 4 🟡 sur 31 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26, 15.27, 15.28, 15.29, 15.30, 15.31 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -64,6 +64,42 @@ avec un corps de requête effectivement surdimensionné (couverture
 unitaire complète, pas de vérification bout en bout comme pour d'autres
 stories de cet epic). Détail complet :
 [02-prd.md](02-prd.md#story-1530--limite-de-taille-de-payload-sur-les-routes-mutatives--done).
+
+**Note story 15.31** (2026-09-19) : ✅ complet — suite à la demande
+explicite « terminons avec l'epic 15 », les 4 découvertes de dette
+technique du [§13](03-architecture.md#13-dette-technique-identifiée-décisions-tranchées-avec-lutilisateur-le-2026-09-19)
+(laissées non tranchées depuis la revue de code holistique du
+2026-09-14) ont été présentées avec leurs options, décidées explicitement
+avec vous, puis implémentées : `packages/api-client` supprimé (code mort,
+avec son unique consommateur `apps/mobile/lib/api.ts`, lui-même
+inutilisé) ; 5 répertoires de route API vides supprimés (`accounts/[id]`,
+`portfolio/[id]`, `alerts/`, `admin/stats`, `admin/users` — le matcher de
+`middleware.ts` a aussi perdu son entrée `/api/alerts/:path*` désormais
+sans cible réelle) ; `projectionByYear` aligné exactement sur le total
+final dans `retirement.ts`/`stockGrowth.ts` (boucle mensuelle au lieu
+d'un bloc annuel — écart de story 15.29 fermé, pas seulement documenté) ;
+wrapper d'API partagé `withApiRoute`/`withDynamicApiRoute`
+([lib/apiRoute.ts](../apps/web/src/lib/apiRoute.ts)) construit et câblé
+sur les 13 fichiers de routes concernés. **Obstacle réel rencontré en
+implémentant le wrapper, non anticipé lors de la décision** : une
+première version à fonction unique avec un second paramètre
+optionnel/par défaut échouait `pnpm type-check` — le validateur de types
+généré par Next.js exige qu'un second paramètre de handler, s'il est
+déclaré, soit exactement `{ params: Promise<P> }` sans `undefined` dans
+le type, ce qu'un paramètre optionnel ne satisfait jamais en TypeScript.
+Résolu en scindant en deux fonctions (`withApiRoute` pour les routes
+statiques, un seul paramètre déclaré ; `withDynamicApiRoute<P>` pour les
+routes à segment dynamique, deux paramètres obligatoires) — détail complet
+dans [03-architecture.md](03-architecture.md#aucun-wrapper-de-route-api-partagé--trycatchrate-limitsession-recopiés-à-la-main-dans-12-fichiers--décision-prise--hof-withapiroutewithdynamicapiroute).
+16 nouveaux tests de wrapper, 2 tests de simulateurs réécrits (267/267 au
+total), `pnpm type-check` 3/3 (le monorepo passe de 4 à 3 packages),
+`pnpm build` 50/50 pages après un rebuild complet (`.next` supprimé pour
+régénérer les validateurs de route sur les nouvelles signatures). Aucun
+changement de comportement sur le chemin nominal des 13 routes migrées —
+confirmé par la suite de tests existante, exécutée sans aucune
+modification de ses mocks (ils ciblent les chemins de module, pas les
+sites d'import). Détail complet :
+[02-prd.md](02-prd.md#story-1531--dette-technique-13-clôturée-avec-lutilisateur-4-décisions--done).
 
 **Toutes les stories de l'Epic 15 ont désormais au moins été entamées** —
 13 ✅, 4 🟡 (15.7, 15.8, 15.14, 15.15), plus aucune 🔴. Il ne reste donc
@@ -729,7 +765,7 @@ honnête item par item, contre le code réel :
 | CSRF protégé partout | 🟡 | Cookie `SameSite=Lax` par défaut NextAuth ; pas de token CSRF explicite sur les routes API custom (FE-04) |
 | Headers de sécurité présents | ✅ | CSP/X-Frame-Options/etc déployés (FE-06) |
 | Aucun endpoint debug exposé | ✅ | Story 15.17 — `/api/health` ne renvoie plus le message d'erreur Prisma brut, BDD/Redis vérifiés indépendamment, erreurs journalisées côté serveur uniquement (BE-09) |
-| Secrets depuis un coffre dédié | 🟡 | Story 15.14 — décision de cadrage prise (variables d'env chiffrées Vercel plutôt que Vault/AWS Secrets Manager, [ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514), à confirmer avec vous) + validation Zod des secrets au boot (`lib/env.ts`) ; non vérifié sur un vrai compte Vercel |
+| Secrets depuis un coffre dédié | 🟡 | Story 15.14 — décision de cadrage confirmée avec vous le 2026-09-19 (variables d'env chiffrées Vercel plutôt que Vault/AWS Secrets Manager, [ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514--confirmé)) + validation Zod des secrets au boot (`lib/env.ts`) ; reste 🟡 uniquement faute de vérification sur un vrai compte Vercel |
 | Pipeline CI/CD protégé | ✅ | Story 15.6, confirmé actif |
 | Scan SCA sans vulnérabilité critique | ✅ | `pnpm audit` à **0 vulnérabilité** (story 15.10) |
 
