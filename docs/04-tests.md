@@ -18,7 +18,7 @@ tests). Chaque ligne 🔴 correspond à une story de l'Epic 15 dans
 | ID | Faiblesse | Priorité | État | Constat |
 |---|---|---|---|---|
 | BE-01 | Contrôle d'accès cassé (BOLA/IDOR) | 🔴 | ✅ Couvert | `transactions/[id]` et `goals/[id]` vérifient `userId === session.user.id` avant lecture/écriture/suppression (404 si non-propriétaire, jamais 403 pour ne pas confirmer l'existence) |
-| BE-02 | Authentification défaillante | 🔴 | 🟡 Partiel | Session JWT (7j depuis 15.8, était 30j), bcrypt sur les mots de passe. Rate limiting par (email, IP) **et** par compte toutes IP confondues (story 15.1 + 15.8) ; mot de passe ≥10 caractères + rejet des mots de passe communs (story 15.8). Reset de mot de passe (story 15.11) : token 256 bits, seul le hash stocké, réponse identique que le compte existe ou non (pas d'énumération d'emails), token invalidé après usage ou sur nouvelle demande. Vérification email non-bloquante (story 15.12) : même mécanisme de token, `resend-verification` gaté par session plutôt que par email. **Toujours pas de MFA** (décision de périmètre ADR-008 — reporté, story dédiée à créer) ; **pas de révocation de session côté serveur** (JWT sans état par design — `maxAge` réduit borne l'exposition mais n'invalide pas un jeton déjà émis) |
+| BE-02 | Authentification défaillante | 🔴 | 🟡 Partiel | Session JWT (7j depuis 15.8, était 30j), bcrypt sur les mots de passe. Rate limiting par (email, IP) **et** par compte toutes IP confondues (story 15.1 + 15.8) ; mot de passe ≥10 caractères + rejet des mots de passe communs (story 15.8). Reset de mot de passe (story 15.11) : token 256 bits, seul le hash stocké, réponse identique que le compte existe ou non (pas d'énumération d'emails), token invalidé après usage ou sur nouvelle demande. Vérification email non-bloquante (story 15.12) : même mécanisme de token, `resend-verification` gaté par session plutôt que par email. **MFA disponible depuis la story 15.32** — TOTP optionnel activable par l'utilisateur ([ADR-014](03-architecture.md#adr-014--mfa--totp-optionnel-activable-par-lutilisateur-otplib--secret-chiffré-aes-256-gcm-story-1532)), secret chiffré AES-256-GCM (jamais en clair en BDD), 10 codes de récupération à usage unique, web + mobile ; reste 🟡 car **optionnel par choix produit**, pas imposé à tous les comptes, et son activation elle-même n'est pas testée en environnement de production réelle. **Pas de révocation de session côté serveur** (JWT sans état par design — `maxAge` réduit borne l'exposition mais n'invalide pas un jeton déjà émis) |
 | BE-03 | Injection SQL/NoSQL/commande | 🔴 | ✅ Couvert | 100% des requêtes passent par Prisma (requêtes paramétrées) — aucune requête SQL brute (`$queryRawUnsafe`) trouvée dans le code |
 | BE-04 | Exposition de données sensibles | 🟡 | ✅ Couvert | Aucun secret sous `NEXT_PUBLIC_*` ; `passwordHash` jamais sérialisé dans les réponses API (vérifié sur `auth/mobile`, `admin/users`) |
 | BE-05 | Mauvaise configuration sécurité | 🟡 | 🟡 Partiel | Headers de sécurité déployés (CSP, X-Frame-Options, Referrer-Policy — voir FE-06) ; pas de scan de config automatisé |
@@ -182,8 +182,10 @@ Ordre recommandé (Critique → Haute → Moyenne) :
 8. ~~Perf : pagination manquante (story 15.3)~~ ✅ (`accounts`/`budgets`/
    `goals`/`portfolio`/`transactions`, contrat `{ data, meta }` commun)
 9. 🟡 BE-02 — hardening auth (story 15.8) ✅ (rate limit compte, session 7j,
-   politique mot de passe) ; volet MFA explicitement reporté (ADR-008,
-   non bloquant Must mais recommandé avant de vrais utilisateurs)
+   politique mot de passe) ; volet MFA d'abord reporté (ADR-008), **construit
+   depuis par la story 15.32** (TOTP optionnel, ADR-014) — reste 🟡 car
+   optionnel par choix produit, pas testé en environnement de production
+   réelle
 10. ~~DEV-02 résidu — migration Next.js 14 → 15.5.21 + React 19
     (story 15.10)~~ ✅ (14 → 0 vulnérabilité au final, y compris une
     nouvelle introduite par `sharp` et corrigée dans la même story)
@@ -267,18 +269,27 @@ autre story en direct plutôt que planifiée à l'avance :
     trouvé non committé/non branché en début de session, terminé et câblé
     sur les 16 routes concernées, voir
     [02-prd.md](02-prd.md#story-1530--limite-de-taille-de-payload-sur-les-routes-mutatives--done))
+30. ~~Dette technique §13 clôturée avec l'utilisateur (story 15.31)~~ ✅
+    (4 décisions tranchées explicitement puis implémentées :
+    `packages/api-client` supprimé, 5 routes API vides supprimées,
+    `projectionByYear` aligné sur la formule fermée, wrapper
+    `withApiRoute`/`withDynamicApiRoute` construit et câblé sur 13
+    fichiers — voir
+    [02-prd.md](02-prd.md#story-1531--dette-technique-13-clôturée-avec-lutilisateur-4-décisions--done))
+31. ~~BE-02 résidu — MFA (story 15.32)~~ ✅ (dernier volet reporté par
+    ADR-008, cadrage TOTP optionnel décidé avec vous puis implémenté —
+    secret chiffré AES-256-GCM, 10 codes de récupération à usage unique,
+    web + mobile, voir
+    [ADR-014](03-architecture.md#adr-014--mfa--totp-optionnel-activable-par-lutilisateur-otplib--secret-chiffré-aes-256-gcm-story-1532))
 
-**Reste non résolu après ces 29 items** : PROD-03/story 15.7 (test de
-restauration Neon réel, accès console requis) ; BE-02/story 15.8 volet
-MFA (ADR-008, reporté) ; story 15.14 (coffre de secrets — décision de
-cadrage Vercel prise sans confirmation, voir
-[ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514)) ;
-story 15.15 (politique de patching écrite, rollback applicatif testé,
-rollback BDD toujours non exercé) ; API-06 anti-bot (choix de fournisseur
-requis) ; FE-04 CSRF explicite au-delà de `SameSite=Lax` ; PROD-01
-réception réelle d'un événement Sentry (DSN requis) ; quatre éléments de
-dette technique documentés sans story
-([03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)) :
-`packages/api-client` (code mort), 5 répertoires de route API vides, écart
-`projectionByYear` sur 2 simulateurs, absence de wrapper de route API
-partagé.
+**Reste non résolu après ces 31 items** : PROD-03/story 15.7 (test de
+restauration Neon réel, accès console requis) ; story 15.14 (coffre de
+secrets — décision de cadrage confirmée avec vous le 2026-09-19, voir
+[ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514--confirmé),
+mais toujours non vérifiée sur un vrai compte Vercel) ; story 15.15
+(politique de patching écrite, rollback applicatif testé, rollback BDD
+toujours non exercé) ; API-06 anti-bot (choix de fournisseur requis) ;
+FE-04 CSRF explicite au-delà de `SameSite=Lax` ; PROD-01 réception réelle
+d'un événement Sentry (DSN requis) ; MFA (story 15.32) non testée en
+environnement de production réelle, et son activation reste optionnelle
+par choix produit plutôt qu'imposée.

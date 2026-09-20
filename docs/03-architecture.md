@@ -322,13 +322,22 @@ migration de schéma (`mfaSecret`/codes de secours sur `User`), une nouvelle
 dépendance (bibliothèque TOTP), une UI d'enrôlement/QR code et une refonte du
 `CredentialsProvider` NextAuth en flux à deux étapes — un effort disproportionné
 tant que le projet n'a pas d'utilisateurs réels à protéger.
-**Conséquence** : BE-02 reste 🟡 Partiel dans [04-tests.md](04-tests.md) — le
-hardening (rate limiting compte, session raccourcie, politique de mot de
-passe) réduit le risque de brute force et l'exposition d'un jeton volé, mais
-ne couvre pas le vol de mot de passe lui-même (un attaquant avec le bon mot
-de passe reste authentifié sans second facteur). Une story MFA dédiée reste à
-créer si un lancement avec de vrais utilisateurs est planifié.
-**Détail complet** : [02-prd.md — Story 15.8](02-prd.md#story-158--mfa-ou-hardening-de-lauthentification--🟡-partiel-hardening-fait-mfa-hors-périmètre).
+**Conséquence à l'époque** : BE-02 restait 🟡 Partiel dans
+[04-tests.md](04-tests.md) — le hardening (rate limiting compte, session
+raccourcie, politique de mot de passe) réduisait le risque de brute force
+et l'exposition d'un jeton volé, mais ne couvrait pas le vol de mot de
+passe lui-même.
+**Mise à jour (2026-09-19)** : le volet MFA reporté ici a été construit
+par la story 15.32 (TOTP optionnel activable par l'utilisateur, voir
+[ADR-014](#adr-014--mfa--totp-optionnel-activable-par-lutilisateur-otplib--secret-chiffré-aes-256-gcm-story-1532))
+— cadrage décidé explicitement avec vous avant implémentation, comme
+prévu par cette ADR. BE-02 passe donc de 🟡 à un état plus complet (détail
+dans [04-tests.md](04-tests.md)) : un attaquant avec le bon mot de passe
+seul reste bloqué si l'utilisateur a activé la double authentification —
+mais celle-ci reste **optionnelle**, pas imposée à tous les comptes
+(décision produit, pas juste technique).
+**Détail complet** : [02-prd.md — Story 15.8](02-prd.md#story-158--mfa-ou-hardening-de-lauthentification--🟡-partiel-hardening-fait-mfa-hors-périmètre)
+et [02-prd.md — Story 15.32](02-prd.md#story-1532--mfa-totp-optionnel-activable-par-lutilisateur--done).
 
 ### ADR-009 — Migration Next.js 15 + React 19 (story 15.10)
 
@@ -709,6 +718,74 @@ compilé). Voir
 [02-prd.md — Story 15.26](02-prd.md#story-1526--câbler-un-test-runner-jest-expo-pour-appsmobile--done)
 pour le détail complet et les 7 tests qui valident la suite désormais
 fonctionnelle.
+
+### ADR-014 — MFA : TOTP optionnel activable par l'utilisateur, `otplib` + secret chiffré AES-256-GCM (story 15.32)
+
+**Contexte** : dernier volet non traité de la story 15.8 (hardening auth),
+explicitement reporté par [ADR-008](#adr-008--story-158-scoping--hardening-seul-mfa-reporté).
+Cadrage décidé avec vous le 2026-09-19 : TOTP optionnel, activable par
+l'utilisateur (pas obligatoire pour tous — casserait le compte de démo et
+l'expérience de tout utilisateur existant sans migration de compte forcée,
+disproportionné pour un projet sans utilisateurs réels).
+
+**Choix techniques**
+- **`otplib`** (RFC 6238, `authenticator.generateSecret()`/`.verify()`/
+  `.keyuri()`) plutôt que `speakeasy` (moins maintenu) — génère aussi
+  l'URI `otpauth://` consommé par `qrcode` pour le QR affiché à l'écran.
+- **Secret chiffré au repos**, pas hashé : contrairement à un mot de passe,
+  vérifier un code TOTP nécessite de recalculer le HMAC à partir du secret
+  brut — un hash à sens unique serait inutilisable. AES-256-GCM
+  ([lib/mfaCrypto.ts](../apps/web/src/lib/mfaCrypto.ts)) avec une clé dédiée
+  (`MFA_ENCRYPTION_KEY`, 32 octets hex) gardée uniquement dans les
+  variables d'environnement (cohérent avec ADR-012) — une fuite de la BDD
+  seule n'expose donc pas de secrets TOTP exploitables.
+- **10 codes de récupération** à usage unique (format `XXXX-XXXX`,
+  hex uppercase), hashés en bcrypt comme les mots de passe — générés
+  uniquement à l'activation, jamais régénérés automatiquement (l'utilisateur
+  doit désactiver puis réactiver pour en obtenir de nouveaux).
+- **Flux d'activation en 2 requêtes**, pas 1 : `POST /api/auth/mfa/setup`
+  génère et stocke un secret chiffré mais laisse `mfaEnabled=false` ;
+  `POST /api/auth/mfa/enable` exige un code valide avant de l'activer et
+  ne renvoie les codes de récupération qu'à ce moment — un utilisateur qui
+  abandonne le flux (QR jamais scanné) ne reste jamais bloqué avec un
+  secret actif qu'il ne peut pas produire de code pour.
+- **Désactivation** : mot de passe **et** code (TOTP ou récupération)
+  exigés ensemble — même raisonnement que toute action sensible côté
+  compte, une session volée seule ne suffit pas.
+
+**Intégration au flux de connexion — technique NextAuth v4 peu documentée** :
+`CredentialsProvider().authorize()` qui **retourne** `null` est toujours
+traduit par NextAuth en l'erreur générique `CredentialsSignin`, indistincte
+d'un mauvais mot de passe côté client. Pour que la page de connexion sache
+distinguer "il manque un code MFA" d'un vrai échec, `authorize()` **lève**
+une `Error('MFA_REQUIRED')` à la place — NextAuth propage le message de
+l'exception telle quelle dans `result.error` (technique différente du
+`return null`, documentée informellement dans plusieurs issues NextAuth
+mais pas dans son guide officiel). Le formulaire réagit à
+`result.error === 'MFA_REQUIRED'` en affichant un second champ plutôt que
+relancer tout le formulaire.
+[`/api/auth/mobile`](../apps/web/src/app/api/auth/mobile/route.ts), qui
+n'est pas une session NextAuth (JSON simple), fait la même distinction
+avec un corps `{ error: 'mfa_required' }` en `401`.
+
+**Vérifié en direct contre la vraie BDD Neon avec le compte de démo**
+(cycle complet, MFA restaurée désactivée après coup pour ne pas laisser le
+compte partagé dans un état modifié) : activation (QR + secret manuel +
+code de confirmation réel généré via `otplib` en ligne de commande) →
+codes de récupération reçus → connexion mobile sans code → `401
+mfa_required` → connexion avec code TOTP réel → succès → connexion avec un
+code de récupération → succès, code consommé → réutilisation du même code
+→ rejetée → désactivation (mot de passe + code) → connexion normale de
+nouveau sans code requis.
+
+**Mobile** : l'écran de connexion (`apps/mobile/app/(auth)/login.tsx`)
+gère désormais le second facteur — bascule sur un champ code quand l'API
+répond `mfa_required`, comme le formulaire web. **Non fait** : écran
+d'**activation** MFA côté mobile (générer/scanner le QR, voir les codes de
+récupération) — l'activation reste web-only, ce qui est d'ailleurs
+l'endroit naturel pour scanner un QR code avec son téléphone ; une fois
+activée sur le web, la connexion mobile fonctionne pleinement. CI mobile
+inchangée (hors périmètre, comme depuis la story 15.6).
 
 ## 7. Mapping Story → Fichiers affectés
 

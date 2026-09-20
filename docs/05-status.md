@@ -12,7 +12,7 @@ session précédente et laissé non committé, voir sa note ci-dessous)
 | 1. Discovery | [01-brainstorming.md](01-brainstorming.md) | ✅ |
 | 2. PRD | [02-prd.md](02-prd.md) | ✅ |
 | 3. Architecture | [03-architecture.md](03-architecture.md) | ✅ |
-| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 27 ✅ + 4 🟡 sur 31 |
+| 4. Développement | Epics 1–14 | ✅ · Epic 15 | 🟡 28 ✅ + 4 🟡 sur 32 |
 | 5. QA & Tests | [04-tests.md](04-tests.md) | ✅ (audit) · suite auto | 🟡 câblée, couverture partielle |
 | 6. Pre-Launch Gate | ci-dessous | 🔴 bloqué |
 
@@ -34,7 +34,7 @@ session précédente et laissé non committé, voir sa note ci-dessous)
 | 12 | Console admin | ✅ |
 | 13 | Application mobile | ✅ |
 | 14 | Plateforme, monorepo & infra | ✅ |
-| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 27 ✅ + 4 🟡 sur 31 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26, 15.27, 15.28, 15.29, 15.30, 15.31 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
+| 15 | Mise en conformité BMAD v2 (sécurité & prod) | 🟡 28 ✅ + 4 🟡 sur 32 (15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.9, 15.10, 15.11, 15.12, 15.13, 15.16, 15.17, 15.18, 15.19, 15.20, 15.21, 15.22, 15.23, 15.24, 15.25, 15.26, 15.27, 15.28, 15.29, 15.30, 15.31, 15.32 ✅ ; 15.7, 15.8, 15.14, 15.15 🟡 — plus aucune story 🔴 dans l'epic) |
 
 ## Prochaine action recommandée
 
@@ -101,7 +101,52 @@ modification de ses mocks (ils ciblent les chemins de module, pas les
 sites d'import). Détail complet :
 [02-prd.md](02-prd.md#story-1531--dette-technique-13-clôturée-avec-lutilisateur-4-décisions--done).
 
-**Toutes les stories de l'Epic 15 ont désormais au moins été entamées** —
+**Note story 15.32** (2026-09-19) : ✅ complet — dernier volet de la story
+15.8 explicitement reporté par [ADR-008](03-architecture.md#adr-008--story-158-scoping--hardening-seul-mfa-reporté),
+traité maintenant sur votre demande explicite. MFA TOTP **optionnel**
+(activable par l'utilisateur, pas imposé à tous les comptes — cadrage
+décidé avec vous, voir
+[ADR-014](03-architecture.md#adr-014--mfa--totp-optionnel-activable-par-lutilisateur-otplib--secret-chiffré-aes-256-gcm-story-1532)).
+Migration Prisma appliquée contre la vraie BDD Neon
+(`mfaEnabled`/`mfaSecret`/`mfaRecoveryCodes` sur `User`) ; secret chiffré
+AES-256-GCM (nouvelle variable requise `MFA_ENCRYPTION_KEY`, validée au
+boot comme les autres secrets depuis 15.14) — jamais en clair en BDD,
+contrairement à un simple hash impossible ici (vérifier un code TOTP
+nécessite le secret brut). 3 routes API (`setup`/`enable`/`disable`),
+intégration dans `lib/auth.ts` (web) et `/api/auth/mobile` — technique
+NextAuth peu documentée utilisée pour distinguer "code manquant" d'un
+mauvais mot de passe : `authorize()` lève une `Error('MFA_REQUIRED')`
+plutôt que `return null` (NextAuth propage le message de l'exception dans
+`result.error`). UI complète côté web (page de connexion + onglet
+Sécurité des paramètres) **et** côté mobile pour la connexion (l'écran
+d'activation reste web-only, décision délibérée — c'est l'endroit naturel
+pour scanner un QR code). 313 tests web (+35) et 14 tests mobile (+2),
+`pnpm type-check` 3/3, `pnpm build` 50/50 pages. **Vérifié en direct de
+bout en bout contre la vraie BDD Neon avec le compte de démo** : cycle
+complet activation → connexion mobile bloquée sans code → code TOTP réel
+accepté → code de récupération accepté puis rejeté à la deuxième
+tentative (usage unique confirmé) → désactivation → compte restauré à son
+état d'origine après vérification, aucune trace laissée. **Non fait** :
+écran d'activation MFA sur mobile, test en environnement de production
+réelle. Détail complet :
+[02-prd.md](02-prd.md#story-1532--mfa-totp-optionnel-activable-par-lutilisateur--done).
+
+**Découverte non liée, signalée en passant, non corrigée** : en ajoutant
+les dépendances `otplib`/`qrcode` pour cette story, `pnpm audit` a révélé
+**49 vulnérabilités** (2 critiques, 29 hautes, 16 modérées, 2 basses) —
+contredisant l'affirmation précédente de ce document ("0 vulnérabilité
+depuis la story 15.10"), qui ne couvrait en réalité que `apps/web`.
+Confirmé **indépendant de cette story** (`git stash` + `pnpm audit` sans
+mes changements montre le même total) : dérive dans la chaîne d'outils de
+build `apps/mobile` (`joi` via `@react-native-community/cli`, dépendance
+de développement de React Native/Expo, pas du code embarqué dans l'app
+livrée aux utilisateurs) — de nouvelles failles ont été publiées dans ces
+paquets depuis la story 15.10, qui ne portait que sur `apps/web`
+(next.js/React). Non traité ici : hors périmètre de cette story, et une
+vraie remédiation toucherait la chaîne d'outils React Native/Expo,
+délibérément figée depuis l'ADR-009 (postscriptum) pour ne pas
+déstabiliser le mobile pendant la migration Next.js/React 19 du web.
+Mérite sa propre story si un lancement réel est planifié.
 13 ✅, 4 🟡 (15.7, 15.8, 15.14, 15.15), plus aucune 🔴. Il ne reste donc
 plus de story non commencée dans l'epic ; ce qui reste, c'est de
 transformer les quatre 🟡 en ✅ (voir leurs notes respectives ci-dessous) et

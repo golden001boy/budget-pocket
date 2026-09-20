@@ -30,11 +30,20 @@ story suivante. `bmad adr` documente une décision architecturale dans
 6. Jamais de modification directe du schéma BDD en prod — toujours via migration Prisma.
 
 **État actuel** : Epics 1–14 sont ✅ Done. Epic 15 (mise en conformité
-sécurité/prod) est 🟡 27 ✅ + 4 🟡 sur 31, plus aucune story 🔴. 15.7
-(backup/rollback BDD) et 15.8 (hardening auth) restent 🟡 partiels
-documentés (MFA reporté, voir ADR-008 — story dédiée 15.32, cadrage décidé
-avec vous le 2026-09-19 : TOTP optionnel activable par l'utilisateur,
-implémentation à venir). **Dette technique du §13 — clôturée le 2026-09-19** (story
+sécurité/prod) est 🟡 28 ✅ + 4 🟡 sur 32, plus aucune story 🔴. 15.7
+(backup/rollback BDD) et 15.15 (patching/rollback BDD) restent 🟡 partiels
+(accès console Neon requis). 15.8 (hardening auth) reste 🟡 elle-même
+(volet hardening ✅, décision de périmètre historique ADR-008), mais son
+volet MFA reporté est désormais construit séparément — **story 15.32
+✅ Done** (TOTP optionnel activable par l'utilisateur, cadrage décidé avec
+vous le 2026-09-19 : migration Prisma sur `User` appliquée contre la
+vraie BDD Neon, secret chiffré AES-256-GCM, 10 codes de récupération à
+usage unique, intégré à la connexion web **et** mobile, UI complète des
+deux côtés pour la connexion — l'activation elle-même reste web-only,
+décision délibérée. Vérifié en direct de bout en bout contre la vraie BDD
+Neon avec le compte de démo, restauré à son état d'origine après coup.
+Détail : [ADR-014](docs/03-architecture.md#adr-014--mfa--totp-optionnel-activable-par-lutilisateur-otplib--secret-chiffré-aes-256-gcm-story-1532)).
+**Dette technique du §13 — clôturée le 2026-09-19** (story
 15.31, 4 décisions prises explicitement avec vous puis implémentées, plus
 de statu quo) : `packages/api-client` (code mort) supprimé avec son seul
 consommateur (`apps/mobile/lib/api.ts`, lui-même inutilisé) ; les 5
@@ -175,14 +184,23 @@ lancement en production réelle.
 `.env`) — SDK actif en no-op, pas d'erreur. Ajouter un DSN réel active la
 capture sans changement de code.
 
-**`pnpm audit` est à 0 vulnérabilité** depuis la story 15.10 (migration
-`next@14.2.35 → 15.5.21` + React 18 → 19 sur `apps/web` uniquement ;
-`apps/mobile` reste sur React 18/Expo SDK 51). Voir
+**`pnpm audit` était à 0 vulnérabilité sur `apps/web`** depuis la story
+15.10 (migration `next@14.2.35 → 15.5.21` + React 18 → 19, `apps/web`
+uniquement ; `apps/mobile` reste sur React 18/Expo SDK 51). Voir
 [docs/03-architecture.md ADR-009](docs/03-architecture.md#adr-009--migration-nextjs-15--react-19-story-1510)
 pour le détail — notamment un bug de résolution `@types/react` sans rapport
 avec Next.js (`.npmrc` avait `resolve-peers-from-workspace-root=true`
 depuis le commit initial, jamais documenté) qui a fait le plus gros du
-travail de cette story.
+travail de cette story. **Correction (2026-09-19)** : l'affirmation "0
+vulnérabilité" globale était devenue inexacte — `pnpm audit` sur
+l'ensemble du monorepo remonte désormais **49 vulnérabilités** (2
+critiques), toutes dans la chaîne d'outils de build `apps/mobile`
+(`joi` via `@react-native-community/cli`, dépendance de développement,
+pas de code embarqué dans l'app livrée), découvertes de nouvelles failles
+publiées depuis la story 15.10 (qui ne portait que sur `apps/web`).
+Confirmé indépendant de tout changement de cette session
+(`git stash` + re-audit). Non traité, pas de story créée — signalé pour
+décision si un lancement réel est planifié.
 
 **`master` est protégé** depuis la story 15.6 : PR requise + check
 `type-check-and-test` requis avant fusion. Un push direct sur `master` par

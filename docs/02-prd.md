@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (27 ✅ + 4 🟡 sur 31)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (28 ✅ + 4 🟡 sur 32)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -183,6 +183,7 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.29 | Tests pour les 3 simulateurs (immobilier/retraite/bourse) | Should | S | ✅ | Gap "simulateurs" noté depuis 15.9, jamais comblé jusqu'ici |
 | 15.30 | Limite de taille de payload sur les routes mutatives | Should | S | ✅ | Résidu API-04 noté depuis 15.20, jamais traité jusqu'ici |
 | 15.31 | Dette technique §13 clôturée avec l'utilisateur (4 décisions) | Could | M | ✅ | api-client supprimé, 5 routes vides supprimées, `projectionByYear` aligné, wrapper `withApiRoute`/`withDynamicApiRoute` |
+| 15.32 | MFA (TOTP optionnel activable par l'utilisateur) | Should | L | ✅ | Dernier volet reporté par ADR-008 (story 15.8) |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -2025,6 +2026,104 @@ la vérification Neon/Vercel réelle sont traitées séparément.
 `lib/simulators/retirement.ts` + `stockGrowth.ts` et leurs tests,
 suppression de `packages/api-client/` et `apps/mobile/lib/api.ts`,
 [specs/epic-13-mobile.md](../specs/epic-13-mobile.md).
+
+---
+
+### Story 15.32 — MFA (TOTP optionnel activable par l'utilisateur) · ✅ Done
+
+**Story** : En tant qu'utilisateur, je veux pouvoir activer une double
+authentification (TOTP) sur mon compte, afin qu'un mot de passe seul ne
+suffise plus à s'y connecter si je le choisis. Dernier volet de la story
+15.8 explicitement reporté par [ADR-008](03-architecture.md#adr-008--story-158-scoping--hardening-seul-mfa-reporté)
+("effort disproportionné tant que le projet n'a pas d'utilisateurs
+réels"). Traité maintenant sur demande explicite de l'utilisateur
+(« terminons avec l'epic 15 »), cadrage décidé avec lui avant
+implémentation (TOTP optionnel plutôt qu'obligatoire pour tous — voir
+[ADR-014](03-architecture.md#adr-014--mfa--totp-optionnel-activable-par-lutilisateur-otplib--secret-chiffré-aes-256-gcm-story-1532)
+pour le détail complet des choix techniques).
+
+**Ce qui a été livré**
+- Migration Prisma : `User.mfaEnabled` (`Boolean`), `User.mfaSecret`
+  (`String?`, chiffré AES-256-GCM — jamais en clair), `User.mfaRecoveryCodes`
+  (`String[]`, hashés bcrypt) — appliquée contre la vraie BDD Neon
+  (`prisma migrate dev`), pas de modification manuelle de schéma (règle #6).
+- Nouvelle variable d'environnement requise `MFA_ENCRYPTION_KEY` (64
+  caractères hex), validée au boot par `lib/env.ts` (même convention que
+  les autres secrets depuis la story 15.14).
+- [`lib/mfaCrypto.ts`](../apps/web/src/lib/mfaCrypto.ts) (chiffrement
+  AES-256-GCM) et [`lib/mfa.ts`](../apps/web/src/lib/mfa.ts) (génération/
+  vérification TOTP via `otplib`, QR code via `qrcode`, génération et
+  consommation à usage unique des 10 codes de récupération).
+- 3 nouvelles routes API : `POST /api/auth/mfa/setup` (génère un secret,
+  ne l'active pas encore), `POST /api/auth/mfa/enable` (confirme avec un
+  code réel, active, renvoie les codes de récupération une seule fois),
+  `POST /api/auth/mfa/disable` (mot de passe + code requis ensemble).
+- `lib/auth.ts` (NextAuth `CredentialsProvider.authorize()`) et
+  `POST /api/auth/mobile` : après mot de passe validé, exigent un code si
+  `user.mfaEnabled` — `authorize()` lève `Error('MFA_REQUIRED')`/
+  `Error('MFA_INVALID')` (NextAuth propage le message dans `result.error`,
+  contrairement à un `return null` toujours traduit en erreur générique) ;
+  la route mobile renvoie `{ error: 'mfa_required' }` en `401`.
+- UI web : [`LoginForm.tsx`](../apps/web/src/app/(auth)/login/LoginForm.tsx)
+  bascule sur un champ code quand `result.error === 'MFA_REQUIRED'` ;
+  nouvel onglet "Sécurité" dans `/settings`
+  ([`MfaSettings.tsx`](../apps/web/src/components/settings/MfaSettings.tsx))
+  pour activer (QR + confirmation) et désactiver (mot de passe + code).
+- UI mobile : [`login.tsx`](../apps/mobile/app/(auth)/login.tsx) et
+  `AuthContext.login()` gèrent le même second facteur — l'activation
+  elle-même reste web-only (l'endroit naturel pour scanner un QR code).
+
+**Critères d'acceptation**
+- [x] Un compte sans MFA se connecte exactement comme avant (web et
+      mobile), aucune régression sur le chemin nominal.
+- [x] Activer la MFA exige un code réel avant de l'activer — un secret
+      généré mais jamais confirmé ne bloque jamais une future connexion.
+- [x] Une fois activée, la connexion (web et mobile) sans code échoue
+      distinctement d'un mauvais mot de passe (`MFA_REQUIRED`/
+      `mfa_required`, pas `CredentialsSignin` générique).
+- [x] Un code TOTP valide ou un code de récupération valide (non déjà
+      utilisé) permet de se connecter ; un code de récupération est
+      consommé après usage (rejeté sur une deuxième tentative).
+- [x] Désactiver exige le mot de passe **et** un code ensemble.
+- [x] `pnpm test` — 313 (web) + 14 (mobile), tous nouveaux fichiers testés :
+      `lib/mfa.ts`, `lib/mfaCrypto.ts`, les 3 routes `auth/mfa/*`,
+      `lib/auth.ts` (`authorize()`), `auth/mobile` (scénarios MFA),
+      `AuthContext.login()` (scénarios MFA).
+- [x] `pnpm type-check` (3/3) et `pnpm build` (50/50 pages) verts.
+- [x] `pnpm audit` reconfirmé à l'identique (49 vulnérabilités
+      pré-existantes, aucune liée à `otplib`/`qrcode` — confirmé par
+      comparaison avant/après via `git stash`, drift indépendant côté
+      toolchain `apps/mobile`, signalé séparément).
+- [x] **Vérifié en direct contre la vraie BDD Neon avec le compte de
+      démo**, cycle complet : activation (QR + secret manuel + code de
+      confirmation réel généré via `otplib` en ligne de commande) → 10
+      codes de récupération reçus → connexion mobile sans code → `401
+      mfa_required` → connexion avec code TOTP réel → succès → connexion
+      avec un code de récupération → succès, code consommé → réutilisation
+      du même code → rejetée → désactivation (mot de passe + code) →
+      connexion normale de nouveau sans code requis. Compte de démo
+      restauré à son état d'origine (MFA désactivée) après vérification.
+
+**Non fait** : écran d'activation MFA côté mobile (QR/codes de récupération
+— web-only, décision délibérée) ; test en environnement de production
+réelle (aucun n'existe encore) ; MFA reste optionnelle par choix produit,
+pas imposée à tous les comptes.
+
+**Implémentation** :
+[lib/mfa.ts](../apps/web/src/lib/mfa.ts),
+[lib/mfaCrypto.ts](../apps/web/src/lib/mfaCrypto.ts),
+[lib/__tests__/mfa.test.ts](../apps/web/src/lib/__tests__/mfa.test.ts),
+[lib/__tests__/mfaCrypto.test.ts](../apps/web/src/lib/__tests__/mfaCrypto.test.ts),
+[lib/__tests__/auth.test.ts](../apps/web/src/lib/__tests__/auth.test.ts)
+(nouveau),
+`app/api/auth/mfa/{setup,enable,disable}/route.ts` + leurs tests,
+`lib/auth.ts`, `app/api/auth/mobile/route.ts` (+ test),
+`packages/shared/src/schemas/auth.ts` (`loginSchema.totp` optionnel),
+`components/settings/MfaSettings.tsx`, `app/(dashboard)/settings/page.tsx`,
+`app/(auth)/login/LoginForm.tsx`,
+`apps/mobile/app/(auth)/login.tsx`, `apps/mobile/contexts/AuthContext.tsx`
+(+ test), migration Prisma `add_mfa_fields`, `lib/env.ts`
+(`MFA_ENCRYPTION_KEY`).
 
 ---
 
