@@ -80,26 +80,23 @@ describe('computeRetirement', () => {
     }
   });
 
-  it('documents a known discrepancy: the last projectionByYear point runs a few percent below projectedSavings', () => {
-    // Same root cause as the equivalent test in stockGrowth.test.ts:
-    // projectedSavings compounds each month's contribution from the month
-    // it's made, but the year-by-year loop adds a full year of
-    // contributions as one lump sum at year-end, under-compounding
-    // relative to the closed form. projectionByYear isn't rendered
-    // anywhere in the UI yet (confirmed by search) so this has no visible
-    // impact today -- flagged in docs/02-prd.md (story 15.29) for
-    // whoever eventually charts this data.
+  it('keeps the last projectionByYear point in sync with projectedSavings (story 15.31 fix)', () => {
+    // Previously off by ~2.5-3% (story 15.29 finding, documented in
+    // 03-architecture.md §13): projectedSavings compounds each month's
+    // contribution from the month it's made, but the year-by-year loop
+    // used to add a full year of contributions as one lump sum at
+    // year-end, under-compounding relative to the closed form. Fixed by
+    // compounding month-by-month inside the loop too (see the comment in
+    // retirement.ts) — the two numbers now agree exactly, not just
+    // approximately, since they run the identical recurrence.
     const result = computeRetirement({
       currentAge: 30, targetRetirementAge: 65, currentSavings: 1000000,
       monthlyContribution: 50000, expectedReturnRate: 7, inflationRate: 2,
       targetMonthlyIncome: 1000000,
     });
     const lastPoint = result.projectionByYear[result.projectionByYear.length - 1].savings;
-    const gap = (result.projectedSavings - lastPoint) / result.projectedSavings;
 
-    expect(lastPoint).toBeLessThan(result.projectedSavings);
-    expect(gap).toBeGreaterThan(0.01);
-    expect(gap).toBeLessThan(0.05);
+    expect(lastPoint).toBe(result.projectedSavings);
   });
 
   it('floors the safe withdrawal rate at 4% when the real (inflation-adjusted) return is lower', () => {

@@ -47,26 +47,21 @@ describe('computeStockGrowth', () => {
     expect(result.projectionByYear[4].invested).toBe(result.totalInvested);
   });
 
-  it('documents a known discrepancy: the last projectionByYear point runs a few percent below finalValue', () => {
-    // finalValue compounds each month's contribution from the month it's
-    // made (a proper future-value-of-annuity formula). The year-by-year
-    // loop instead adds each year's contributions as one lump sum at
-    // year-end (`value * (1+monthlyRate)^12 + monthlyAmount * 12`), which
-    // under-compounds relative to the closed form. Not asserted as a bug
-    // to fix here -- projectionByYear isn't rendered anywhere in the UI
-    // yet (confirmed by search), so this has no visible impact today, but
-    // a future chart built on this data would show a headline "final
-    // value" that doesn't match its own chart's last point. Flagged in
-    // docs/02-prd.md (story 15.29) for whoever wires up that chart.
+  it('keeps the last projectionByYear point in sync with finalValue (story 15.31 fix)', () => {
+    // Previously off by ~2.5-3% (story 15.29 finding, documented in
+    // 03-architecture.md §13): finalValue compounds each month's
+    // contribution from the month it's made, but the year-by-year loop
+    // used to add a full year of contributions as one lump sum at
+    // year-end, under-compounding relative to the closed form. Fixed by
+    // compounding month-by-month inside the loop too (see the comment in
+    // stockGrowth.ts) — the two numbers now agree exactly, not just
+    // approximately, since they run the identical recurrence.
     const result = computeStockGrowth({
       monthlyAmount: 20000, expectedAnnualReturn: 6, investmentYears: 5, initialAmount: 100000,
     });
     const lastPoint = result.projectionByYear[4].value;
-    const gap = (result.finalValue - lastPoint) / result.finalValue;
 
-    expect(lastPoint).toBeLessThan(result.finalValue);
-    expect(gap).toBeGreaterThan(0.01);
-    expect(gap).toBeLessThan(0.05);
+    expect(lastPoint).toBe(result.finalValue);
   });
 
   it('keeps invested amounts monotonically increasing year over year', () => {
