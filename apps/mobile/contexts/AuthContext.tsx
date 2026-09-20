@@ -17,7 +17,7 @@ interface AuthState {
   user:    MobileUser | null;
   token:   string | null;
   loading: boolean;
-  login:   (email: string, password: string) => Promise<void>;
+  login:   (email: string, password: string, totp?: string) => Promise<void>;
   logout:  () => Promise<void>;
 }
 
@@ -50,15 +50,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string, totp?: string) {
     const res = await fetch(`${BASE_URL}/api/auth/mobile`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email, password }),
+      body:    JSON.stringify({ email, password, totp }),
     });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Erreur réseau' }));
+      // Story 15.32 (MFA): thrown as-is (not translated to a French
+      // message here) so the login screen can tell "needs a code" apart
+      // from every other failure and swap in the TOTP field instead of
+      // just showing an alert.
       throw new Error(err.error ?? 'Connexion échouée');
     }
 

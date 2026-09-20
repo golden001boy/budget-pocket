@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ProfileForm } from '@/components/settings/ProfileForm';
-import { User, CreditCard, Bell } from 'lucide-react';
+import { MfaSettings } from '@/components/settings/MfaSettings';
+import { User, CreditCard, Bell, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
 export default async function SettingsPage() {
@@ -32,12 +33,17 @@ export default async function SettingsPage() {
       <Tabs defaultValue="profile">
         <TabsList className="mb-6">
           <TabsTrigger value="profile" className="gap-2"><User className="h-4 w-4" /> Profil</TabsTrigger>
+          <TabsTrigger value="security" className="gap-2"><ShieldCheck className="h-4 w-4" /> Sécurité</TabsTrigger>
           <TabsTrigger value="billing" className="gap-2"><CreditCard className="h-4 w-4" /> Abonnement</TabsTrigger>
           <TabsTrigger value="notifications" className="gap-2"><Bell className="h-4 w-4" /> Notifications</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
           <ProfileForm user={{ name: user.name ?? '', email: user.email, currency: user.currency, timezone: user.timezone }} />
+        </TabsContent>
+
+        <TabsContent value="security">
+          <MfaSettings initialMfaEnabled={user.mfaEnabled} />
         </TabsContent>
 
         <TabsContent value="billing">

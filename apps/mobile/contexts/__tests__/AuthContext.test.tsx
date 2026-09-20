@@ -102,6 +102,37 @@ describe('AuthProvider', () => {
     expect(mockSetItemAsync).not.toHaveBeenCalled();
   });
 
+  it('login() throws mfa_required and leaves state unauthenticated when no totp is given (story 15.32)', async () => {
+    mockGetItemAsync.mockResolvedValue(null);
+    (global.fetch as jest.Mock).mockResolvedValue(
+      new Response(JSON.stringify({ error: 'mfa_required' }), { status: 401 }),
+    );
+
+    const auth = await renderAuth();
+    await expect(act(async () => {
+      await auth.current.login('demo@budget-pocket.app', 'demo1234');
+    })).rejects.toThrow('mfa_required');
+
+    expect(auth.current.token).toBeNull();
+    expect(mockSetItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('login() sends totp along and succeeds once a valid code is provided (story 15.32)', async () => {
+    mockGetItemAsync.mockResolvedValue(null);
+    (global.fetch as jest.Mock).mockResolvedValue(
+      new Response(JSON.stringify({ token: 'new-token', user: fakeUser }), { status: 200 }),
+    );
+
+    const auth = await renderAuth();
+    await act(async () => {
+      await auth.current.login('demo@budget-pocket.app', 'demo1234', '123456');
+    });
+
+    expect(auth.current.token).toBe('new-token');
+    const [, requestInit] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(requestInit.body)).toEqual({ email: 'demo@budget-pocket.app', password: 'demo1234', totp: '123456' });
+  });
+
   it('logout() clears SecureStore and resets state', async () => {
     mockGetItemAsync.mockImplementation((key: string) =>
       Promise.resolve(key === 'auth_token' ? 'stored-token' : JSON.stringify(fakeUser)),
