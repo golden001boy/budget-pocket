@@ -1,9 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { checkMutationRateLimit } from '@/lib/rateLimit';
-import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
+import { readJsonBody } from '@/lib/requestBody';
+import { withApiRoute } from '@/lib/apiRoute';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -13,34 +11,16 @@ const schema = z.object({
   onboardingDone: z.boolean().optional(),
 });
 
-export async function PATCH(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const PATCH = withApiRoute(async (req: Request, { session }) => {
+  const body   = await readJsonBody(req);
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-    const limit = await checkMutationRateLimit(session.user.id);
-    if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
+  const updated = await prisma.user.update({
+    where:  { id: session.user.id },
+    data:   parsed.data as any,
+    select: { id: true, name: true, email: true, currency: true, timezone: true, onboardingDone: true },
+  });
 
-    const body   = await readJsonBody(req);
-    const parsed = schema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-
-    const updated = await prisma.user.update({
-      where:  { id: session.user.id },
-      data:   parsed.data as any,
-      select: { id: true, name: true, email: true, currency: true, timezone: true, onboardingDone: true },
-    });
-
-    return NextResponse.json(updated);
-  } catch (error) {
-    if (error instanceof PayloadTooLargeError) {
-      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
-    }
-    // Story 15.24: same fragility class fixed in auth/mobile (15.21) and
-    // advisor/scenarios (15.23) — a transient DB error (observed live
-    // multiple times this session) previously surfaced as a bare,
-    // un-JSON crash instead of a graceful response.
-    console.error('[user/profile:PATCH]', error);
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
-  }
-}
+  return NextResponse.json(updated);
+}, { name: 'user/profile:PATCH', rateLimit: true });

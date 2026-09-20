@@ -1,10 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
-import { checkMutationRateLimit } from '@/lib/rateLimit';
-import { readJsonBody, PayloadTooLargeError } from '@/lib/requestBody';
+import { readJsonBody } from '@/lib/requestBody';
+import { withApiRoute } from '@/lib/apiRoute';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -24,62 +22,36 @@ const createSchema = z.object({
   priority:      z.number().int().min(1).max(10).optional(),
 });
 
-export async function GET(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withApiRoute(async (req: Request, { session }) => {
+  const { searchParams } = new URL(req.url);
+  const { skip, take, page, pageSize } = parsePagination(searchParams);
+  const where = { userId: session.user.id };
 
-    const { searchParams } = new URL(req.url);
-    const { skip, take, page, pageSize } = parsePagination(searchParams);
-    const where = { userId: session.user.id };
+  const [goals, total] = await Promise.all([
+    prisma.financialGoal.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
+    prisma.financialGoal.count({ where }),
+  ]);
 
-    const [goals, total] = await Promise.all([
-      prisma.financialGoal.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
-      prisma.financialGoal.count({ where }),
-    ]);
+  return NextResponse.json({ data: goals, meta: buildPaginationMeta(total, page, pageSize) });
+}, { name: 'goals:GET' });
 
-    return NextResponse.json({ data: goals, meta: buildPaginationMeta(total, page, pageSize) });
-  } catch (error) {
-    // Story 15.24: same fragility class fixed in auth/mobile (15.21) and
-    // advisor/scenarios (15.23) — a transient DB error (observed live
-    // multiple times this session) previously surfaced as a bare,
-    // un-JSON crash instead of a graceful response.
-    console.error('[goals:GET]', error);
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
-  }
-}
+export const POST = withApiRoute(async (req: Request, { session }) => {
+  const body   = await readJsonBody(req);
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-export async function POST(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const limit = await checkMutationRateLimit(session.user.id);
-    if (!limit.success) return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 });
-
-    const body   = await readJsonBody(req);
-    const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-
-    const goal = await prisma.financialGoal.create({
-      data: {
-        userId:        session.user.id,
-        name:          parsed.data.name,
-        type:          parsed.data.type,
-        targetAmount:  parsed.data.targetAmount,
-        currentAmount: parsed.data.currentAmount,
-        deadline:      parsed.data.deadline ? new Date(parsed.data.deadline) : undefined,
-        notes:         parsed.data.notes,
-        priority:      parsed.data.priority,
-        status:        'ACTIVE',
-      },
-    });
-    return NextResponse.json(goal, { status: 201 });
-  } catch (error) {
-    if (error instanceof PayloadTooLargeError) {
-      return NextResponse.json({ error: 'Corps de requête trop volumineux' }, { status: 413 });
-    }
-    console.error('[goals:POST]', error);
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
-  }
-}
+  const goal = await prisma.financialGoal.create({
+    data: {
+      userId:        session.user.id,
+      name:          parsed.data.name,
+      type:          parsed.data.type,
+      targetAmount:  parsed.data.targetAmount,
+      currentAmount: parsed.data.currentAmount,
+      deadline:      parsed.data.deadline ? new Date(parsed.data.deadline) : undefined,
+      notes:         parsed.data.notes,
+      priority:      parsed.data.priority,
+      status:        'ACTIVE',
+    },
+  });
+  return NextResponse.json(goal, { status: 201 });
+}, { name: 'goals:POST', rateLimit: true });

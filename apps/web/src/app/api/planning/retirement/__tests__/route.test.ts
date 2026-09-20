@@ -32,7 +32,7 @@ describe('GET /api/planning/retirement', () => {
   it('rejects an unauthenticated request with 401', async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const response = await GET();
+    const response = await GET(makeRequest('http://localhost/api/planning/retirement'));
 
     expect(response.status).toBe(401);
   });
@@ -41,7 +41,7 @@ describe('GET /api/planning/retirement', () => {
     mockGetSession.mockResolvedValue({ user: { id: 'user-1' } });
     mockPrisma.retirementPlan.findUnique.mockResolvedValue({ userId: 'user-1' });
 
-    await GET();
+    await GET(makeRequest('http://localhost/api/planning/retirement'));
 
     expect(mockPrisma.retirementPlan.findUnique).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
   });
