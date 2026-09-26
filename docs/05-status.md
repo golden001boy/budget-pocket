@@ -1,9 +1,9 @@
 # 05 — Status
 
 **Commande BMAD** : `bmad status`
-**Dernière mise à jour** : 2026-09-19 (story 15.30 — limite de taille de
-payload sur les routes mutatives ; reprise d'un travail commencé dans une
-session précédente et laissé non committé, voir sa note ci-dessous)
+**Dernière mise à jour** : 2026-09-26 (PR #1 et #2 fusionnées dans `master` ;
+stories 15.30 à 15.32 terminées, correctif sécurité Next.js, CI corrigée —
+voir les notes ci-dessous)
 
 ## Vue d'ensemble des phases
 
