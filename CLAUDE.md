@@ -147,13 +147,15 @@ plusieurs fois pendant la session : une **connectivité intermittente**
 part), cause exacte non confirmée (cold-start du compute Neon Free
 suspecté, instabilité du sandbox pas exclue). Travail alors commité sur
 une branche locale non poussée (`epic-15/15.14-15.15-secrets-patching`) —
-**poussée depuis, le 2026-09-19, sur demande explicite** : PR
-[#1](https://github.com/golden001boy/budget-pocket/pull/1) ouverte
+**poussée puis fusionnée** : PR
+[#1](https://github.com/golden001boy/budget-pocket/pull/1)
 (`epic-15/15.14-15.15-secrets-patching` → `master`, stories 15.14 à
-15.31), CI verte (`type-check-and-test`), mergeable, **toujours pas
-fusionnée** — la fusion elle-même a été bloquée par le mode auto de
-Claude Code ("Merge Without Review", jamais auto-approuvé) ; à faire par
-vous depuis GitHub, ou à autoriser explicitement. Voir
+15.32 + correctif sécurité Next.js) **fusionnée dans `master` le
+2026-09-26** (commit `438253d`) après autorisation explicite de votre
+part — le mode auto de Claude Code refuse toute fusion sans elle
+("Merge Without Review"). Un premier passage CI avait échoué : les tests
+MFA lisaient `MFA_ENCRYPTION_KEY` dans le `.env` local (absent en CI),
+corrigé par `apps/web/jest.setup.js`. Voir
 [docs/05-status.md §Gate Phase 6](docs/05-status.md#gate-phase-6--évaluation-bmad-prelaunch-2026-07-23)
 pour le détail item par item (score **10 ✅ / 6 🟡 / 5 🔴 sur 21** — le
 dénombrement précédent ("20 items") était déjà inexact ; le projet reste

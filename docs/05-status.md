@@ -169,7 +169,8 @@ explicitement prises avec vous avant implémentation). La décision de
 cadrage de la 15.14 (ADR-012) est donc à confirmer ou corriger — 15.15,
 15.17, 15.18 et 15.19 n'impliquaient pas de décision de cadrage comparable,
 donc moins de réserve sur celles-ci. Travail commité sur une branche locale
-(`epic-15/15.14-15.15-secrets-patching`), **pas fusionnée ni poussée** —
+(`epic-15/15.14-15.15-secrets-patching`), **pas fusionnée ni poussée à
+l'époque (depuis : PR #1 fusionnée dans `master` le 2026-09-26)** —
 **non pas par impossibilité technique** : contrairement à ce qu'affirmaient
 les premières versions de cette note, GitHub et Neon se sont révélés
 joignables plus tard dans la même session (voir la correction dans la note
