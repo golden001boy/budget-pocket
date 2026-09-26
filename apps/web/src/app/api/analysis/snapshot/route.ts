@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { computeMonthlySnapshot } from '@/lib/analytics/snapshot';
+import { withApiRoute } from '@/lib/apiRoute';
 
-export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
+export const GET = withApiRoute(async (req: Request, { session }) => {
   const { searchParams } = new URL(req.url);
   const now   = new Date();
   const year  = parseInt(searchParams.get('year')  ?? String(now.getFullYear()),  10);
@@ -14,4 +10,4 @@ export async function GET(req: Request) {
 
   const snapshot = await computeMonthlySnapshot(session.user.id, year, month);
   return NextResponse.json({ data: snapshot });
-}
+}, { name: 'analysis/snapshot:GET' });

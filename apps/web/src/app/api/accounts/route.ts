@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
+import { readJsonBody } from '@/lib/requestBody';
+import { withApiRoute } from '@/lib/apiRoute';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -13,10 +13,7 @@ const createSchema = z.object({
   currency:      z.enum(['XOF', 'EUR', 'USD', 'GBP']).default('XOF'),
 });
 
-export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+export const GET = withApiRoute(async (req: Request, { session }) => {
   const { searchParams } = new URL(req.url);
   const { skip, take, page, pageSize } = parsePagination(searchParams);
   const where = { userId: session.user.id };
@@ -27,13 +24,10 @@ export async function GET(req: NextRequest) {
   ]);
 
   return NextResponse.json({ data: accounts, meta: buildPaginationMeta(total, page, pageSize) });
-}
+}, { name: 'accounts:GET' });
 
-export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const body   = await req.json();
+export const POST = withApiRoute(async (req: Request, { session }) => {
+  const body   = await readJsonBody(req);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
@@ -49,4 +43,4 @@ export async function POST(req: NextRequest) {
     },
   });
   return NextResponse.json(account, { status: 201 });
-}
+}, { name: 'accounts:POST', rateLimit: true });

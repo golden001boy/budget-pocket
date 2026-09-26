@@ -29,12 +29,22 @@ export function computeStockGrowth(inputs: StockGrowthInputs): StockGrowthResult
   const totalGain    = finalValue - totalInvested;
   const totalGainPercent = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
 
+  // Month-by-month, not `value * (1+monthlyRate)^12 + monthlyAmount * 12`:
+  // that lump-sum update added a year's contributions in one shot at
+  // year-end, undercapitalizing them relative to the closed-form annuity
+  // formula above (which compounds each monthly contribution from its own
+  // month) — the two diverged by ~2.5-3% by the end of a realistic
+  // projection (found while writing this file's tests, story 15.29).
+  // Compounding monthly here keeps the last point exactly in sync with
+  // `finalValue`.
   const projectionByYear: { year: number; value: number; invested: number }[] = [];
   let value    = initialAmount;
   let invested = initialAmount;
 
   for (let y = 1; y <= investmentYears; y++) {
-    value    = value * Math.pow(1 + monthlyRate, 12) + monthlyAmount * 12;
+    for (let m = 0; m < 12; m++) {
+      value = value * (1 + monthlyRate) + monthlyAmount;
+    }
     invested += monthlyAmount * 12;
     projectionByYear.push({
       year:     y,

@@ -143,7 +143,7 @@ Spec : [specs/epic-14-platform.md](../specs/epic-14-platform.md)
 
 ---
 
-## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (6/10 ✅)
+## Epic 15 — Mise en conformité BMAD v2 (sécurité & prod) · 🟡 En cours (28 ✅ + 4 🟡 sur 32)
 
 **Nouveau** — créé suite à l'adoption de [BMAD_FRAMEWORK_v2.md](BMAD_FRAMEWORK_v2.md).
 Ces stories couvrent les écarts identifiés dans [04-tests.md](04-tests.md) contre
@@ -165,8 +165,25 @@ le catalogue de failles §8 du framework. Toutes bloquent la Phase 6
 | 15.11 | Reset de mot de passe (flux email + token) | Must | M | ✅ | Gate Phase 6 §9.1 |
 | 15.12 | Vérification email à l'inscription | Must | M | ✅ | Gate Phase 6 §9.1 |
 | 15.13 | Tests de charge | Should | M | ✅ | Gate Phase 6 §9.3 |
-| 15.14 | Coffre de secrets pour les variables d'environnement | Could | S | 🔴 | Gate Phase 6 §9.2 |
-| 15.15 | Politique de patching formelle + test de rollback | Could | S | 🔴 | Gate Phase 6 §9.3 |
+| 15.14 | Coffre de secrets pour les variables d'environnement | Could | S | 🟡 | Gate Phase 6 §9.2 |
+| 15.15 | Politique de patching formelle + test de rollback | Could | S | 🟡 | Gate Phase 6 §9.3 |
+| 15.16 | Corriger le goulot `/dashboard` trouvé en story 15.13 | Should | M | ✅ | Gate Phase 6 §9.3 (suivi 15.13) |
+| 15.17 | Ne pas exposer le détail interne des erreurs sur `/api/health` | Should | S | ✅ | Gate Phase 6 §9.2, BE-09 |
+| 15.18 | Pagination sur `/api/advisor/scenarios` et `/api/planning/taxes` | Should | S | ✅ | Gate Phase 6 §9.1 (résidu de 15.3) |
+| 15.19 | Journalisation centralisée des actions sensibles (auth) | Should | S | ✅ | Gate Phase 6 §9.3, BE-08 |
+| 15.20 | Rate limiting sur les routes de mutation (accounts/budgets/goals/portfolio/transactions/profile/scenarios/taxes/retirement) | Should | M | ✅ | Gate Phase 6 §9.2, API-04/API-06 |
+| 15.21 | 401 JSON propre sur les routes API protégées (au lieu d'une redirection 307) + résilience `/api/auth/mobile` | Should | S | ✅ | Gap noté depuis 15.2, jamais transformé en story |
+| 15.22 | Couverture de tests unitaires pour les 9 routes CRUD principales | Should | M | ✅ | Gap noté depuis 15.9 : "routes API n'ont aucun test à ce jour" |
+| 15.23 | Validation Zod + résilience sur `POST /api/advisor/scenarios` | Must | S | ✅ | Règle #5 non-négociable (CLAUDE.md) : trouvé sans validation du tout |
+| 15.24 | `try/catch` sur les 12 routes restantes (CRUD + analysis) qui n'en avaient pas | Must | M | ✅ | Même fragilité que le bug `/api/auth/mobile` de 15.21, trouvée systémique |
+| 15.25 | Champs Prisma réels jamais exposés (retraite/objectifs/portefeuille) | Should | S | ✅ | Même schéma que 15.23 : schémas partagés complets mais inutilisés |
+| 15.26 | Câbler un test runner (`jest-expo`) pour `apps/mobile` | Should | M | ✅ | Gap noté depuis 15.9 : "apps/mobile n'a pas de runner du tout" |
+| 15.27 | Tests pour `formatCurrency`/`convertToXOF` (`packages/shared`) | Could | S | ✅ | Logique argent réelle, utilisée partout, jamais testée |
+| 15.28 | Tests pour `projectForecast` (régression linéaire, prévisions financières) | Should | S | ✅ | Testé uniquement par mock dans la story 15.24, jamais directement |
+| 15.29 | Tests pour les 3 simulateurs (immobilier/retraite/bourse) | Should | S | ✅ | Gap "simulateurs" noté depuis 15.9, jamais comblé jusqu'ici |
+| 15.30 | Limite de taille de payload sur les routes mutatives | Should | S | ✅ | Résidu API-04 noté depuis 15.20, jamais traité jusqu'ici |
+| 15.31 | Dette technique §13 clôturée avec l'utilisateur (4 décisions) | Could | M | ✅ | api-client supprimé, 5 routes vides supprimées, `projectionByYear` aligné, wrapper `withApiRoute`/`withDynamicApiRoute` |
+| 15.32 | MFA (TOTP optionnel activable par l'utilisateur) | Should | L | ✅ | Dernier volet reporté par ADR-008 (story 15.8) |
 
 ### Story 15.1 — Rate limiting sur login + inscription · ✅ Done
 
@@ -261,7 +278,7 @@ Zod n'est atteignable qu'avec une vraie session cookie — pas simulable via
 `401` JSON propre — ce qui casse le contrat attendu par un client API/mobile
 consommant du JSON. Comportement pré-existant, non introduit par 15.1/15.2 ;
 à traiter dans une story dédiée si confirmé problématique pour le client
-mobile.
+mobile. **Corrigé en story 15.21** (2026-09-13).
 
 ### Story 15.9 — Câbler un test runner (Jest) · ✅ Done
 
@@ -736,7 +753,12 @@ agrégé opaque :
    15.1), confirmé ici avec des chiffres réels (~5,4s moyenne). Distorsion
    assumée de ce test : non représentatif d'un environnement avec Redis
    opérationnel.
-2. **`/dashboard` — goulot distinct, indépendant de Redis** : tracé jusqu'à
+2. **`/dashboard` — goulot distinct, indépendant de Redis** ⚠️ **hypothèse
+   invalidée par la story 15.16** (le vrai coupable était le comportement
+   de reconnexion `ioredis`, pas Postgres — voir
+   [Story 15.16](#story-1516--corriger-le-goulot-dashboard-trouvé-en-story-1513--done)
+   pour la cause réelle et le correctif). Diagnostic original conservé
+   ci-dessous tel quel, par souci de traçabilité : tracé jusqu'à
    [`computeMonthlySnapshot()`](../apps/web/src/lib/analytics/snapshot.ts),
    qui tente un `cacheGet()` (échoue vite et silencieusement, cf.
    `lib/cache.ts`), puis exécute inconditionnellement un `findMany` +
@@ -794,28 +816,76 @@ agrégé opaque :
 
 ---
 
-### Story 15.14 — Coffre de secrets pour les variables d'environnement · 🔴 À faire
+### Story 15.14 — Coffre de secrets pour les variables d'environnement · 🟡 Partiel
 
 **Story** : En tant qu'opérateur, je veux que les secrets de production
 (clés API, `DATABASE_URL`, `NEXTAUTH_SECRET`...) soient gérés via un coffre
 dédié plutôt qu'un fichier `.env` local, afin de réduire le risque de fuite
 et de centraliser la rotation des secrets (Gate Phase 6 §9.2).
 
-**Constat** : `.env` local uniquement à ce jour (gitignoré, jamais commité
-— vérifié story antérieure) ; pas de Vault/AWS Secrets Manager/équivalent.
-**Note de cadrage à trancher avec vous avant de commencer** : si le
-déploiement cible reste Vercel (voir
-[03-architecture.md §10](03-architecture.md#10--cible-de-déploiement)),
-les variables d'environnement chiffrées de Vercel pourraient déjà
-satisfaire cet item sans outillage supplémentaire — à confirmer plutôt que
-de supposer qu'un vrai coffre tiers (Vault, AWS Secrets Manager) est
-nécessaire.
+**Constat initial** : `.env` local uniquement à ce jour (gitignoré, jamais
+commité — vérifié story antérieure) ; pas de Vault/AWS Secrets
+Manager/équivalent.
 
-**Non commencée.**
+**Décision de cadrage — prise sans vous, à noter** : cette story a été
+traitée dans une session `/goal` en continuation autonome, sans pause pour
+confirmation contrairement au cadrage initialement prévu ("à trancher avec
+vous avant de commencer"). Décision retenue : les variables d'environnement
+chiffrées de Vercel (déploiement cible déjà confirmé,
+[03-architecture.md §10](03-architecture.md#10--cible-de-déploiement))
+constituent le coffre dédié, plutôt qu'un Vault/AWS Secrets Manager tiers —
+raisonnement complet dans
+[03-architecture.md ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514).
+**À confirmer ou à corriger avec vous** — pas un choix définitif si vous
+préférez un vrai coffre tiers.
+
+**Critères d'acceptation**
+- [x] Décision de cadrage documentée (ADR-012), avec le raisonnement et la
+      mention explicite qu'elle a été prise sans vous.
+- [x] Garde-fou vérifiable en code, indépendant du choix de coffre :
+      [`lib/env.ts`](../apps/web/src/lib/env.ts) — schéma Zod validant au
+      boot que les secrets requis (`DATABASE_URL`, `NEXTAUTH_SECRET`,
+      `NEXTAUTH_URL`, `CRON_SECRET`) sont présents et bien formés, et que
+      les secrets optionnels (Stripe, Redis, Resend, Sentry, IA, prix
+      marché) sont bien formés **si** présents — chaîne vide traitée comme
+      absente (même convention que Sentry sans DSN depuis 15.4), pas comme
+      une erreur.
+- [x] Appelé depuis `instrumentation.ts` (runtime `nodejs` uniquement,
+      avant l'init Sentry) — un déploiement mal configuré échoue
+      immédiatement au boot avec une erreur agrégée listant tous les
+      champs en cause, plutôt qu'une panne confuse au premier appel
+      touchant la variable manquante.
+- [x] Item checklist §5.2.j mis à jour (🔴 → 🟡) dans 03-architecture.md.
+- [x] Test unitaire — 12 nouveaux dans
+      [`env.test.ts`](../apps/web/src/lib/__tests__/env.test.ts) : accepte
+      un environnement minimal valide, rejette chaque variable requise
+      manquante individuellement, rejette les formats invalides
+      (`DATABASE_URL`/`NEXTAUTH_URL` non-URL, secrets trop courts), traite
+      une variable optionnelle vide comme absente plutôt que comme une
+      erreur, agrège plusieurs erreurs en un seul message.
+- [x] Vérifié en conditions réelles : le premier passage du schéma
+      rejetait à tort les clés Stripe vides du `.env` local comme des
+      erreurs de validation — **bug réel attrapé en démarrant le serveur
+      de dev** (`pnpm dev`, échec immédiat au boot avec le message
+      d'erreur agrégé), corrigé (`emptyToUndefined`) avant de committer,
+      puis reconfirmé : redémarrage propre (`✓ Ready in 22.7s`),
+      `pnpm type-check` (4/4) et `pnpm test` (68/68, +12 nouveaux tests)
+      verts.
+- [ ] **Non vérifié** : configuration réelle des variables dans un vrai
+      dashboard Vercel (Development/Preview/Production) — nécessiterait un
+      compte Vercel connecté, non disponible dans cette session, même
+      limitation que Sentry (15.4)/GitHub (15.6) sur des stories
+      antérieures.
+- [ ] **Reste 🟡, pas ✅** : le cadrage lui-même (Vercel vs coffre tiers)
+      n'a pas été confirmé avec vous — voir ADR-012.
+
+**Implémentation** : [lib/env.ts](../apps/web/src/lib/env.ts),
+[instrumentation.ts](../apps/web/src/instrumentation.ts),
+[03-architecture.md ADR-012](03-architecture.md#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514).
 
 ---
 
-### Story 15.15 — Politique de patching formelle + test de rollback · 🔴 À faire
+### Story 15.15 — Politique de patching formelle + test de rollback · 🟡 Partiel
 
 **Story** : En tant qu'opérateur, je veux une politique écrite de mise à
 jour des dépendances/de la plateforme (cadence, qui décide, comment
@@ -823,11 +893,1237 @@ tester avant déploiement) et un rollback réellement testé une fois, afin
 de ne pas improviser en cas de régression après une mise à jour (Gate
 Phase 6 §9.3).
 
-**Constat** : aucune politique de patching écrite à ce jour. Chevauche
-partiellement la story 15.7 (rollback BDD documenté, jamais testé en
-pratique) — à cadrer ensemble plutôt qu'en double lors de l'implémentation.
+**Constat initial** : aucune politique de patching écrite à ce jour.
+Chevauche partiellement la story 15.7 (rollback BDD documenté, jamais
+testé en pratique) — cadrée ensemble plutôt qu'en double, voir
+[03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515),
+qui distingue explicitement le volet applicatif (cette story) du volet
+données/schéma (§11, story 15.7, inchangé).
 
-**Non commencée.**
+**Critères d'acceptation**
+- [x] Politique de patching écrite : trois catégories (correctifs de
+      sécurité, montées mineures, montées majeures) avec cadence
+      recommandée par catégorie, ancrée sur les précédents réels du projet
+      (stories 15.5/15.10) plutôt qu'inventée dans l'abstrait.
+- [x] Qui décide : documenté (projet à un seul opérateur à ce jour, toute
+      déviation actée comme une décision architecturale — même règle que
+      §2.4 du framework).
+- [x] Gate de test avant déploiement documenté : CI (`type-check-and-test`,
+      15.6) + vérification manuelle Neon pour tout changement BDD/auth
+      (précédent constant depuis 15.2) + re-jeu Artillery ciblé pour tout
+      changement touchant Redis/`/dashboard` (15.13/15.16).
+- [x] Mécanismes de rollback applicatif documentés : `git revert` + PR
+      (jamais de rewrite d'historique sur `master`), promotion d'un
+      déploiement Vercel antérieur (non vérifiée en direct, pas de compte
+      connecté), `pnpm.overrides`/retour de version pour les dépendances.
+- [x] **Rollback réellement testé** — contrairement à la restauration Neon
+      (15.7, toujours jamais exercée), le rollback applicatif par
+      `git revert` a été exécuté en direct sur une branche jetable : une
+      régression intentionnelle dans
+      [`lib/pagination.ts`](../apps/web/src/lib/pagination.ts) fait
+      échouer `pagination.test.ts` comme prévu (confirme que le gate CI
+      aurait bloqué la fusion), `git revert` restaure un état vert (7/7)
+      sans conflit. Détail complet et effet de bord découvert (un gap de
+      couverture de test réel, non corrigé ici) dans
+      [03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515).
+- [ ] **Non vérifié** : rollback Vercel réel (promotion d'un déploiement
+      antérieur) et restauration Neon réelle — aucun accès à un compte
+      Vercel ni à la console Neon dans cette session.
+- [ ] **Reste 🟡, pas ✅** : politique écrite mais pas encore éprouvée sur
+      un cycle réel de patching (pas assez de temps écoulé pour évaluer si
+      elle est suivie en pratique).
+
+**Implémentation** :
+[03-architecture.md §12](03-architecture.md#12-politique-de-patching--test-de-rollback-story-1515)
+(politique + détail du test de rollback exécuté).
+
+---
+
+### Story 15.16 — Corriger le goulot `/dashboard` trouvé en story 15.13 · ✅ Done
+
+**Story** : En tant qu'utilisateur, je veux que `/dashboard` reste
+disponible sous charge concurrente, afin de ne pas subir le goulot
+d'étranglement identifié lors des tests de charge (story 15.13, Gate
+Phase 6 §9.3).
+
+**⚠️ Le diagnostic de la story 15.13 (ADR-010) était faux.** L'hypothèse de
+départ — contention de verrou ligne Postgres sur `MonthlySnapshot` — a été
+invalidée par cette story. Le vrai coupable : le comportement de reconnexion
+d'`ioredis`. Détail complet ci-dessous ; [ADR-010 dans
+03-architecture.md](03-architecture.md#adr-010--tests-de-charge-sans-redis-local--goulot-dashboard-non-corrigé-story-1513)
+a été mis à jour avec une correction plutôt que réécrit en silence — la
+chaîne de raisonnement (fausse piste incluse) reste visible.
+
+**Ce qui a été vérifié en premier, avant de toucher au code** : un `curl`
+serveur-à-serveur direct sur `/dashboard`, une seule requête, sans aucune
+charge concurrente, prenait déjà 12 à 16 secondes — de façon répétée, pas
+seulement au premier appel (ce qui aurait pu suggérer un cold-start Neon).
+Un script isolé mesurant les mêmes requêtes Prisma (`findUnique` sur
+`MonthlySnapshot`, `findMany` sur `Transaction`) directement contre Neon,
+sans passer par Next.js, donnait des temps de 140 à 300ms — sains. Donc pas
+la BDD. Un client `ioredis` isolé, tout neuf, configuré à l'identique
+(`maxRetriesPerRequest: 3`, `lazyConnect: true`), rejetait un `get()` en
+371ms — sain aussi. Donc pas non plus le comportement "de base" de la
+librairie. La différence : le client Redis du **serveur de prod déjà en
+vie** (celui qui avait essuyé les dizaines d'échecs du test de charge
+précédent) restait lent en continu, y compris sur une requête isolée,
+plusieurs minutes après. Cela pointait vers un état interne accumulé par le
+client au fil du temps, pas vers la BDD ni vers un comportement Redis de
+base.
+
+**Cause réelle** : `ioredis`, avec sa configuration par défaut
+(`enableOfflineQueue` activé par défaut), **met en file d'attente** les
+commandes émises pendant une déconnexion et les fait attendre le prochain
+cycle de reconnexion automatique — cycle dont le délai (`retryStrategy`)
+s'allonge progressivement et **ne se réinitialise jamais** tant que le
+client reste incapable de se reconnecter. Sur un serveur de longue durée
+avec Redis indisponible en continu (ce poste, en permanence), ce délai
+accumulé fait que **chaque appel cache, même unique, devient de plus en
+plus lent au fil de la vie du process** — jusqu'à 12-16 secondes observées
+ici, bien au-delà des ~300ms attendus d'un client fraîchement créé. C'est
+un bug de fond, pas un artefact du test de charge : n'importe quel
+déploiement réel où Redis tombe en panne durablement subirait la même
+dégradation progressive.
+
+**Correctif** : `enableOfflineQueue: false` sur le client
+[`lib/redis.ts`](../apps/web/src/lib/redis.ts). Une commande émise pendant
+une déconnexion est désormais **rejetée immédiatement** (0-14ms mesurés,
+stable sur 10 appels espacés d'une seconde) au lieu d'attendre le cycle de
+reconnexion. Vérifié isolément par script Node avant d'y toucher en prod.
+
+**Résultats mesurés avant/après** (même méthodologie et mêmes scénarios
+qu'en story 15.13, contre un build de production réel + Neon réelle) :
+| Scénario | Avant (15.13) | Après (15.16) |
+|---|---|---|
+| `dashboard-only.yml` (60 req, 3 req/s) | 100 % d'échec | **0 % d'échec**, p95 1526ms, p99 1720ms |
+| `login-latency.yml` (`/api/auth/mobile`, 10 req) | moyenne 5355ms, p95/p99 6838ms, 1 timeout complet | **moyenne 410ms, p95/p99 441ms, 0 échec** |
+| `api-lists-only.yml` (240 req, routes sans Redis) | 0 % d'échec (déjà sain) | 0 % d'échec, p95 573ms (inchangé) |
+| `read-routes-isolated.yml` (1050 req, session partagée, dashboard dilué) | 20 % d'échec | **5 % d'échec** (résiduel, voir note ci-dessous) |
+| `read-routes.yml` (login par VU + lectures + dashboard) | 73,6 % d'échec | **20,1 % d'échec** (résiduel, voir note ci-dessous) |
+
+**Ce correctif résout aussi, en même temps, un coût déjà documenté et
+accepté depuis la story 15.1/ADR-004** : le "coût du fail-open Redis"
+(~9-10s par requête, jusqu'ici considéré comme un compromis architectural
+inhérent au choix fail-open) n'était en réalité pas inhérent au design —
+c'était le même bug de configuration `ioredis`. `login-latency.yml` le
+confirme directement : moyenne 5355ms → 410ms, un ordre de grandeur.
+
+**Échecs résiduels, non éliminés dans cette story** : `read-routes.yml`
+(login par utilisateur virtuel à chaque VU) garde 20 % d'échec, et
+`read-routes-isolated.yml` (session partagée, pas de login) garde 5 %.
+Ni l'un ni l'autre n'implique plus Redis (`api-lists-only.yml`, qui
+n'appelle jamais Redis, reste à 0 %). Hypothèse la plus probable :
+capacité de connexions réelle du plan Neon Free sous charge combinée
+(jusqu'à ~13-65 req/s cumulées selon le scénario) plutôt qu'un bug
+applicatif — cohérent avec le fait que `read-routes.yml`, qui ajoute un
+`bcrypt.compare` par VU en plus des requêtes BDD, échoue davantage que
+`read-routes-isolated.yml` qui n'en fait aucun. **Non investigué plus
+avant** — hors périmètre de cette story (corriger le goulot dashboard
+diagnostiqué en 15.13), à cadrer séparément si jugé prioritaire.
+
+**Changement additionnel, indépendant du vrai correctif** :
+[`computeMonthlySnapshot()`](../apps/web/src/lib/analytics/snapshot.ts)
+lit désormais la ligne `MonthlySnapshot` existante et retourne son contenu
+sans recalcul ni ré-`upsert` si elle date de moins de 6h (même fenêtre que
+le TTL de cache déjà déclaré, `CACHE_TTL.MONTHLY_SNAPSHOT`) — évite un
+`findMany` + `upsert` Prisma inutile à chaque requête, y compris quand
+Redis fonctionne mal. **Ce n'est pas ce qui a corrigé le goulot mesuré ici**
+(le vrai correctif est `enableOfflineQueue`), mais reste une optimisation
+défensive raisonnable pour un scénario à plus grande échelle réelle. Effet
+de bord assumé : en environnement sans Redis fonctionnel, le tableau de
+bord du mois en cours devient éventuellement périmé jusqu'à 6h après un
+ajout de transaction, au lieu d'être toujours recalculé en direct — c'est
+exactement le contrat de fraîcheur que le cache Redis (jamais actif ici)
+était censé imposer depuis le début ; ce changement le fait simplement
+respecter même quand Redis est indisponible.
+
+**Acceptance criteria** :
+- [x] Cause racine réelle identifiée par isolation méthodique (BDD hors
+      cause, comportement Redis de base hors cause, état accumulé du
+      client Redis du serveur en cause) plutôt que reconduite sans
+      vérification depuis le diagnostic (faux) de la story 15.13.
+- [x] Correctif appliqué (`enableOfflineQueue: false`), vérifié isolément
+      avant modification du code de prod.
+- [x] `dashboard-only.yml` : 100 % → 0 % d'échec, mesuré contre un build de
+      production réel + Neon réelle.
+- [x] `login-latency.yml` : coût fail-open Redis réduit d'un ordre de
+      grandeur (5355ms → 410ms moyenne), fermant une limitation acceptée
+      depuis la story 15.1/ADR-004.
+- [x] Aucune régression sur les routes déjà saines (`api-lists-only.yml`
+      toujours à 0 %).
+- [x] Correction honnête d'ADR-010 (diagnostic faux de la story 15.13),
+      pas de réécriture silencieuse.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (56/56, +4 nouveaux tests
+      pour `computeMonthlySnapshot`) verts.
+- [ ] **Échecs résiduels sous charge combinée** (20 % / 5 % selon
+      scénario) non investigués — hypothèse capacité Neon Free, non
+      confirmée, hors périmètre de cette story.
+
+---
+
+### Story 15.17 — Ne pas exposer le détail interne des erreurs sur `/api/health` · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que `/api/health` ne révèle aucun
+détail interne (message d'erreur Prisma brut, hôte de BDD...) à un appelant
+non authentifié, afin de ne pas offrir de reconnaissance gratuite à un
+attaquant (Gate Phase 6 §9.2, BE-09).
+
+**Constat qui a motivé cette story** : trouvé en vérifiant en direct le
+correctif de la story 15.14 (serveur de dev démarré, `/api/health` appelé
+pour confirmer le boot) — la route renvoyait `String(error)` tel quel, donc
+le message d'erreur Prisma complet, y compris l'hôte de la BDD Neon, sur un
+endpoint sans authentification. Correspond exactement à l'item déjà noté
+🟡 dans la checklist §9.2 ("Aucun endpoint debug exposé... `/api/health`
+expose le message d'erreur Prisma brut, BE-09") — pas une nouvelle
+découverte, mais la première fois qu'une story s'en charge.
+
+**Critères d'acceptation**
+- [x] `GET /api/health` ne renvoie plus jamais le contenu de l'objet
+      erreur — seulement un statut structuré par dépendance
+      (`{ status, db, redis }`, chacun `'connected' | 'error'`).
+- [x] BDD et Redis vérifiés **indépendamment** (`Promise.all`, deux
+      fonctions séparées) plutôt qu'en séquence dans un seul `try` — avant
+      ce correctif, une BDD en panne empêchait même de tester Redis,
+      masquant l'état réel de la deuxième dépendance.
+- [x] Chaque échec est journalisé côté serveur (`console.error`, même
+      convention que le fail-open Redis dans `rateLimit.ts`) — l'opérateur
+      garde le détail utile au diagnostic, l'appelant externe n'en voit
+      rien.
+- [x] `200` si les deux dépendances répondent, `503` sinon (comportement
+      inchangé pour un monitoring externe qui ne regarde que le code HTTP).
+- [x] Test unitaire — 4 nouveaux dans
+      [`route.test.ts`](../apps/web/src/app/api/health/__tests__/route.test.ts)
+      (premier test d'une route API dans ce projet, `04-tests.md` notait
+      cette absence) : `200` si tout va bien, `503` sans fuite du message
+      brut si la BDD échoue, idem si Redis échoue, les deux indépendamment
+      si les deux échouent.
+- [x] Vérifié en direct : serveur de dev redémarré, `curl /api/health`
+      renvoie `{"status":"error","db":"error","redis":"error"}` (BDD et
+      Redis injoignables dans cette session, sandbox sans sortie réseau) —
+      **aucune trace de l'hôte Neon ni d'un message Prisma dans la
+      réponse**, contrairement au comportement observé avant correctif.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (73/73, +4 nouveaux tests pour
+      cette story +1 test de régression trouvé pendant la story 15.15)
+      verts.
+
+**Implémentation** :
+[api/health/route.ts](../apps/web/src/app/api/health/route.ts),
+[api/health/__tests__/route.test.ts](../apps/web/src/app/api/health/__tests__/route.test.ts).
+
+---
+
+### Story 15.18 — Pagination sur `/api/advisor/scenarios` et `/api/planning/taxes` · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que les deux dernières listes
+API sans pagination (`scenarios`, `taxRecords`) suivent le même contrat que
+les autres depuis la story 15.3, afin de fermer le résidu explicitement
+noté dans la checklist §9.1 ("pas vérifié exhaustivement sur le reste
+(alerts, scenarios...)") (Gate Phase 6 §9.1).
+
+**Audit préalable** : les 6 routes API du projet ont été listées ; deux
+`GET` renvoyaient encore un tableau brut sans `skip`/`take` ni plafond —
+`/api/advisor/scenarios` et `/api/planning/taxes`. Les pages web
+équivalentes (`(dashboard)/advisor`, `(dashboard)/planning`) lisent Prisma
+directement côté serveur (même situation déjà notée pour le mobile
+Investissements en 15.3) donc ne dépendent pas du contrat de ces deux
+routes — mais **l'app mobile, elle, appelle bien `GET
+/api/advisor/scenarios`** (`apps/mobile/app/(tabs)/advisor/index.tsx`),
+ce qui a changé le périmètre de cette story en cours de route (voir bug
+trouvé ci-dessous).
+
+**Bug pré-existant trouvé pendant l'audit, sans rapport avec la
+pagination** : l'écran mobile Conseiller attendait `{ scenarios:
+ScenarioDTO[] }` alors que la route renvoyait (avant cette story) un
+tableau brut — `data.scenarios` sur un tableau est `undefined`, donc cet
+écran affichait **silencieusement zéro scénario sauvegardé, depuis
+toujours**, indépendamment de tout changement ici. Même famille de bug que
+celui trouvé sur l'écran mobile Investissements en story 15.3 (contrat API
+non aligné avec le client mobile).
+
+**Critères d'acceptation**
+- [x] `GET /api/advisor/scenarios` accepte `?page=&pageSize=`, renvoie
+      `{ data, meta }` (même contrat que accounts/budgets/goals/portfolio/
+      transactions), scope la requête à l'utilisateur courant.
+- [x] `GET /api/planning/taxes` — même changement.
+- [x] Écran mobile Conseiller corrigé pour lire `data.data` au lieu de
+      `data.scenarios` — corrige à la fois le passage au nouveau contrat
+      **et** le bug pré-existant ci-dessus en un seul changement.
+- [x] Aucun autre consommateur cassé — recherché explicitement
+      (`grep` sur web et mobile) avant de committer : les pages web lisent
+      Prisma directement (hors périmètre du contrat API), `/api/planning/
+      taxes` n'a aucun consommateur `GET` du tout à ce jour (web ou
+      mobile) donc aucun risque de rupture pour cette route.
+- [x] Test unitaire — 5 nouveaux : 3 pour
+      [`scenarios/route.test.ts`](../apps/web/src/app/api/advisor/scenarios/__tests__/route.test.ts)
+      (401 sans session, pagination + scoping utilisateur, plafond
+      `MAX_PAGE_SIZE` respecté) et 2 pour
+      [`taxes/route.test.ts`](../apps/web/src/app/api/planning/taxes/__tests__/route.test.ts).
+- [x] `pnpm type-check` (4/4, web **et** mobile) et `pnpm test` (78/78)
+      verts.
+- [x] Vérifié en direct : serveur de dev redémarré, les deux routes
+      répondent (redirection `307` sans session — comportement connu et
+      déjà documenté depuis la story 15.2, pas une régression de cette
+      story) plutôt qu'un crash au boot.
+
+**Implémentation** :
+[api/advisor/scenarios/route.ts](../apps/web/src/app/api/advisor/scenarios/route.ts),
+[api/planning/taxes/route.ts](../apps/web/src/app/api/planning/taxes/route.ts),
+[apps/mobile/app/(tabs)/advisor/index.tsx](../apps/mobile/app/(tabs)/advisor/index.tsx).
+
+---
+
+### Story 15.19 — Journalisation centralisée des actions sensibles (auth) · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que les actions sensibles liées à
+l'authentification (connexion, inscription, reset de mot de passe,
+vérification email) soient journalisées de façon structurée et
+centralisée, afin de pouvoir enquêter sur un incident (compte compromis,
+brute force) après coup (Gate Phase 6 §9.3, BE-08).
+
+**Constat** : jusqu'ici, ces événements n'étaient soit pas journalisés du
+tout, soit journalisés en texte libre au cas par cas (`console.warn`
+ad hoc dans `auth.ts` pour le rate limiting uniquement). Aucun format
+commun, aucune couverture des succès de connexion, inscription, reset de
+mot de passe ou vérification email.
+
+**Cadrage** : pas de changement de rôle à journaliser dans le périmètre
+réel de l'app — la console admin (`/admin/users`, Epic 12.2) est en
+lecture seule à ce jour, aucune mutation de rôle n'existe encore dans le
+code. Le catalogue de failles (BE-08) cite "login, changement de rôle"
+comme exemples, pas comme une liste exhaustive obligatoire — le périmètre
+retenu est donc les événements d'authentification réels du projet.
+
+**Critères d'acceptation**
+- [x] [`lib/auditLog.ts`](../apps/web/src/lib/auditLog.ts) — une fonction
+      `logSensitiveAction()`, format JSON structuré à une ligne
+      (`{ type: 'audit', action, userId, email, ip, reason, at }`), pas de
+      sink externe (pas de compte Sentry/Datadog disponible, même
+      situation que Sentry sans DSN depuis 15.4) — objectif : standardiser
+      la *forme* maintenant, brancher un vrai sink plus tard sans toucher
+      aux appelants.
+- [x] Branché sur 7 événements réels, dans 6 fichiers :
+      `login_success`/`login_failure` (web `lib/auth.ts` **et** mobile
+      `api/auth/mobile`, avec la raison exacte — `rate_limited_ip`,
+      `rate_limited_account`, `no_such_account`, `wrong_password`),
+      `register`, `password_reset_requested` (journalisé uniquement côté
+      serveur, sans changer la réponse volontairement identique de
+      `forgot-password` — pas de canal d'énumération ouvert),
+      `password_reset_completed`, `email_verified`,
+      `email_verification_resent`.
+- [x] Test unitaire — 6 nouveaux : 2 pour
+      [`auditLog.test.ts`](../apps/web/src/lib/__tests__/auditLog.test.ts)
+      (forme du JSON, champs optionnels absents → `null` plutôt qu'omis) et
+      4 pour
+      [`auth/mobile/route.test.ts`](../apps/web/src/app/api/auth/mobile/__tests__/route.test.ts)
+      (chaque branche de `login_failure` + `login_success`, premier test
+      de ce fichier).
+- [x] `pnpm type-check` (4/4) et `pnpm test` (84/84) verts.
+- [x] **Vérifié en direct contre la vraie BDD Neon avec le compte de démo**
+      (`demo@budget-pocket.app`) — pas seulement en unitaire : mot de passe
+      erroné → `login_failure` loggé avec `reason: wrong_password` et le
+      vrai `userId`, `401` renvoyé ; mot de passe correct (`demo1234`) →
+      `login_success` loggé avec le vrai `userId`, JWT émis, `200` renvoyé.
+      Les deux lignes JSON confirmées dans les logs du serveur de dev.
+- [ ] **Non fait, hors périmètre** : aucun sink externe branché (cohérent
+      avec l'absence de compte Sentry/Datadog) ; aucune UI de consultation
+      des logs (recherche/dashboard) — la story couvre la journalisation,
+      pas son exploitation.
+
+**Découverte pendant cette story, sans rapport avec la journalisation en
+elle-même** : en vérifiant l'audit log en direct, la BDD Neon s'est révélée
+**joignable** dans cette session — contrairement à ce qu'indiquait
+`/api/health` plus tôt dans la même session (`db: error`). De même,
+`git ls-remote origin` (GitHub), non joignable en tout début de session
+(stories 15.14/15.15), a été retesté avec succès pendant cette story. Voir
+la correction dans la section "Prochaine action recommandée" plus haut
+dans ce document — l'accès réseau de ce sandbox n'était pas bloqué en
+continu comme documenté à tort dans les stories précédentes, probablement
+une latence de démarrage (cold-start du compute Neon Free, qui se met en
+veille) plutôt qu'un vrai blocage réseau.
+
+**Implémentation** :
+[lib/auditLog.ts](../apps/web/src/lib/auditLog.ts),
+[lib/auth.ts](../apps/web/src/lib/auth.ts),
+[api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts),
+[api/auth/register/route.ts](../apps/web/src/app/api/auth/register/route.ts),
+[api/auth/forgot-password/route.ts](../apps/web/src/app/api/auth/forgot-password/route.ts),
+[api/auth/reset-password/route.ts](../apps/web/src/app/api/auth/reset-password/route.ts),
+[api/auth/verify-email/route.ts](../apps/web/src/app/api/auth/verify-email/route.ts),
+[api/auth/resend-verification/route.ts](../apps/web/src/app/api/auth/resend-verification/route.ts).
+
+---
+
+### Story 15.20 — Rate limiting sur les routes de mutation · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que les routes qui créent/modifient/
+suppriment des données (comptes, budgets, objectifs, portefeuille,
+transactions, profil, scénarios, taxes, retraite) soient limitées en
+fréquence par utilisateur, afin qu'un client défaillant ou une session
+compromise ne puisse pas générer un volume d'écriture illimité (Gate Phase
+6 §9.2, API-04/API-06).
+
+**Cadrage** : contrairement au rate limiting de login (protection contre le
+brute force de mot de passe), cette limite protège contre l'abus de
+ressources par un compte **déjà authentifié** — clé par `userId`, pas par
+IP/email. Limite volontairement généreuse (60 requêtes/minute) : une saisie
+manuelle en rafale (import d'un mois de transactions) ne doit pas la
+déclencher ; seul un usage automatisé/anormal la touche.
+
+**Critères d'acceptation**
+- [x] [`lib/rateLimit.ts`](../apps/web/src/lib/rateLimit.ts) —
+      `checkMutationRateLimit(userId)`, réutilise la primitive `rateLimit()`
+      existante (même fail-open si Redis injoignable, ADR-004).
+- [x] Branché sur les 14 handlers de mutation existants, dans 10 fichiers :
+      `POST /api/accounts`, `POST /api/budgets`, `POST /api/goals` +
+      `PATCH`/`DELETE /api/goals/[id]`, `POST /api/portfolio`,
+      `POST /api/transactions` + `PATCH`/`DELETE /api/transactions/[id]`,
+      `PATCH /api/user/profile`, `POST /api/planning/retirement`,
+      `POST /api/advisor/scenarios`, `POST /api/planning/taxes`.
+- [x] Vérifié qu'aucun handler de mutation n'a été oublié — audit explicite
+      (`grep` sur `POST`/`PATCH`/`DELETE`/`PUT` dans tous les `route.ts`)
+      avant de considérer la story terminée.
+- [x] **Hors périmètre, noté plutôt que traité en douce** :
+      `GET /api/stripe/checkout` et `GET /api/stripe/portal` déclenchent des
+      appels Stripe (donc un effet de bord réel) mais via `GET`, pas un
+      verbe de mutation — Stripe a ses propres limites de débit côté API ;
+      les routes `cron/*` sont protégées par `CRON_SECRET`, pas une session
+      utilisateur, donc hors du modèle "par utilisateur" de cette limite ;
+      `POST /api/advisor/chat` renvoie toujours `503` (fonctionnalité
+      désactivée, Epic 9.3) donc n'a aucun effet à limiter.
+- [x] Test unitaire — 4 nouveaux pour `checkMutationRateLimit` dans
+      [`rateLimit.test.ts`](../apps/web/src/lib/__tests__/rateLimit.test.ts)
+      (scope par `userId`, sous la limite, au-delà de la limite, fail-open)
+      + 2 nouveaux tests d'intégration sur
+      [`advisor/scenarios/route.test.ts`](../apps/web/src/app/api/advisor/scenarios/__tests__/route.test.ts)
+      (`POST` rejeté `429` sans écriture, `POST` accepté sous la limite) —
+      route choisie comme représentative plutôt que dupliquer le même test
+      dans les 10 fichiers touchés.
+- [x] `pnpm type-check` (4/4) et `pnpm test` (90/90) verts.
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo :
+      build de production (`pnpm build`, 50/50 pages) + `pnpm start`,
+      connexion mobile réelle puis `POST /api/accounts` avec le cookie de
+      session obtenu — compte créé avec succès (`201`, fail-open confirmé
+      puisque Redis reste injoignable dans cet environnement). Compte de
+      test supprimé après vérification.
+
+**Implémentation** : [lib/rateLimit.ts](../apps/web/src/lib/rateLimit.ts) +
+les 10 fichiers de route listés ci-dessus.
+
+---
+
+### Story 15.21 — 401 JSON propre sur les routes API protégées + résilience `/api/auth/mobile` · ✅ Done
+
+**Story** : En tant que client API (mobile ou futur), je veux recevoir un
+`401` JSON propre quand je ne suis pas authentifié sur une route API
+protégée, au lieu d'une redirection HTML `307` que je ne peux pas
+raisonnablement suivre.
+
+**Constat** : gap noté depuis la story 15.2 ("l'observation incidente"),
+répété en 15.3, jamais transformé en story — `middleware.ts` (`withAuth`)
+redirige systématiquement vers `/login` pour toute requête non
+authentifiée, page **ou** route `/api/*`, car son callback `authorized`
+ne peut renvoyer qu'un booléen, pas façonner la réponse elle-même.
+
+**Critères d'acceptation**
+- [x] [`middleware.ts`](../apps/web/src/middleware.ts) — logique extraite
+      dans une fonction nommée `authMiddleware` (exportée séparément pour
+      être testée directement) ; `authorized` renvoie désormais toujours
+      `true`, et c'est `authMiddleware` qui décide de la réponse : `401`
+      JSON si `pathname` commence par `/api/` et qu'aucun token n'est
+      présent, sinon la redirection `/login?callbackUrl=...` déjà en place
+      (reproduite manuellement, même comportement qu'avant pour les pages).
+- [x] Logique d'onboarding et de garde admin inchangée, seulement
+      réorganisée pour partir d'un token garanti non-null après le nouveau
+      bloc d'authentification.
+- [x] Test unitaire — 7 nouveaux dans
+      [`middleware.test.ts`](../apps/web/src/__tests__/middleware.test.ts) :
+      `401` JSON sur route API non authentifiée, redirection `/login` +
+      `callbackUrl` sur page non authentifiée, passage normal si
+      authentifié, redirection onboarding, garde admin (bloque/passe).
+- [x] Vérifié en direct : build de production + `pnpm start`,
+      `GET /api/goals` sans session → `401 {"error":"Unauthorized"}` (plus
+      de `307`) ; `GET /dashboard` sans session → toujours `307` vers
+      `/login?callbackUrl=...` (comportement page inchangé) ; connexion
+      mobile réelle puis mêmes routes avec session → passage normal ;
+      garde admin revérifiée (non-admin bloqué, admin passe).
+
+**Découverte pendant la vérification, corrigée dans la même story** : en
+testant la connexion mobile en direct, un `500` brut (pas de JSON) est
+apparu — `api/auth/mobile/route.ts` n'avait **aucun** `try/catch`
+englobant, contrairement à `register`/`forgot-password`/`reset-password`/
+`verify-email` qui renvoient tous un `{ error: 'Erreur serveur' }` propre
+en cas d'exception. Une coupure transitoire de la BDD (observée en direct
+dans cette session) suffisait à faire remonter l'erreur Prisma brute non
+gérée. Corrigé par le même patron `try/catch` que les autres routes.
+- [x] Test unitaire — 1 nouveau dans
+      [`auth/mobile/route.test.ts`](../apps/web/src/app/api/auth/mobile/__tests__/route.test.ts) :
+      `findUnique` qui rejette → `500` JSON propre, sans fuite du message
+      d'erreur brut.
+- [x] Vérifié en direct, dans les deux sens : pendant une coupure BDD réelle
+      de cette session, `POST /api/auth/mobile` renvoyait
+      `{"error":"Erreur serveur"}` (`500`) au lieu d'un crash brut ; une
+      fois la BDD reconnectée (quelques minutes plus tard, sans
+      redémarrage du serveur), la même requête a réussi normalement
+      (`200`, token émis).
+- [x] `pnpm test` (98/98) et `pnpm type-check` (4/4) verts.
+
+**Observation reconfirmée sur l'accès réseau de ce sandbox** : au cours de
+cette story, la BDD Neon est passée de joignable → injoignable → de
+nouveau joignable, **sans aucune action de ma part**, sur une fenêtre de
+quelques minutes avec le même serveur en cours d'exécution. Ce n'est donc
+ni "bloqué en continu" (l'affirmation initiale des stories 15.14/15.15) ni
+"joignable de façon fiable" (la correction apportée en story 15.19) — la
+réalité est une **connectivité intermittente**, cohérente avec un
+comportement de compute Neon Free qui se suspend/reprend, mais pas
+exclu non plus qu'il s'agisse d'une instabilité réseau du sandbox
+lui-même. Aucune des deux hypothèses n'a pu être confirmée avec certitude
+dans le temps de cette session.
+
+**Implémentation** :
+[middleware.ts](../apps/web/src/middleware.ts),
+[middleware.test.ts](../apps/web/src/__tests__/middleware.test.ts),
+[api/auth/mobile/route.ts](../apps/web/src/app/api/auth/mobile/route.ts).
+
+---
+
+### Story 15.22 — Couverture de tests unitaires pour les 9 routes CRUD principales · ✅ Done
+
+**Story** : En tant que développeur, je veux que les routes API qui font le
+gros du trafic applicatif (comptes, budgets, objectifs, portefeuille,
+transactions, profil, retraite) aient une couverture de tests de base,
+afin qu'une régression sur l'auth, la validation ou le scoping par
+utilisateur soit détectée par `pnpm test` avant même d'atteindre la BDD
+réelle.
+
+**Constat** : gap noté depuis la story 15.9 ("couverture encore très
+partielle — simulateurs, analytique et routes API n'ont aucun test à ce
+jour"). Les stories 15.17/15.18/15.20/15.21 avaient déjà commencé à combler
+ce vide au fil de l'eau (`health`, `advisor/scenarios`, `planning/taxes`,
+`auth/mobile`, `middleware`) ; cette story termine le travail pour les
+routes CRUD restantes qui n'avaient encore aucun test.
+
+**Portée** : uniquement des tests — **aucun changement de comportement**
+dans les routes elles-mêmes (déjà vérifiées en direct contre la vraie BDD
+Neon lors des stories 15.20/15.21), donc risque de régression nul par
+construction.
+
+**Critères d'acceptation**
+- [x] Tests unitaires pour les 9 fichiers de route restants : `accounts`
+      (6 tests), `budgets` (6), `goals` (6) + `goals/[id]` (8),
+      `portfolio` (6), `transactions` (8) + `transactions/[id]` (9),
+      `user/profile` (4), `planning/retirement` (6) — 59 tests au total.
+- [x] Chaque suite couvre au minimum : rejet `401` sans session, rejet
+      `429` une fois la limite de mutation atteinte (sans écriture),
+      rejet `400` sur un body invalide, scoping correct par
+      `userId` (jamais un autre utilisateur), et le chemin de succès.
+- [x] `goals/[id]` et `transactions/[id]` couvrent aussi le `404` quand la
+      ressource appartient à un autre utilisateur — le contrôle
+      d'appartenance (`findFirst`/`findUnique` puis comparaison de
+      `userId`) est le point le plus sensible de ces deux fichiers.
+- [x] `transactions` couvre le calcul incrémental de `budget.spent` (`{
+      increment: amount }`) et l'invalidation du cache de snapshot mensuel
+      — deux effets de bord faciles à casser silencieusement.
+- [x] `user/profile` couvre explicitement qu'un `id` fourni par le client
+      dans le body ne peut jamais écraser `session.user.id` (le schéma Zod
+      ne le whitelist pas, donc Prisma ne le voit jamais).
+- [x] `pnpm test` (157/157, +59 vs avant cette story) et
+      `pnpm type-check` (4/4) verts.
+- [x] `pnpm build` (production réelle, 50/50 pages) reconfirmé vert après
+      l'ajout des fichiers de test — pas de live re-test nécessaire au-delà
+      (aucune route modifiée, déjà vérifiées en direct en 15.20/15.21).
+
+**Implémentation** : `__tests__/route.test.ts` dans
+[accounts/](../apps/web/src/app/api/accounts/__tests__/route.test.ts),
+[budgets/](../apps/web/src/app/api/budgets/__tests__/route.test.ts),
+[goals/](../apps/web/src/app/api/goals/__tests__/route.test.ts),
+[goals/[id]/](../apps/web/src/app/api/goals/%5Bid%5D/__tests__/route.test.ts),
+[portfolio/](../apps/web/src/app/api/portfolio/__tests__/route.test.ts),
+[transactions/](../apps/web/src/app/api/transactions/__tests__/route.test.ts),
+[transactions/[id]/](../apps/web/src/app/api/transactions/%5Bid%5D/__tests__/route.test.ts),
+[user/profile/](../apps/web/src/app/api/user/profile/__tests__/route.test.ts),
+[planning/retirement/](../apps/web/src/app/api/planning/retirement/__tests__/route.test.ts).
+
+---
+
+### Story 15.23 — Validation Zod + résilience sur `POST /api/advisor/scenarios` · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux que `POST /api/advisor/scenarios`
+respecte la règle non-négociable #5 du projet ("Toute API valide ses
+inputs côté serveur, sans exception"), afin qu'un body malformé ne puisse
+ni corrompre une donnée ni faire planter la route.
+
+**Constat, trouvé en auditant les schémas Zod existants pendant la story
+15.22** : cette route n'avait **aucune validation** — `const { type, name,
+inputs, results } = await req.json()` puis un simple
+`VALID_TYPES.includes(type)` en dur, sans jamais vérifier que `name` est
+une chaîne, ni qu'`inputs`/`results` sont des objets. Un schéma
+[`createScenarioSchema`](../packages/shared/src/schemas/scenario.ts) existe
+déjà dans `packages/shared` (union discriminée par `type`, avec un shape
+d'`inputs` typé par type) — mais il ne couvre que 3 des 6 valeurs de
+`ScenarioType` que cette route accepte réellement (`REAL_ESTATE`,
+`EARLY_RETIREMENT`, `STOCK_INVESTMENT` — pas `BUSINESS_CREATION`,
+`EDUCATION_FUND`, `CUSTOM`, qui n'ont aucun shape d'`inputs` défini nulle
+part). Le brancher tel quel aurait **rejeté trois types qui fonctionnent
+aujourd'hui** — un choix produit (quel shape donner à ces types ?), pas un
+correctif de validation. Documenté dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
+plutôt que tranché seul.
+
+**Décision de cadrage** : schéma plus étroit, écrit pour cette story,
+validant ce que la route suppose déjà (chaînes/objets bien formés) sans
+inventer de shape par type pour des types non spécifiés.
+
+**Critères d'acceptation**
+- [x] Nouveau schéma local dans la route : `type` (les 6 valeurs
+      `ScenarioType` réelles, optionnel), `name` (chaîne 1-200
+      caractères, optionnel), `inputs`/`results` (objets, optionnels) —
+      rejette un `type` inconnu, un `name` non-chaîne, ou des
+      `inputs`/`results` qui ne sont pas des objets.
+- [x] Comportement de repli préservé à l'identique : `type` absent ou
+      manquant → `CUSTOM` (avant : n'importe quelle chaîne invalide
+      tombait aussi sur `CUSTOM` ; maintenant le schéma rejette d'abord
+      les chaînes invalides avec un `400`, seul `undefined` tombe encore
+      sur le repli — changement de comportement mineur et voulu, un
+      `type` explicitement invalide est maintenant un input rejeté, pas
+      silencieusement recatégorisé).
+- [x] `try/catch` ajouté — même classe de fragilité que le bug
+      `/api/auth/mobile` corrigé en story 15.21 (aucun filet avant),
+      trouvée par la même méthode (audit, pas un crash accidentel cette
+      fois).
+- [x] Cast `as any` sur `inputs`/`results` au moment de l'écriture Prisma
+      — nécessaire, `Record<string, unknown>` de Zod n'est pas
+      structurellement assignable au type `InputJsonValue` récursif de
+      Prisma (incompatibilité connue, déjà rencontrée ailleurs dans le
+      projet avec les champs `Json`).
+- [x] Test unitaire — 6 nouveaux : `401` avant tout appel rate-limit/BDD,
+      `400` sur type invalide, `400` sur `name` non-chaîne, repli `CUSTOM`
+      préservé quand `type` est omis, `500` propre sans fuite si Prisma
+      lève une exception, plus les tests déjà existants de 15.18/15.20
+      toujours verts.
+- [x] `pnpm test` (162/162) et `pnpm type-check` (4/4) verts.
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo :
+      build de production + `pnpm start`, `{"type":"NOT_A_TYPE","name":123}`
+      → `400` avec les deux erreurs de champ détaillées ;
+      `{"type":"CUSTOM","name":"Test 15.23"}` → `201`, scénario réellement
+      créé en BDD. Enregistrement de test supprimé après vérification.
+
+**Implémentation** :
+[api/advisor/scenarios/route.ts](../apps/web/src/app/api/advisor/scenarios/route.ts).
+
+---
+
+### Story 15.24 — `try/catch` sur les 12 routes restantes qui n'en avaient pas · ✅ Done
+
+**Story** : En tant qu'opérateur, je veux qu'aucune route API ne puisse
+planter avec un crash brut (non-JSON) sur une erreur inattendue (coupure
+BDD transitoire, etc.), afin que tout client — web, mobile, ou un futur
+consommateur — reçoive toujours une réponse JSON exploitable.
+
+**Constat, trouvé en auditant systématiquement le reste de l'API après
+les corrections ponctuelles de 15.21 (`auth/mobile`) et 15.23
+(`advisor/scenarios`)** : ces deux corrections avaient chacune été
+motivées par un incident précis, pas par un audit — un `grep` sur les
+routes CRUD (déjà pagination + rate-limit + Zod depuis 15.3/15.20) a
+montré qu'**aucune** n'avait de `try/catch`. Un second passage sur les
+routes de lecture restantes (`analysis/*`) a trouvé la même fragilité sur
+`analysis/snapshot` (la route derrière le goulot `/dashboard` de 15.13/
+15.16 — pas hypothétique du tout ici) et `analysis/forecast` ; `prices/*`
+avait déjà son propre `try/catch`, confirmé au passage. Même fragilité
+systémique, à l'échelle de quasi toute l'API du projet, pas seulement les
+deux endroits où elle avait déjà causé un incident visible.
+
+**Cadrage — pas une nouvelle politique, l'application cohérente d'un
+patron déjà établi** : chaque route a été enveloppée dans le même
+`try/catch` que `register`/`forgot-password`/`reset-password`/
+`verify-email`/`auth/mobile`/`advisor/scenarios` — un `console.error`
+préfixé par le nom de la route/méthode, puis `{ error: 'Erreur serveur'
+}` en `500`. Aucun changement de comportement sur le chemin normal.
+
+**Critères d'acceptation**
+- [x] `try/catch` ajouté sur les 21 handlers restants dans 12 fichiers :
+      `accounts` (GET, POST), `budgets` (GET, POST), `goals` (GET, POST) +
+      `goals/[id]` (PATCH, DELETE), `portfolio` (GET, POST),
+      `transactions` (GET, POST) + `transactions/[id]` (GET, PATCH,
+      DELETE), `user/profile` (PATCH), `planning/retirement` (GET, POST),
+      `planning/taxes` (GET, POST), `analysis/snapshot` (GET),
+      `analysis/forecast` (GET).
+- [x] Aucun changement de comportement sur le chemin de succès — les 162
+      tests déjà existants pour les 10 premiers fichiers (stories
+      15.20/15.22) passent sans modification.
+- [x] Test unitaire — 24 nouveaux : 15 ("retourne un 500 JSON propre au
+      lieu de planter quand Prisma lève une exception"), un par fichier de
+      route déjà testé (deux pour `planning/taxes`, dont la suite `POST`
+      n'existait pas encore et a été complétée au passage) ; 9 nouveaux
+      pour `analysis/snapshot` et `analysis/forecast`, qui n'avaient
+      aucun test du tout jusqu'ici (401, scoping par utilisateur, plafond
+      de mois par plan FREE/PREMIUM, 500 propre).
+- [x] `pnpm test` (186/186) et `pnpm type-check` (4/4) verts.
+- [x] `pnpm build` (production réelle, 50/50 pages) vert.
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo :
+      build de production + `pnpm start`, connexion mobile réelle, puis
+      `GET`/`PATCH` sur les 9 routes concernées (`accounts`, `budgets`,
+      `goals`, `portfolio`, `transactions`, `planning/retirement`,
+      `planning/taxes`, `user/profile`, `analysis/snapshot`,
+      `analysis/forecast`) — toutes `200` avec de vraies données
+      (`analysis/forecast` a renvoyé une vraie projection sur le compte de
+      démo), aucune régression sur le chemin normal. En prime : une
+      tentative de connexion pendant cette vérification a essuyé une
+      coupure BDD transitoire réelle et reçu le `{"error":"Erreur
+      serveur"}` propre de 15.21 plutôt qu'un crash — reconfirmation
+      incidente de cette story antérieure.
+
+**Implémentation** : les 12 fichiers de route listés ci-dessus, plus
+[analysis/snapshot/__tests__/route.test.ts](../apps/web/src/app/api/analysis/snapshot/__tests__/route.test.ts)
+et
+[analysis/forecast/__tests__/route.test.ts](../apps/web/src/app/api/analysis/forecast/__tests__/route.test.ts)
+(nouveaux).
+
+---
+
+### Story 15.25 — Champs Prisma réels jamais exposés par l'API (retraite/objectifs/portefeuille) · ✅ Done
+
+**Story** : En tant qu'utilisateur, je veux pouvoir renseigner tous les
+champs que l'app propose déjà dans son schéma de données (taux
+d'inflation d'un plan retraite, priorité d'un objectif, bourse/notes d'une
+position de portefeuille), afin de ne pas perdre silencieusement une
+donnée que je pensais avoir enregistrée.
+
+**Constat, trouvé en auditant les schémas `packages/shared` inutilisés
+après la découverte du même problème sur `scenario.ts` en story 15.23** :
+trois autres schémas partagés (`retirement.ts`, `goal.ts`, `portfolio.ts`)
+existent, complets et cohérents avec Prisma, mais ne sont **pas** ceux
+réellement importés par leurs routes — chacune utilise un schéma local
+plus restreint, qui omet des colonnes bien réelles :
+- `RetirementPlan.inflationRate` et `.notes` — jamais acceptés par
+  `POST /api/planning/retirement`.
+- `FinancialGoal.priority` — jamais acceptée par `POST /api/goals` (alors
+  que `PATCH /api/goals/[id]` l'accepte déjà via `updateGoalSchema`,
+  importé du même `packages/shared`).
+- `PortfolioItem.exchange` et `.notes` — jamais acceptés par
+  `POST /api/portfolio`, dont le `assetClass` était aussi un `z.string()`
+  non contraint (une valeur invalide atteignait Prisma au lieu d'être
+  rejetée avec un `400` clair) et le `purchaseDate` un `z.string()` sans
+  format imposé.
+
+**Décision de cadrage** : ne pas importer les schémas partagés tels
+quels — chacun diverge légèrement du schéma local déjà en production
+(bornes, defaults). Ajout ciblé des champs/validations manquants dans
+chaque schéma local, sans toucher au comportement déjà existant.
+
+**Critères d'acceptation**
+- [x] `planning/retirement` — `inflationRate` (défaut 3, même convention
+      que `expectedReturnRate` déjà par défaut à 8) et `notes` ajoutés ;
+      contrainte `.refine()` reprise du schéma partagé
+      (`targetRetirementAge` doit dépasser `currentAge`).
+- [x] `goals` (POST) — `priority` (1-10, **sans** défaut Zod, pour laisser
+      le défaut Prisma natif (1) s'appliquer si omis plutôt que d'imposer
+      silencieusement le défaut 5 du schéma partagé).
+- [x] `portfolio` — `exchange`/`notes` ajoutés ; `assetClass` resserré au
+      vrai enum Prisma (7 valeurs) ; `purchaseDate` contraint au format
+      `AAAA-MM-JJ`.
+- [x] Vérifié qu'aucun consommateur ne casse avec le resserrement de
+      `assetClass` : seul
+      [`AddPortfolioItemForm.tsx`](../apps/web/src/components/investments/AddPortfolioItemForm.tsx)
+      appelle ce `POST` (mobile ne fait que lire `/api/portfolio`), et
+      n'envoie déjà que des valeurs du vrai enum.
+- [x] Test unitaire — 20 nouveaux au total sur les trois fichiers
+      (validation croisée retraite, valeurs par défaut, `priority`
+      transmis/omis/hors bornes, `exchange`/`notes` acceptés,
+      `assetClass`/`purchaseDate` invalides rejetés).
+- [x] `pnpm test` (195/195) et `pnpm type-check` (4/4) verts.
+- [x] `pnpm build` (production réelle, 50/50 pages) vert.
+- [x] Vérifié en direct contre la vraie BDD Neon avec le compte de démo :
+      plan retraite créé avec `inflationRate`/`notes` réels ; `400` clair
+      sur un âge de retraite antérieur à l'âge actuel ; objectif créé avec
+      `priority: 9` persistée ; position de portefeuille créée avec
+      `exchange`/`notes` réels ; `assetClass` invalide rejeté `400` avec
+      le message d'erreur détaillé listant les 7 valeurs valides.
+
+**Incident pendant le nettoyage post-vérification, corrigé** : le plan
+retraite créé pour tester `inflationRate`/`notes` a été écrit via
+`upsert` (comme le fait la route) — **sur la ligne déjà existante du
+compte de démo** (`scripts/seed.ts` en crée une), pas une nouvelle ligne.
+Le nettoyage a supprimé cette ligne par réflexe (`delete`) sans vérifier
+au préalable qu'il s'agissait d'un upsert plutôt qu'un insert, effaçant
+le plan retraite seedé du compte de démo. **Restauré immédiatement**
+avec les valeurs exactes de `scripts/seed.ts`
+(`currentAge: 32, targetRetirementAge: 55, monthlyContribution: 80000,
+currentSavings: 850000, expectedReturnRate: 8, targetMonthlyIncome:
+500000`) — `inflationRate`/`notes` retombent sur leurs défauts (3/`null`),
+identiques à l'état seedé d'origine. Aucune donnée réelle affectée (compte
+de démo uniquement), mais signalé ici en toute transparence plutôt que
+passé sous silence — la leçon retenue : vérifier si une écriture de test
+est un `upsert` avant de supprimer par réflexe ce qu'on croit avoir créé.
+
+**Implémentation** :
+[api/planning/retirement/route.ts](../apps/web/src/app/api/planning/retirement/route.ts),
+[api/goals/route.ts](../apps/web/src/app/api/goals/route.ts),
+[api/portfolio/route.ts](../apps/web/src/app/api/portfolio/route.ts).
+
+---
+
+### Story 15.26 — Câbler un test runner (`jest-expo`) pour `apps/mobile` · ✅ Done
+
+**Story** : En tant que développeur, je veux qu'`apps/mobile` ait un
+test runner fonctionnel, afin que la règle §6.1 du framework ("tests
+écrits avec le code") soit enfin respectable côté mobile aussi — jusqu'ici
+seul `apps/web` en avait un depuis la story 15.9, qui notait explicitement
+`apps/mobile` comme "hors périmètre... nécessiterait un preset différent
+(`jest-expo`)".
+
+**Cadrage** : `jest-expo@51.0.2` (dist-tag `sdk-51`, exactement aligné sur
+`expo: ~51.0.0` déjà utilisé) — dépend en interne de
+`react-test-renderer@18.2.0`, qui correspond exactement à la version de
+`react` déjà fixée dans `apps/mobile`. `jest@^29.7.0` réutilisé (même pin
+que `apps/web` depuis l'ADR-006, story 15.9).
+
+**Obstacle réel rencontré, diagnostiqué puis corrigé** : la toute
+première tentative échouait systématiquement avec une erreur de syntaxe
+sur `@react-native/js-polyfills` (`type ErrorHandler = ...`, syntaxe Flow
+non transpilée). Cause : le `transformIgnorePatterns` par défaut de
+`jest-expo` suppose un `node_modules` classique et plat
+(`node_modules/<pkg>/...`), alors que pnpm imbrique les dépendances
+transitives sous `node_modules/.pnpm/<pkg>@<version>/node_modules/<pkg>/...`
+— le pattern négatif matchait sur le premier `node_modules/` (juste avant
+`.pnpm`, qui n'est dans aucune liste autorisée), ignorant à tort le
+fichier réel plus loin. Aggravé par le fait que cette session tourne sous
+Windows (séparateurs `\`), que le pattern d'origine (tout en `/`) ne
+matchait de toute façon jamais. Corrigé en ajoutant `.pnpm/` lui-même à la
+liste des motifs "autorisés" au niveau du *premier* `node_modules/`
+rencontré — cela ne change pas le verdict à cet endroit, ça empêche juste
+cette frontière externe de trancher : la vraie décision reste prise à la
+frontière *interne* (juste avant le fichier réel), avec la même liste de
+paquets RN/Expo qu'avant. Les deux séparateurs (`/` et `\`) sont matchés
+partout. Diagnostic confirmé par un script Node isolé testant le regex
+directement contre des chemins réels avant de retoucher `jest.config.js`,
+plutôt que par essais-erreurs sur la suite complète.
+
+**Critères d'acceptation**
+- [x] `pnpm --filter mobile run test` exécute une vraie suite Jest et
+      réussit.
+- [x] `pnpm test` (racine, via Turborepo) exécute la suite mobile en plus
+      de la suite web — aucune configuration supplémentaire nécessaire
+      dans `turbo.json` (la tâche `test: {}` générique, déjà en place
+      depuis la story 15.9, découvre automatiquement tout script `test`
+      d'un workspace).
+- [x] `pnpm type-check` (4/4) reste vert.
+- [x] Premier test réel écrit, pas un test bidon pour prouver que le
+      runner tourne : [`lib/mfetch.ts`](../apps/mobile/lib/mfetch.ts), la
+      primitive réseau centrale de toute l'app mobile (utilisée par tous
+      les écrans depuis `lib/mfetch.ts`, jamais testée jusqu'ici) — 7
+      tests couvrant l'authentification par cookie `next-auth.session-token`
+      (pas un header `Authorization`, confirmée story 15.19/routes divers),
+      l'absence de cookie sans token stocké, la priorité des headers
+      fournis par l'appelant, et les trois chemins d'erreur de
+      `mfetchJson` (succès, erreur JSON avec `error`, erreur JSON sans
+      `error`, corps non-JSON).
+- [x] Deuxième test réel, une fois l'infra prouvée : `contexts/AuthContext.tsx`
+      — toute la gestion de session mobile (login/logout/restauration au
+      démarrage), jamais testée jusqu'ici. Rendue avec `react-test-renderer`
+      (déjà une dépendance transitive de `jest-expo`, aucune nouvelle
+      dépendance de test ajoutée pour le rendu) et une petite sonde
+      (`Probe`) qui capture la valeur de contexte — pas
+      `@testing-library/react-native`, pour ne pas ajouter une dépendance
+      réseau de plus à cette story déjà consacrée à en faire fonctionner
+      une. A nécessité `@types/react-test-renderer` en devDependency
+      (absent, `pnpm type-check` échouait sinon). 5 tests : pas de session
+      au démarrage, restauration depuis `SecureStore`, `login()` persiste
+      token/utilisateur/devise et met à jour l'état, `login()` échoué lève
+      l'erreur serveur sans modifier l'état, `logout()` efface tout.
+- [x] `pnpm install` revérifié sans erreur — seul avertissement de peer
+      dependency rencontré (`@shopify/react-native-skia` exigeant React
+      19+/RN 0.78+) est préexistant (transitif de `victory-native`, déjà
+      présent avant cette story), pas introduit ici.
+- [x] `pnpm build` (web) reconfirmé vert après l'installation.
+- [x] Accès réseau au registre npm vérifié disponible avant de tenter
+      quoi que ce soit (cohérent avec la connectivité intermittente déjà
+      documentée cette session, stories 15.19/15.21) — tentative reportée
+      plus tôt dans la session faute d'accès, retentée avec succès une
+      fois le registre de nouveau joignable.
+- [x] `pnpm test` (racine) : 195 (web) + **12** (mobile, +7 depuis
+      `mfetch.ts` +5 depuis `AuthContext.tsx`). `pnpm type-check` 4/4.
+
+**Non fait, hors périmètre de cette story** : aucun test d'écran complet
+(seuls une primitive pure et un context provider ont été testés, sans
+rendu d'une vraie navigation/écran) ; aucune configuration CI mobile (le
+workflow GitHub Actions de la story 15.6 ne couvre que `apps/web`) — à
+envisager dans une story dédiée si la couverture mobile doit s'étendre
+davantage.
+
+**Implémentation** :
+[apps/mobile/package.json](../apps/mobile/package.json) (`jest`,
+`jest-expo`, `@types/jest`, `@types/react-test-renderer` en
+devDependencies, script `test`),
+[apps/mobile/jest.config.js](../apps/mobile/jest.config.js) (nouveau),
+[contexts/__tests__/AuthContext.test.tsx](../apps/mobile/contexts/__tests__/AuthContext.test.tsx)
+(nouveau),
+[lib/__tests__/mfetch.test.ts](../apps/mobile/lib/__tests__/mfetch.test.ts)
+(nouveau).
+
+---
+
+### Story 15.27 — Tests pour `formatCurrency`/`convertToXOF` · ✅ Done
+
+**Story** : couvrir la logique de formatage/conversion de devise
+(`packages/shared/src/constants/currencies.ts`) — utilisée dans tout
+l'affichage de montants de l'app (web et mobile), jamais testée jusqu'ici.
+
+**Cadrage** : `packages/shared` n'a pas de test runner propre (pas de
+script `test`, pas de `jest` en devDependency) — même convention déjà
+établie par `authSchemas.test.ts` : le code partagé est testé depuis
+`apps/web`, via son propre Jest, plutôt que laissé sans test faute d'un
+runner dédié.
+
+**Critères d'acceptation**
+- [x] 7 tests : XOF sans décimales + symbole FCFA, défaut sur XOF si
+      devise omise, EUR/USD/GBP avec 2 décimales et le bon symbole, XOF
+      arrondi à l'entier (pas de décimales affichées), `convertToXOF`
+      identité pour XOF, taux de conversion documentés respectés,
+      linéarité par rapport au montant.
+- [x] Assertions sur le contenu (regex/`toContain`), pas sur les octets
+      exacts du séparateur de milliers — `Intl.NumberFormat` utilise un
+      espace insécable fine (U+202F) dont l'encodage exact peut varier
+      selon la version d'ICU, vérifié directement en Node avant d'écrire
+      les assertions plutôt que supposé.
+- [x] `pnpm test` (202 web + 12 mobile) et `pnpm type-check` (4/4) verts.
+
+**Implémentation** :
+[lib/__tests__/currencies.test.ts](../apps/web/src/lib/__tests__/currencies.test.ts).
+
+---
+
+### Story 15.28 — Tests pour `projectForecast` · ✅ Done
+
+**Story** : couvrir directement l'algorithme de prévision financière
+(`lib/analytics/forecast.ts` — régression linéaire simple sur revenus/
+dépenses, accumulation de patrimoine net projeté, niveau de confiance).
+Jusqu'ici testé uniquement **par mock** dans
+`analysis/forecast/route.test.ts` (story 15.24) — l'implémentation réelle
+n'avait jamais été exercée.
+
+**Critères d'acceptation**
+- [x] 10 tests : tableau vide sous 2 snapshots, nombre de points égal à
+      `monthsAhead`, projection plate quand la tendance est nulle,
+      extrapolation d'une tendance croissante (pas juste la moyenne),
+      jamais de revenu/dépense négatif même sur tendance fortement
+      baissière (`Math.max(0, ...)`), accumulation correcte du
+      patrimoine net projeté mois après mois, `netWorth` manquant traité
+      comme `0` sans planter, retour à janvier l'année suivante après
+      décembre, tri chronologique de snapshots donnés dans le désordre
+      (projette bien depuis le mois le plus récent, pas depuis l'ordre du
+      tableau), niveaux de confiance `low`/`medium`/`high` selon le
+      nombre de mois d'historique.
+- [x] `pnpm test` (212 web + 12 mobile) et `pnpm type-check` (4/4) verts.
+
+**Implémentation** :
+[lib/analytics/__tests__/forecast.test.ts](../apps/web/src/lib/analytics/__tests__/forecast.test.ts).
+
+---
+
+### Story 15.29 — Tests pour les 3 simulateurs (immobilier/retraite/bourse) · ✅ Done
+
+**Story** : couvrir `lib/simulators/realEstate.ts`, `retirement.ts` et
+`stockGrowth.ts` — logique financière réelle (amortissement de prêt,
+capitalisation composée, rente future) utilisée par le conseiller IA
+(`ScenarioList.tsx`), jamais testée. C'est précisément le mot
+"simulateurs" cité comme trou de couverture depuis la story 15.9, jamais
+comblé explicitement jusqu'ici (les stories suivantes avaient fermé
+"routes API"/"analytique" mais pas celui-ci).
+
+**Découverte pendant l'écriture des tests, non un bug caché mais un
+écart réel** : `retirement.ts` et `stockGrowth.ts` renvoient chacun deux
+chiffres qui devraient représenter la même quantité mais divergent de
+~2,5 à 3 % — le total final (`projectedSavings`/`finalValue`, calculé
+par une formule fermée qui capitalise chaque contribution mensuelle dès
+son propre mois) et le dernier point de `projectionByYear` (calculé par
+une boucle an-par-an qui ajoute les 12 contributions de l'année en une
+seule fois en fin d'année, sous-capitalisant par rapport à la formule
+fermée). Vérifié avec un script Node isolé avant d'écrire les assertions,
+pour ne pas figer une fausse égalité dans un test. **Sans impact visible
+aujourd'hui** : `projectionByYear`/`amortizationTable` sont calculés mais
+**ne sont rendus nulle part dans l'UI actuelle** (recherché explicitement
+— seuls `finalValue`/`projectedSavings`/`totalGain`/`totalInvested` sont
+affichés par `ScenarioList.tsx`) — mais deviendrait visible dès qu'un
+graphique consommerait ces données (le total affiché ne correspondrait
+plus au dernier point du graphique). Documenté dans les tests eux-mêmes
+(assertions qui vérifient l'écart plutôt que de le masquer) et dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-non-traitée-signalée-pour-décision)
+plutôt que "corrigé" unilatéralement — les deux méthodes de calcul sont
+défendables (capitalisation mensuelle précise vs. approximation annuelle
+plus simple à lire sur un graphique), le choix appartient à qui
+construira ce graphique.
+
+**Critères d'acceptation**
+- [x] `realEstate.ts` — 7 tests : formule d'amortissement standard vérifiée
+      indépendamment, taux zéro (répartition égale), cohérence
+      totalPaid/totalInterest/monthlyPayment, `breakEvenMonths`/`annualROI`
+      `null` sans loyer, positifs avec loyer, table d'amortissement
+      plafonnée à 12 lignes, cohérence principal+intérêt≈paiement et
+      solde strictement décroissant.
+- [x] `retirement.ts` — 8 tests : `yearsToRetirement`, somme simple à taux
+      zéro, croissance au-delà de la somme simple à taux positif,
+      cohérence `isFunded`/`fundingGap`, `fundingGap` jamais négatif,
+      projection annuelle de la bonne longueur démarrant à
+      `currentSavings`, écart documenté `projectionByYear` vs
+      `projectedSavings` (voir ci-dessus), plancher à 4 % du taux de
+      retrait sûr.
+- [x] `stockGrowth.ts` — 8 tests : somme simple à taux zéro, défaut de
+      `initialAmount` à 0, gain positif à taux positif, capitalisation
+      composée (pas linéaire) sur plus d'années, projection annuelle de
+      la bonne longueur, écart documenté `projectionByYear` vs
+      `finalValue`, montants investis strictement croissants, pas de
+      division par zéro quand rien n'est investi.
+- [x] `pnpm test` (235 web + 12 mobile) et `pnpm type-check` (4/4) verts.
+
+**Implémentation** :
+[lib/simulators/__tests__/realEstate.test.ts](../apps/web/src/lib/simulators/__tests__/realEstate.test.ts),
+[lib/simulators/__tests__/retirement.test.ts](../apps/web/src/lib/simulators/__tests__/retirement.test.ts),
+[lib/simulators/__tests__/stockGrowth.test.ts](../apps/web/src/lib/simulators/__tests__/stockGrowth.test.ts).
+
+---
+
+### Story 15.30 — Limite de taille de payload sur les routes mutatives · ✅ Done
+
+**Story** : En tant qu'opérateur de la plateforme, je veux qu'aucune route
+API ne puisse être forcée à bufferiser et parser un corps de requête
+arbitrairement volumineux avant validation, afin de fermer le dernier
+résidu documenté d'API-04 (Unrestricted Resource Consumption) : `POST`/
+`PATCH` acceptait `await req.json()` sans aucune limite de taille, et
+`Content-Length` ne peut pas servir de garde-fou côté serveur (un client
+peut l'omettre ou mentir dessus sans que Next.js rejette le mismatch).
+Résidu noté explicitement dans [04-tests.md](04-tests.md) (BE-07, API-04)
+depuis la story 15.20, jamais transformé en story jusqu'ici.
+
+**Contexte de reprise** : l'implémentation du garde-fou
+([lib/requestBody.ts](../apps/web/src/lib/requestBody.ts) —
+`readJsonBody()`, remplaçant direct de `req.json()` qui compte les octets
+réels du corps via `Buffer.byteLength` avant de parser) avait été écrite
+dans une session précédente mais laissée non committée, non branchée sur
+aucune route et sans test — trouvée comme fichier non suivi par git en
+début de session. Cette story termine ce travail : câblage sur toutes les
+routes concernées, gestion `413`, tests, documentation.
+
+**Choix de la limite** : 100 Ko (`MAX_JSON_BODY_BYTES`). Le plus gros
+payload légitime de l'app est le blob `inputs`/`results` d'un scénario
+conseiller (story 15.23) — quelques Ko en pratique — donc 100 Ko laisse
+une marge généreuse sans autoriser un corps de plusieurs Mo à être
+bufferisé.
+
+**Critères d'acceptation**
+- [x] `readJsonBody()` remplace `await req.json()` sur les 16 fichiers de
+      route qui acceptent un corps JSON : `accounts`, `budgets`, `goals` +
+      `goals/[id]`, `portfolio`, `transactions` + `transactions/[id]`,
+      `user/profile`, `planning/retirement`, `planning/taxes`,
+      `advisor/scenarios`, et les 5 routes `auth/*`
+      (`mobile`/`register`/`forgot-password`/`reset-password`/
+      `verify-email`).
+- [x] Chaque `catch` correspondant distingue désormais `PayloadTooLargeError`
+      (→ `413 { error: 'Corps de requête trop volumineux' }`) du reste
+      (→ `500` générique, comportement inchangé de la story 15.24) — un
+      corps trop gros n'atteint donc jamais la validation Zod ni Prisma.
+- [x] Comportement sur le chemin normal strictement inchangé : un corps
+      valide sous la limite est parsé exactement comme avant (`readJsonBody`
+      fait `JSON.parse(await req.text())`, identique à `req.json()` sous
+      le capot — même `SyntaxError` sur un JSON malformé).
+- [x] Test unitaire du helper — 7 tests
+      ([lib/__tests__/requestBody.test.ts](../apps/web/src/lib/__tests__/requestBody.test.ts)) :
+      corps valide sous la limite, corps au-delà de la limite par défaut,
+      corps exactement à la limite, `maxBytes` personnalisé, JSON malformé
+      sous la limite (toujours un `SyntaxError` simple), comptage en
+      octets et non en caractères (UTF-8 multi-octets), message de
+      `PayloadTooLargeError`.
+- [x] Test de régression `413` ajouté sur les 12 fichiers de test de route
+      déjà existants parmi les 16 modifiés (les 4 routes `auth/*` restantes
+      — `register`/`forgot-password`/`reset-password`/`verify-email` —
+      n'avaient aucun fichier de test avant cette story ; leur créer un
+      depuis zéro pour ce seul correctif aurait dépassé le périmètre de
+      cette story et dupliqué un gap déjà connu séparément — non traité
+      ici, signalé).
+- [x] `pnpm test` (254/254) et `pnpm type-check` (4/4) verts.
+- [x] `pnpm build` (production réelle, 50/50 pages) vert.
+
+**Non vérifié** : comportement réel contre la vraie BDD Neon avec un
+appel `curl` envoyant un corps de >100 Ko (couverture unitaire complète,
+pas de vérification bout en bout comme pour d'autres stories de cet
+epic — aucun changement de comportement attendu sur le chemin réseau
+lui-même, `readJsonBody` opère uniquement sur le texte déjà reçu).
+
+**Implémentation** :
+[lib/requestBody.ts](../apps/web/src/lib/requestBody.ts) (nouveau),
+[lib/__tests__/requestBody.test.ts](../apps/web/src/lib/__tests__/requestBody.test.ts)
+(nouveau), les 16 fichiers de route listés ci-dessus, plus les tests `413`
+ajoutés dans leurs 12 suites déjà existantes.
+
+---
+
+### Story 15.31 — Dette technique §13 clôturée avec l'utilisateur (4 décisions) · ✅ Done
+
+**Story** : En tant que mainteneur, je veux que les quatre découvertes de
+fin de session documentées dans
+[03-architecture.md §13](03-architecture.md#13-dette-technique-identifiée-décisions-tranchées-avec-lutilisateur-le-2026-09-19)
+— laissées volontairement non tranchées car chacune impliquait une
+décision de produit/architecture — soient explicitement décidées avec
+l'utilisateur puis implémentées, plutôt que rester indéfiniment en
+suspens dans la documentation.
+
+**Contexte** : demande explicite de l'utilisateur (« terminons avec
+l'epic 15 ») après consultation sur chacune des 4 décisions
+individuellement (options présentées, choix faits), plus deux décisions
+connexes (confirmation de l'ADR-012, scope de la story MFA — voir
+15.32/ADR-008). Cette story ne couvre que les 4 décisions du §13 ; MFA et
+la vérification Neon/Vercel réelle sont traitées séparément.
+
+**Décisions prises et implémentées**
+
+1. **`packages/api-client`** (code mort, auth Bearer incompatible avec ce
+   backend) — supprimé entièrement, avec son unique (et lui-même inutilisé)
+   consommateur `apps/mobile/lib/api.ts`. Dépendance retirée de
+   `apps/web/package.json` et `apps/mobile/package.json`, lockfile
+   régénéré (`pnpm install`) — le monorepo passe de 4 à 3 packages
+   (`shared`, `web`, `mobile`). [specs/epic-13-mobile.md](../specs/epic-13-mobile.md)
+   mis à jour (story 13.4 marquée "Superseded").
+2. **5 répertoires de route API vides** (`accounts/[id]/` + `sync/`,
+   `portfolio/[id]/`, `alerts/` en entier, `admin/stats/`, `admin/users/`)
+   — supprimés. `middleware.ts` a aussi perdu son entrée
+   `/api/alerts/:path*`, qui ne protégeait plus rien de réel.
+3. **`projectionByYear` divergent de ~2,5-3%** (`retirement.ts`,
+   `stockGrowth.ts`) — la boucle annuelle capitalise désormais chaque mois
+   individuellement au lieu d'ajouter les 12 contributions en un bloc en
+   fin d'année, la rendant mathématiquement identique à la formule fermée.
+   Les deux tests qui documentaient l'écart (story 15.29) réécrits pour
+   vérifier l'égalité exacte plutôt que la divergence.
+4. **Aucun wrapper de route API partagé** — `withApiRoute`/
+   `withDynamicApiRoute` (voir détail technique complet dans
+   [03-architecture.md §13, 4e découverte](03-architecture.md#aucun-wrapper-de-route-api-partagé--trycatchrate-limitsession-recopiés-à-la-main-dans-12-fichiers--décision-prise--hof-withapiroutewithdynamicapiroute)) —
+   deux fonctions plutôt qu'une seule polymorphe, contrainte découverte en
+   implémentant : le validateur de types généré par Next.js
+   (`.next/types/app/api/**/route.ts`) rejette un second paramètre de
+   handler optionnel/par défaut (toujours vu comme `X | undefined` par
+   `Parameters<>`), d'où deux entrées séparées selon que la route a ou non
+   un segment dynamique. 13 fichiers de routes migrés.
+
+**Critères d'acceptation**
+- [x] Les 4 décisions ci-dessus confirmées avec l'utilisateur avant
+      implémentation (aucune tranchée unilatéralement).
+- [x] `pnpm test` — 267/267 (16 nouveaux tests de wrapper, 2 tests de
+      simulateurs réécrits).
+- [x] `pnpm type-check` — 3/3 (le monorepo passe de 4 à 3 packages après
+      la suppression d'`api-client`).
+- [x] `pnpm build` (production réelle) — 50/50 pages, vert après un
+      rebuild complet (`.next` supprimé) pour régénérer les validateurs de
+      types de route Next.js sur les nouvelles signatures.
+- [x] Aucun changement de comportement sur le chemin nominal des 13 routes
+      migrées vers le wrapper — mêmes 401/429/400/404/2xx qu'avant,
+      vérifié par la suite de tests existante sans modification (les
+      mocks Jest ciblent les chemins de module, pas les sites d'import,
+      donc `apiRoute.ts` important les mêmes modules mockés continue de
+      fonctionner de façon transparente).
+
+**Implémentation** :
+[lib/apiRoute.ts](../apps/web/src/lib/apiRoute.ts) (nouveau),
+[lib/__tests__/apiRoute.test.ts](../apps/web/src/lib/__tests__/apiRoute.test.ts)
+(nouveau), les 13 fichiers de routes migrés, `middleware.ts`,
+`lib/simulators/retirement.ts` + `stockGrowth.ts` et leurs tests,
+suppression de `packages/api-client/` et `apps/mobile/lib/api.ts`,
+[specs/epic-13-mobile.md](../specs/epic-13-mobile.md).
+
+---
+
+### Story 15.32 — MFA (TOTP optionnel activable par l'utilisateur) · ✅ Done
+
+**Story** : En tant qu'utilisateur, je veux pouvoir activer une double
+authentification (TOTP) sur mon compte, afin qu'un mot de passe seul ne
+suffise plus à s'y connecter si je le choisis. Dernier volet de la story
+15.8 explicitement reporté par [ADR-008](03-architecture.md#adr-008--story-158-scoping--hardening-seul-mfa-reporté)
+("effort disproportionné tant que le projet n'a pas d'utilisateurs
+réels"). Traité maintenant sur demande explicite de l'utilisateur
+(« terminons avec l'epic 15 »), cadrage décidé avec lui avant
+implémentation (TOTP optionnel plutôt qu'obligatoire pour tous — voir
+[ADR-014](03-architecture.md#adr-014--mfa--totp-optionnel-activable-par-lutilisateur-otplib--secret-chiffré-aes-256-gcm-story-1532)
+pour le détail complet des choix techniques).
+
+**Ce qui a été livré**
+- Migration Prisma : `User.mfaEnabled` (`Boolean`), `User.mfaSecret`
+  (`String?`, chiffré AES-256-GCM — jamais en clair), `User.mfaRecoveryCodes`
+  (`String[]`, hashés bcrypt) — appliquée contre la vraie BDD Neon
+  (`prisma migrate dev`), pas de modification manuelle de schéma (règle #6).
+- Nouvelle variable d'environnement requise `MFA_ENCRYPTION_KEY` (64
+  caractères hex), validée au boot par `lib/env.ts` (même convention que
+  les autres secrets depuis la story 15.14).
+- [`lib/mfaCrypto.ts`](../apps/web/src/lib/mfaCrypto.ts) (chiffrement
+  AES-256-GCM) et [`lib/mfa.ts`](../apps/web/src/lib/mfa.ts) (génération/
+  vérification TOTP via `otplib`, QR code via `qrcode`, génération et
+  consommation à usage unique des 10 codes de récupération).
+- 3 nouvelles routes API : `POST /api/auth/mfa/setup` (génère un secret,
+  ne l'active pas encore), `POST /api/auth/mfa/enable` (confirme avec un
+  code réel, active, renvoie les codes de récupération une seule fois),
+  `POST /api/auth/mfa/disable` (mot de passe + code requis ensemble).
+- `lib/auth.ts` (NextAuth `CredentialsProvider.authorize()`) et
+  `POST /api/auth/mobile` : après mot de passe validé, exigent un code si
+  `user.mfaEnabled` — `authorize()` lève `Error('MFA_REQUIRED')`/
+  `Error('MFA_INVALID')` (NextAuth propage le message dans `result.error`,
+  contrairement à un `return null` toujours traduit en erreur générique) ;
+  la route mobile renvoie `{ error: 'mfa_required' }` en `401`.
+- UI web : [`LoginForm.tsx`](../apps/web/src/app/(auth)/login/LoginForm.tsx)
+  bascule sur un champ code quand `result.error === 'MFA_REQUIRED'` ;
+  nouvel onglet "Sécurité" dans `/settings`
+  ([`MfaSettings.tsx`](../apps/web/src/components/settings/MfaSettings.tsx))
+  pour activer (QR + confirmation) et désactiver (mot de passe + code).
+- UI mobile : [`login.tsx`](../apps/mobile/app/(auth)/login.tsx) et
+  `AuthContext.login()` gèrent le même second facteur — l'activation
+  elle-même reste web-only (l'endroit naturel pour scanner un QR code).
+
+**Critères d'acceptation**
+- [x] Un compte sans MFA se connecte exactement comme avant (web et
+      mobile), aucune régression sur le chemin nominal.
+- [x] Activer la MFA exige un code réel avant de l'activer — un secret
+      généré mais jamais confirmé ne bloque jamais une future connexion.
+- [x] Une fois activée, la connexion (web et mobile) sans code échoue
+      distinctement d'un mauvais mot de passe (`MFA_REQUIRED`/
+      `mfa_required`, pas `CredentialsSignin` générique).
+- [x] Un code TOTP valide ou un code de récupération valide (non déjà
+      utilisé) permet de se connecter ; un code de récupération est
+      consommé après usage (rejeté sur une deuxième tentative).
+- [x] Désactiver exige le mot de passe **et** un code ensemble.
+- [x] `pnpm test` — 313 (web) + 14 (mobile), tous nouveaux fichiers testés :
+      `lib/mfa.ts`, `lib/mfaCrypto.ts`, les 3 routes `auth/mfa/*`,
+      `lib/auth.ts` (`authorize()`), `auth/mobile` (scénarios MFA),
+      `AuthContext.login()` (scénarios MFA).
+- [x] `pnpm type-check` (3/3) et `pnpm build` (50/50 pages) verts.
+- [x] `pnpm audit` reconfirmé à l'identique (49 vulnérabilités
+      pré-existantes, aucune liée à `otplib`/`qrcode` — confirmé par
+      comparaison avant/après via `git stash`, drift indépendant côté
+      toolchain `apps/mobile`, signalé séparément).
+- [x] **Vérifié en direct contre la vraie BDD Neon avec le compte de
+      démo**, cycle complet : activation (QR + secret manuel + code de
+      confirmation réel généré via `otplib` en ligne de commande) → 10
+      codes de récupération reçus → connexion mobile sans code → `401
+      mfa_required` → connexion avec code TOTP réel → succès → connexion
+      avec un code de récupération → succès, code consommé → réutilisation
+      du même code → rejetée → désactivation (mot de passe + code) →
+      connexion normale de nouveau sans code requis. Compte de démo
+      restauré à son état d'origine (MFA désactivée) après vérification.
+
+**Non fait** : écran d'activation MFA côté mobile (QR/codes de récupération
+— web-only, décision délibérée) ; test en environnement de production
+réelle (aucun n'existe encore) ; MFA reste optionnelle par choix produit,
+pas imposée à tous les comptes.
+
+**Implémentation** :
+[lib/mfa.ts](../apps/web/src/lib/mfa.ts),
+[lib/mfaCrypto.ts](../apps/web/src/lib/mfaCrypto.ts),
+[lib/__tests__/mfa.test.ts](../apps/web/src/lib/__tests__/mfa.test.ts),
+[lib/__tests__/mfaCrypto.test.ts](../apps/web/src/lib/__tests__/mfaCrypto.test.ts),
+[lib/__tests__/auth.test.ts](../apps/web/src/lib/__tests__/auth.test.ts)
+(nouveau),
+`app/api/auth/mfa/{setup,enable,disable}/route.ts` + leurs tests,
+`lib/auth.ts`, `app/api/auth/mobile/route.ts` (+ test),
+`packages/shared/src/schemas/auth.ts` (`loginSchema.totp` optionnel),
+`components/settings/MfaSettings.tsx`, `app/(dashboard)/settings/page.tsx`,
+`app/(auth)/login/LoginForm.tsx`,
+`apps/mobile/app/(auth)/login.tsx`, `apps/mobile/contexts/AuthContext.tsx`
+(+ test), migration Prisma `add_mfa_fields`, `lib/env.ts`
+(`MFA_ENCRYPTION_KEY`).
 
 ---
 

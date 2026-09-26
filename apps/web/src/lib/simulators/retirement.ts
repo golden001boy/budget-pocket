@@ -45,11 +45,21 @@ export function computeRetirement(inputs: RetirementInputs): RetirementResults {
   const isFunded   = projectedSavings >= requiredNestEgg;
   const fundingGap = Math.max(0, requiredNestEgg - projectedSavings);
 
+  // Month-by-month, not `savings * (1+monthlyRate)^12 + monthlyContribution * 12`:
+  // that lump-sum update added a year's contributions in one shot at
+  // year-end, undercapitalizing them relative to the closed-form annuity
+  // formula above (which compounds each monthly contribution from its own
+  // month) — the two diverged by ~2.5-3% by the end of a realistic
+  // projection (found while writing this file's tests, story 15.29).
+  // Compounding monthly here keeps the last point exactly in sync with
+  // `projectedSavings`.
   const projectionByYear: { age: number; savings: number }[] = [];
   let savings = currentSavings;
   for (let y = 0; y <= yearsToRetirement; y++) {
     projectionByYear.push({ age: currentAge + y, savings: Math.round(savings) });
-    savings = savings * Math.pow(1 + monthlyRate, 12) + monthlyContribution * 12;
+    for (let m = 0; m < 12; m++) {
+      savings = savings * (1 + monthlyRate) + monthlyContribution;
+    }
   }
 
   return {

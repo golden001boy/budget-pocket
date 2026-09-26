@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
+import { readJsonBody } from '@/lib/requestBody';
+import { withApiRoute } from '@/lib/apiRoute';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -12,12 +12,17 @@ const createSchema = z.object({
   currentAmount: z.number().min(0).default(0),
   deadline:      z.string().optional(),
   notes:         z.string().optional(),
+  // Story 15.25: FinancialGoal.priority is a real column (Prisma default
+  // 1) this schema never accepted, even though updateGoalSchema (already
+  // imported by PATCH .../[id]) has had it all along — a goal's priority
+  // could be changed after creation but never set at creation. No
+  // `.default()` here on purpose: omitting it should still fall through
+  // to Prisma's own column default (1), not silently change to something
+  // else.
+  priority:      z.number().int().min(1).max(10).optional(),
 });
 
-export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+export const GET = withApiRoute(async (req: Request, { session }) => {
   const { searchParams } = new URL(req.url);
   const { skip, take, page, pageSize } = parsePagination(searchParams);
   const where = { userId: session.user.id };
@@ -28,13 +33,10 @@ export async function GET(req: NextRequest) {
   ]);
 
   return NextResponse.json({ data: goals, meta: buildPaginationMeta(total, page, pageSize) });
-}
+}, { name: 'goals:GET' });
 
-export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const body   = await req.json();
+export const POST = withApiRoute(async (req: Request, { session }) => {
+  const body   = await readJsonBody(req);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
@@ -47,8 +49,9 @@ export async function POST(req: NextRequest) {
       currentAmount: parsed.data.currentAmount,
       deadline:      parsed.data.deadline ? new Date(parsed.data.deadline) : undefined,
       notes:         parsed.data.notes,
+      priority:      parsed.data.priority,
       status:        'ACTIVE',
     },
   });
   return NextResponse.json(goal, { status: 201 });
-}
+}, { name: 'goals:POST', rateLimit: true });

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
+import { readJsonBody } from '@/lib/requestBody';
+import { withApiRoute } from '@/lib/apiRoute';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -13,22 +14,20 @@ const schema = z.object({
   isPaid:  z.boolean().default(false),
 });
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withApiRoute(async (req: Request, { session }) => {
+  const { searchParams } = new URL(req.url);
+  const { skip, take, page, pageSize } = parsePagination(searchParams);
+  const where = { userId: session.user.id };
 
-  const records = await prisma.taxRecord.findMany({
-    where:   { userId: session.user.id },
-    orderBy: { year: 'desc' },
-  });
-  return NextResponse.json(records);
-}
+  const [records, total] = await Promise.all([
+    prisma.taxRecord.findMany({ where, orderBy: { year: 'desc' }, skip, take }),
+    prisma.taxRecord.count({ where }),
+  ]);
+  return NextResponse.json({ data: records, meta: buildPaginationMeta(total, page, pageSize) });
+}, { name: 'planning/taxes:GET' });
 
-export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const body   = await req.json();
+export const POST = withApiRoute(async (req: Request, { session }) => {
+  const body   = await readJsonBody(req);
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
@@ -44,4 +43,4 @@ export async function POST(req: NextRequest) {
     },
   });
   return NextResponse.json(record, { status: 201 });
-}
+}, { name: 'planning/taxes:POST', rateLimit: true });

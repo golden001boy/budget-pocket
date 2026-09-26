@@ -1,33 +1,27 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateTransactionSchema } from '@budget-pocket/shared';
 import { cacheDel } from '@/lib/cache';
+import { readJsonBody } from '@/lib/requestBody';
+import { withDynamicApiRoute } from '@/lib/apiRoute';
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
-  const { id } = await params;
+export const GET = withDynamicApiRoute<{ id: string }>(async (_req: Request, { session, params }) => {
+  const { id } = params;
   const tx = await prisma.transaction.findUnique({ where: { id } });
   if (!tx || tx.userId !== session.user.id) {
     return NextResponse.json({ error: 'Non trouvé' }, { status: 404 });
   }
   return NextResponse.json({ data: serializeTx(tx) });
-}
+}, { name: 'transactions/[id]:GET' });
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
-  const { id } = await params;
+export const PATCH = withDynamicApiRoute<{ id: string }>(async (req: Request, { session, params }) => {
+  const { id } = params;
   const tx = await prisma.transaction.findUnique({ where: { id } });
   if (!tx || tx.userId !== session.user.id) {
     return NextResponse.json({ error: 'Non trouvé' }, { status: 404 });
   }
 
-  const body = await req.json();
+  const body = await readJsonBody(req);
   const data = updateTransactionSchema.safeParse(body);
   if (!data.success) {
     return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
@@ -50,13 +44,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   await cacheDel(`snapshot:${session.user.id}:${tx.date.getFullYear()}:${tx.date.getMonth() + 1}`);
   return NextResponse.json({ data: serializeTx(updated) });
-}
+}, { name: 'transactions/[id]:PATCH', rateLimit: true });
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
-  const { id } = await params;
+export const DELETE = withDynamicApiRoute<{ id: string }>(async (_req: Request, { session, params }) => {
+  const { id } = params;
   const tx = await prisma.transaction.findUnique({ where: { id } });
   if (!tx || tx.userId !== session.user.id) {
     return NextResponse.json({ error: 'Non trouvé' }, { status: 404 });
@@ -65,7 +56,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   await prisma.transaction.delete({ where: { id } });
   await cacheDel(`snapshot:${session.user.id}:${tx.date.getFullYear()}:${tx.date.getMonth() + 1}`);
   return new Response(null, { status: 204 });
-}
+}, { name: 'transactions/[id]:DELETE', rateLimit: true });
 
 function serializeTx(tx: any) {
   return {

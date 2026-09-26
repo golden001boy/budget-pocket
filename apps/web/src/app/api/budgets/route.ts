@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
+import { readJsonBody } from '@/lib/requestBody';
+import { withApiRoute } from '@/lib/apiRoute';
 import { createBudgetSchema } from '@budget-pocket/shared';
 
-export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
+export const GET = withApiRoute(async (req: Request, { session }) => {
   const { searchParams } = new URL(req.url);
   const month = parseInt(searchParams.get('month') ?? String(new Date().getMonth() + 1), 10);
   const year  = parseInt(searchParams.get('year')  ?? String(new Date().getFullYear()),  10);
@@ -29,13 +26,10 @@ export async function GET(req: Request) {
     })),
     meta: buildPaginationMeta(total, page, pageSize),
   });
-}
+}, { name: 'budgets:GET' });
 
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
-  const body = await req.json();
+export const POST = withApiRoute(async (req: Request, { session }) => {
+  const body = await readJsonBody(req);
   const data = createBudgetSchema.safeParse(body);
   if (!data.success) {
     return NextResponse.json({ error: 'Données invalides', details: data.error.flatten() }, { status: 400 });
@@ -68,4 +62,4 @@ export async function POST(req: Request) {
   return NextResponse.json({
     data: { ...budget, amount: Number(budget.amount), spent: Number(budget.spent), alertAt: Number(budget.alertAt) },
   }, { status: 201 });
-}
+}, { name: 'budgets:POST', rateLimit: true });

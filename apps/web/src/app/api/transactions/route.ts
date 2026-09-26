@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createTransactionSchema } from '@budget-pocket/shared';
 import { cacheDel } from '@/lib/cache';
 import { parsePagination, buildPaginationMeta } from '@/lib/pagination';
+import { readJsonBody } from '@/lib/requestBody';
+import { withApiRoute } from '@/lib/apiRoute';
 
-export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
+export const GET = withApiRoute(async (req: Request, { session }) => {
   const { searchParams } = new URL(req.url);
   const { skip, take, page, pageSize } = parsePagination(searchParams);
   const category = searchParams.get('category') as any;
@@ -34,13 +31,10 @@ export async function GET(req: Request) {
     data: transactions.map(serializeTransaction),
     meta: buildPaginationMeta(total, page, pageSize),
   });
-}
+}, { name: 'transactions:GET' });
 
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
-  const body = await req.json();
+export const POST = withApiRoute(async (req: Request, { session }) => {
+  const body = await readJsonBody(req);
   const data = createTransactionSchema.safeParse(body);
   if (!data.success) {
     return NextResponse.json({ error: 'Données invalides', details: data.error.flatten() }, { status: 400 });
@@ -78,7 +72,7 @@ export async function POST(req: Request) {
   await cacheDel(`snapshot:${session.user.id}:${txDate.getFullYear()}:${txDate.getMonth() + 1}`);
 
   return NextResponse.json({ data: serializeTransaction(tx) }, { status: 201 });
-}
+}, { name: 'transactions:POST', rateLimit: true });
 
 function serializeTransaction(tx: any) {
   return {

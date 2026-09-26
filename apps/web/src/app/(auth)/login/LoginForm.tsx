@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { loginSchema } from '@budget-pocket/shared';
-import { Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
 export function LoginForm() {
@@ -15,13 +15,40 @@ export function LoginForm() {
   const [error,    setError]   = useState('');
   const [loading,  setLoading] = useState(false);
   const [showPwd,  setShowPwd] = useState(false);
+  // Story 15.32 (MFA): once lib/auth.ts's authorize() throws MFA_REQUIRED
+  // for this email/password pair, we keep both around (the credentials
+  // provider needs them again on the second submit — NextAuth doesn't
+  // remember a prior partial attempt) and swap the password field for a
+  // TOTP code field instead of restarting the form.
+  const [mfaPending, setMfaPending] = useState<{ email: string; password: string } | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    const fd     = new FormData(e.currentTarget);
+    const fd = new FormData(e.currentTarget);
+
+    if (mfaPending) {
+      const totp = String(fd.get('totp') ?? '').trim();
+      if (!totp) {
+        setError('Veuillez saisir votre code de vérification');
+        setLoading(false);
+        return;
+      }
+
+      const result = await signIn('credentials', { ...mfaPending, totp, redirect: false });
+      if (result?.error) {
+        setError(result.error === 'MFA_INVALID' ? 'Code invalide' : 'Une erreur est survenue');
+        setLoading(false);
+        return;
+      }
+
+      router.push('/dashboard');
+      router.refresh();
+      return;
+    }
+
     const parsed = loginSchema.safeParse({
       email:    fd.get('email'),
       password: fd.get('password'),
@@ -35,6 +62,12 @@ export function LoginForm() {
 
     const result = await signIn('credentials', { ...parsed.data, redirect: false });
 
+    if (result?.error === 'MFA_REQUIRED') {
+      setMfaPending({ email: parsed.data.email, password: parsed.data.password });
+      setLoading(false);
+      return;
+    }
+
     if (result?.error) {
       setError('Email ou mot de passe incorrect');
       setLoading(false);
@@ -43,6 +76,56 @@ export function LoginForm() {
 
     router.push('/dashboard');
     router.refresh();
+  }
+
+  if (mfaPending) {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="flex items-center gap-2 text-sm text-gray-600 bg-teal-50 rounded-lg px-3 py-2.5">
+          <ShieldCheck className="h-4 w-4 flex-shrink-0 text-teal-600" />
+          Saisissez le code à 6 chiffres de votre application d'authentification,
+          ou l'un de vos codes de récupération.
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="totp" className="text-gray-700 font-medium text-sm">Code de vérification</Label>
+          <Input
+            id="totp"
+            name="totp"
+            type="text"
+            inputMode="numeric"
+            placeholder="123456"
+            autoComplete="one-time-code"
+            autoFocus
+            required
+            className="h-11 bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus-visible:ring-teal-500 focus-visible:border-teal-500"
+          />
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2.5">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          disabled={loading}
+          className="w-full h-11 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm shadow-sm shadow-teal-200"
+        >
+          {loading ? 'Vérification...' : 'Vérifier'}
+        </Button>
+
+        <button
+          type="button"
+          onClick={() => { setMfaPending(null); setError(''); }}
+          className="w-full text-xs text-gray-500 hover:text-gray-700"
+        >
+          Retour
+        </button>
+      </form>
+    );
   }
 
   return (

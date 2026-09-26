@@ -139,6 +139,16 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Story 15.32 (ADR-008 residual, MFA): mfaSecret is the TOTP secret
+  // encrypted at rest (AES-256-GCM, lib/mfaCrypto.ts) — unlike passwordHash
+  // it can't be a one-way hash, since verifying a code requires recomputing
+  // the HMAC from the raw secret. mfaEnabled stays false while a secret has
+  // been generated but not yet confirmed with a valid code (lib/mfa.ts).
+  // mfaRecoveryCodes are bcrypt-hashed, one-time, consumed on use.
+  mfaEnabled       Boolean  @default(false)
+  mfaSecret        String?
+  mfaRecoveryCodes String[] @default([])
+
   sessions         Session[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]

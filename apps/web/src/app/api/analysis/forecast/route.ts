@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { projectForecast } from '@/lib/analytics/forecast';
 import { cacheGetOrSet, CACHE_TTL } from '@/lib/cache';
+import { withApiRoute } from '@/lib/apiRoute';
 
-export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
+export const GET = withApiRoute(async (req: Request, { session }) => {
   const { searchParams } = new URL(req.url);
   const months = Math.min(
     parseInt(searchParams.get('months') ?? '6', 10),
@@ -41,4 +37,4 @@ export async function GET(req: Request) {
   }, CACHE_TTL.FORECAST);
 
   return NextResponse.json({ data: result });
-}
+}, { name: 'analysis/forecast:GET' });

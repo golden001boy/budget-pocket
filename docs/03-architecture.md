@@ -167,15 +167,17 @@ reflète pas automatiquement — la page `/verify-email` appelle
   non authentifié, 404 non trouvé/non autorisé, 400 validation échouée). Pas
   de code d'erreur structuré (`code: "..."`) sur la plupart des routes, sauf
   exception ponctuelle (`FEATURE_DISABLED` sur `/api/advisor/chat`).
-- **Incohérence relevée (story 15.2)** : les routes API sous le matcher de
-  `middleware.ts` (voir [apps/web/src/middleware.ts](../apps/web/src/middleware.ts))
-  reçoivent une redirection `307` vers `/api/auth/signin` si non
-  authentifiées, **avant** même d'atteindre le `getServerSession` du handler
-  — donc jamais le `401 { error: ... }` JSON attendu par un client API/mobile.
-  Le contrôle `if (!session) return NextResponse.json(...)` dans chaque
-  handler est de fait mort pour ces routes. Non corrigé ici (hors périmètre
-  de 15.2) — à traiter dans une story dédiée si confirmé gênant pour le
-  client mobile (`@budget-pocket/api-client`).
+- **Incohérence relevée en story 15.2, corrigée en story 15.21** : les
+  routes API sous le matcher de
+  [`middleware.ts`](../apps/web/src/middleware.ts) recevaient une
+  redirection `307` si non authentifiées, **avant** même d'atteindre le
+  `getServerSession` du handler — donc jamais le `401 { error: ... }` JSON
+  attendu par un client API/mobile ; le contrôle
+  `if (!session) return NextResponse.json(...)` de chaque handler était de
+  fait mort pour ces routes. `authMiddleware` (extrait de `withAuth` pour
+  être testable, voir story 15.21) renvoie désormais un `401` JSON pour
+  toute route `/api/*` non authentifiée, et conserve la redirection pour
+  les pages.
 - **Validation** : Zod sur toutes les routes mutatives connues via
   `@budget-pocket/shared` (schémas partagés avec le mobile) depuis la story
   15.2 — voir [04-tests.md](04-tests.md) FE-08/API-03.
@@ -240,6 +242,13 @@ en production (chaque instance a son propre compteur).
 **Conséquence** : nécessite Redis en production pour être effectif (sinon
 fail-open = pas de protection). Redis n'est pas encore configuré dans
 l'environnement local à ce jour — voir [05-status.md](05-status.md).
+
+**Mise à jour (story 15.16)** : le coût mesuré du fail-open (~9-10s puis
+~5,4s par requête selon les mesures, story 15.1 puis 15.13) a longtemps été
+considéré comme un compromis inhérent au design fail-open. Il ne l'était
+pas — c'était un bug de configuration `ioredis` (`enableOfflineQueue` non
+désactivé, backoff de reconnexion qui s'accumule sans fin). Corrigé :
+coût réduit à ~410ms. Voir [ADR-011](#adr-011--vraie-cause-du-goulot-dashboard--backoff-de-reconnexion-ioredis-pas-postgres-story-1516).
 
 ### ADR-005 — Pas de test unitaire livré avec la story 15.1
 **Contexte** : la règle de développement §6.1 du framework impose des tests
@@ -313,13 +322,22 @@ migration de schéma (`mfaSecret`/codes de secours sur `User`), une nouvelle
 dépendance (bibliothèque TOTP), une UI d'enrôlement/QR code et une refonte du
 `CredentialsProvider` NextAuth en flux à deux étapes — un effort disproportionné
 tant que le projet n'a pas d'utilisateurs réels à protéger.
-**Conséquence** : BE-02 reste 🟡 Partiel dans [04-tests.md](04-tests.md) — le
-hardening (rate limiting compte, session raccourcie, politique de mot de
-passe) réduit le risque de brute force et l'exposition d'un jeton volé, mais
-ne couvre pas le vol de mot de passe lui-même (un attaquant avec le bon mot
-de passe reste authentifié sans second facteur). Une story MFA dédiée reste à
-créer si un lancement avec de vrais utilisateurs est planifié.
-**Détail complet** : [02-prd.md — Story 15.8](02-prd.md#story-158--mfa-ou-hardening-de-lauthentification--🟡-partiel-hardening-fait-mfa-hors-périmètre).
+**Conséquence à l'époque** : BE-02 restait 🟡 Partiel dans
+[04-tests.md](04-tests.md) — le hardening (rate limiting compte, session
+raccourcie, politique de mot de passe) réduisait le risque de brute force
+et l'exposition d'un jeton volé, mais ne couvrait pas le vol de mot de
+passe lui-même.
+**Mise à jour (2026-09-19)** : le volet MFA reporté ici a été construit
+par la story 15.32 (TOTP optionnel activable par l'utilisateur, voir
+[ADR-014](#adr-014--mfa--totp-optionnel-activable-par-lutilisateur-otplib--secret-chiffré-aes-256-gcm-story-1532))
+— cadrage décidé explicitement avec vous avant implémentation, comme
+prévu par cette ADR. BE-02 passe donc de 🟡 à un état plus complet (détail
+dans [04-tests.md](04-tests.md)) : un attaquant avec le bon mot de passe
+seul reste bloqué si l'utilisateur a activé la double authentification —
+mais celle-ci reste **optionnelle**, pas imposée à tous les comptes
+(décision produit, pas juste technique).
+**Détail complet** : [02-prd.md — Story 15.8](02-prd.md#story-158--mfa-ou-hardening-de-lauthentification--🟡-partiel-hardening-fait-mfa-hors-périmètre)
+et [02-prd.md — Story 15.32](02-prd.md#story-1532--mfa-totp-optionnel-activable-par-lutilisateur--done).
 
 ### ADR-009 — Migration Next.js 15 + React 19 (story 15.10)
 
@@ -457,9 +475,34 @@ une nouvelle vague d'erreurs une fois le précédent corrigé — pas de
 méthode plus directe trouvée pour énumérer tous les paquets concernés à
 l'avance.
 
+**Post-scriptum 3 — post-scriptum 1 (client Prisma sur store froid)
+reproduit indépendamment, story 15.26** : en installant `jest-expo` pour
+`apps/mobile`, un `node_modules` totalement vidé puis réinstallé
+(`pnpm install --frozen-lockfile`, store pnpm local conservé mais aucun
+`node_modules`) a fait resurgir **exactement** les mêmes erreurs `TS7006`
+sur des fichiers sans rapport (`investments/page.tsx`, `planning/page.tsx`,
+`admin/page.tsx`, `cron/snapshots/route.ts`, `lib/ai/buildContext.ts`,
+etc.) malgré un `postinstall` de `prisma generate` rapportant à nouveau un
+succès. Confirme que ce n'est pas un incident isolé de la story 15.10 mais
+un bug latent et reproductible du pipeline d'installation lui-même,
+toujours présent. Corrigé de la même façon : un second `prisma generate`
+explicite après l'installation complète (déjà le correctif appliqué en CI
+depuis 15.10 — non touché ici, cette reproduction n'a eu lieu qu'en local).
+Signalé ici comme confirmation, pas comme nouveau correctif.
+
 **Détail complet** : [02-prd.md — Story 15.10](02-prd.md#story-1510--migrer-nextjs-14--15--✅-done).
 
 ### ADR-010 — Tests de charge sans Redis local + goulot `/dashboard` non corrigé (story 15.13)
+
+> **⚠️ Correction (story 15.16)** : l'hypothèse de contention Postgres
+> ci-dessous, posée dans cette story, **s'est révélée fausse**. La cause
+> réelle était le comportement de reconnexion `ioredis` (délai de backoff
+> qui s'accumule sur la durée de vie du client sans jamais se
+> réinitialiser). Corrigée dans
+> [Story 15.16](02-prd.md#story-1516--corriger-le-goulot-dashboard-trouvé-en-story-1513--done).
+> Le texte original est conservé tel quel ci-dessous par souci de
+> traçabilité du raisonnement (fausse piste incluse), plutôt que réécrit
+> en silence.
 
 **Contexte** : story 15.13 (tests de charge, Gate Phase 6 §9.3). Aucun
 Redis local disponible sur ce poste ; installation via Chocolatey proposée
@@ -508,6 +551,242 @@ story de suivi dédiée est recommandée mais pas encore créée dans le PRD.
 **Détail complet, chiffres et méthodologie** :
 [02-prd.md — Story 15.13](02-prd.md#story-1513--tests-de-charge--fait-avec-distorsion-documentée).
 
+### ADR-011 — Vraie cause du goulot `/dashboard` : backoff de reconnexion `ioredis`, pas Postgres (story 15.16)
+
+**Contexte** : story 15.16, cadrée pour corriger le goulot `/dashboard`
+diagnostiqué (à tort, voir correction en tête d'ADR-010) comme une
+contention de verrou ligne Postgres.
+
+**Méthode de vérification, avant de toucher au code** : plutôt que de
+recoder directement une hypothèse de correctif, trois mesures isolées ont
+été prises pour localiser la vraie cause :
+1. Une requête `curl` unique, sans charge concurrente, sur `/dashboard` :
+   déjà 12-16 secondes, de façon répétée (pas seulement au premier appel —
+   élimine l'hypothèse d'un cold-start Neon).
+2. Un script Node isolé exécutant les mêmes requêtes Prisma
+   (`monthlySnapshot.findUnique`, `transaction.findMany`) directement
+   contre Neon, hors Next.js : 140-300ms — la BDD est saine, hors cause.
+3. Un client `ioredis` isolé et fraîchement créé, config identique
+   (`maxRetriesPerRequest: 3`, `lazyConnect: true`) : un `get()` rejette en
+   371ms — comportement de base sain, hors cause lui aussi.
+
+Seul le client Redis du **serveur de production déjà en vie** (celui qui
+avait subi les dizaines d'échecs du test de charge précédent) restait lent
+en continu, y compris sur une requête isolée plusieurs minutes après.
+
+**Cause réelle** : `ioredis`, avec `enableOfflineQueue` à sa valeur par
+défaut (activé), met en **file d'attente** les commandes émises pendant une
+déconnexion et les fait attendre le prochain cycle de reconnexion
+automatique. Le délai de ce cycle (`retryStrategy`) **s'allonge
+progressivement et ne se réinitialise jamais** tant que le client échoue à
+se reconnecter. Sur un process de longue durée avec Redis indisponible en
+continu, ce délai accumulé fait que chaque appel cache — même unique,
+même sans aucune charge concurrente — devient de plus en plus lent au fil
+de la vie du process. C'est un bug de fond de configuration, pas un
+artefact du test de charge : n'importe quel déploiement réel où Redis tombe
+en panne durablement subirait la même dégradation progressive et sans
+fin.
+
+**Correctif** : `enableOfflineQueue: false` sur
+[`lib/redis.ts`](../apps/web/src/lib/redis.ts). Une commande émise pendant
+une déconnexion est rejetée immédiatement (0-14ms mesurés isolément,
+stable sur 10 appels espacés d'une seconde, pas de dégradation dans le
+temps) au lieu d'attendre le cycle de reconnexion.
+
+**Résultats** : `dashboard-only.yml` 100 % → 0 % d'échec ;
+`login-latency.yml` (qui exerce le même mécanisme via le rate limiting)
+moyenne 5355ms → 410ms — un ordre de grandeur, et referme au passage une
+limitation acceptée depuis la story 15.1/ADR-004 sans qu'elle soit en
+réalité inhérente au design fail-open. Détail complet, chiffres avant/après
+et échecs résiduels non expliqués par Redis :
+[02-prd.md — Story 15.16](02-prd.md#story-1516--corriger-le-goulot-dashboard-trouvé-en-story-1513--done).
+
+**Changement additionnel, non responsable de la correction ci-dessus** :
+[`computeMonthlySnapshot()`](../apps/web/src/lib/analytics/snapshot.ts)
+court-circuite désormais le recalcul si une ligne `MonthlySnapshot`
+existante date de moins de 6h (même fenêtre que `CACHE_TTL.MONTHLY_SNAPSHOT`).
+Optimisation défensive indépendante, gardée pour limiter la charge BDD à
+plus grande échelle réelle, mais ce n'est pas ce qui a résolu le goulot
+mesuré ici (voir Story 15.16 pour la distinction claire entre les deux
+changements).
+
+### ADR-012 — Coffre de secrets : variables d'environnement Vercel plutôt que Vault/AWS Secrets Manager (story 15.14) · ✅ Confirmé
+
+**Contexte** : Gate Phase 6 §9.2.j ("Secrets depuis un coffre dédié") était
+🔴 — `.env` local uniquement, aucun coffre-fort. La story indiquait
+explicitement une décision de cadrage à trancher avant implémentation.
+
+**Décision prise de façon autonome, pas avec vous** : cette story a été
+traitée dans une session `/goal` en continuation autonome (« poursuis
+jusqu'à épuisement de token de cette session », 2026-09-13), sans pause
+pour confirmation — contrairement aux stories précédentes (15.10, 15.12)
+où le cadrage avait explicitement été discuté avec vous avant
+implémentation. Marqué ici pour transparence à l'origine, **confirmé
+explicitement avec vous le 2026-09-19** — le choix ci-dessous reste tel
+quel, cette ADR n'est plus ouverte à réexamen sauf changement de contexte
+(ex. multi-provider, besoin d'audit de rotation fin).
+
+**Choix retenu** : les **variables d'environnement chiffrées de Vercel**
+(Project Settings → Environment Variables, scopées par environnement
+Development/Preview/Production, chiffrées au repos) constituent le coffre
+dédié pour ce projet, plutôt que d'introduire Vault ou AWS Secrets Manager.
+
+**Raisonnement** :
+- La cible de déploiement est déjà Vercel ([§10](#10-cible-de-déploiement),
+  `vercel.json`) — aucun autre runtime cloud n'est en jeu à ce jour.
+- Aucune prod réelle n'existe encore (Gate Phase 6 : "Environnements
+  dev/staging/prod séparés" reste 🔴) — introduire un service tiers payant
+  ou une infra à opérer (Vault) avant même d'avoir un déploiement réel
+  serait prématuré et non vérifiable dans cette session (pas d'accès à un
+  compte Vercel/Vault pour le confirmer en direct, même limitation que
+  Sentry/GitHub sur des stories antérieures).
+- Un vrai coffre tiers (Vault, AWS Secrets Manager) reste la bonne
+  escalade si le projet dépasse un seul provider de déploiement, a besoin
+  d'audit de rotation fin, ou de partage de secrets entre plusieurs
+  services/équipes — aucun de ces besoins n'existe aujourd'hui.
+
+**Ce qui a été livré en plus de la décision de cadrage** (la partie
+vérifiable en code, sans accès à un compte Vercel réel) :
+[`lib/env.ts`](../apps/web/src/lib/env.ts) — schéma Zod validant la forme
+des variables d'environnement serveur au boot (`DATABASE_URL`,
+`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `CRON_SECRET` requises ; Stripe/Redis/
+Resend/Sentry/IA/marché optionnelles mais bien formées si présentes —
+chaîne vide traitée comme absente, même convention que Sentry sans DSN).
+Appelé depuis `instrumentation.ts` (runtime `nodejs` uniquement, avant
+l'init Sentry) : un déploiement mal configuré échoue immédiatement au
+boot avec une erreur agrégée listant tous les champs en cause, plutôt que
+de tomber en panne plus tard au premier appel touchant la variable
+manquante. Un bug réel a été attrapé en écrivant ce garde-fou : la
+première version du schéma rejetait les clés Stripe vides comme des
+erreurs, alors que ce projet les traite délibérément comme "non
+configuré" (même logique que Sentry/Resend) — corrigé avant de committer
+(`emptyToUndefined`, testé dans
+[`env.test.ts`](../apps/web/src/lib/__tests__/env.test.ts)).
+
+**Non fait, hors périmètre vérifiable ici** : confirmation en direct que
+les variables sont effectivement configurées comme "Production" scopées
+dans un vrai dashboard Vercel — nécessiterait un compte Vercel connecté,
+non disponible dans cette session.
+
+### ADR-013 — `transformIgnorePatterns` pnpm-compatible pour `jest-expo` (story 15.26)
+
+**Contexte** : story 15.26, câbler `jest-expo` pour `apps/mobile`
+(`expo: ~51.0.0` → `jest-expo@51.0.2`, dist-tag `sdk-51`). Premier essai
+échoue systématiquement : `SyntaxError: Unexpected identifier 'ErrorHandler'`
+sur `@react-native/js-polyfills/error-guard.js` (syntaxe Flow
+non transpilée, ex. `type ErrorHandler = (error: mixed, ...) => void;`).
+
+**Cause** : le `transformIgnorePatterns` par défaut de `jest-expo`
+(`node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo...)`)
+suppose un `node_modules` classique et plat — chaque paquet directement
+sous `node_modules/<pkg>/`. pnpm imbrique au contraire les dépendances
+transitives sous `node_modules/.pnpm/<pkg>@<version>/node_modules/<pkg>/...`.
+`RegExp.test()` cherche une correspondance n'importe où dans le chemin ;
+au **premier** `node_modules/` rencontré (juste avant `.pnpm`), le lookahead
+négatif du motif constate que `.pnpm` ne correspond à aucun nom autorisé —
+le motif matche donc à cette position, et `@react-native/js-polyfills`
+(qui apparaît plus loin, après le **second** `node_modules/`) est ignoré
+par erreur, jamais transpilé. Aggravé par le fait que cette session
+tourne sous Windows (séparateurs `\`) : le motif d'origine, tout en `/`,
+ne matchait de toute façon jamais sur ce poste, indépendamment du problème
+pnpm.
+
+**Diagnostic, avant de toucher au code** : un script Node isolé
+(`new RegExp(pattern).test(cheminRéel)`) a testé le motif directement
+contre des chemins réels du `node_modules` du projet — confirmé que le
+motif d'origine ignorait `@react-native/js-polyfills` (faux négatif) et
+qu'un candidat de correctif fonctionnait, **avant** de relancer la suite
+Jest complète. Deux itérations de parenthésage cassé (`Unterminated group`)
+détectées de cette façon en quelques secondes plutôt qu'en relançant Jest
+à chaque essai (~15-20s par run avec la transformation Babel complète).
+
+**Correctif** : ajout de `\.pnpm[\\/]` à la liste des motifs "autorisés"
+dans le lookahead négatif, mais uniquement pertinent à la frontière
+*externe* (`node_modules/.pnpm/`) — cela ne change pas le verdict à cet
+endroit (un paquet non-RN sous pnpm doit toujours être ignoré), ça
+empêche seulement cette frontière externe de décider elle-même : la
+vraie décision reste prise à la frontière *interne* (juste avant le
+fichier réel, après le second `node_modules/`), avec la même liste
+qu'avant. Classes de séparateur `[\\\\/]` utilisées partout pour couvrir
+Windows et POSIX.
+
+**Résultat** : `@react-native/js-polyfills` et tous les paquets Expo/RN
+imbriqués sous `.pnpm` sont désormais transpilés correctement ; un paquet
+tiers non-RN (ex. `lodash`) imbriqué de la même façon reste ignoré
+(comportement inchangé, transformation inutile pour du CJS déjà publié
+compilé). Voir
+[02-prd.md — Story 15.26](02-prd.md#story-1526--câbler-un-test-runner-jest-expo-pour-appsmobile--done)
+pour le détail complet et les 7 tests qui valident la suite désormais
+fonctionnelle.
+
+### ADR-014 — MFA : TOTP optionnel activable par l'utilisateur, `otplib` + secret chiffré AES-256-GCM (story 15.32)
+
+**Contexte** : dernier volet non traité de la story 15.8 (hardening auth),
+explicitement reporté par [ADR-008](#adr-008--story-158-scoping--hardening-seul-mfa-reporté).
+Cadrage décidé avec vous le 2026-09-19 : TOTP optionnel, activable par
+l'utilisateur (pas obligatoire pour tous — casserait le compte de démo et
+l'expérience de tout utilisateur existant sans migration de compte forcée,
+disproportionné pour un projet sans utilisateurs réels).
+
+**Choix techniques**
+- **`otplib`** (RFC 6238, `authenticator.generateSecret()`/`.verify()`/
+  `.keyuri()`) plutôt que `speakeasy` (moins maintenu) — génère aussi
+  l'URI `otpauth://` consommé par `qrcode` pour le QR affiché à l'écran.
+- **Secret chiffré au repos**, pas hashé : contrairement à un mot de passe,
+  vérifier un code TOTP nécessite de recalculer le HMAC à partir du secret
+  brut — un hash à sens unique serait inutilisable. AES-256-GCM
+  ([lib/mfaCrypto.ts](../apps/web/src/lib/mfaCrypto.ts)) avec une clé dédiée
+  (`MFA_ENCRYPTION_KEY`, 32 octets hex) gardée uniquement dans les
+  variables d'environnement (cohérent avec ADR-012) — une fuite de la BDD
+  seule n'expose donc pas de secrets TOTP exploitables.
+- **10 codes de récupération** à usage unique (format `XXXX-XXXX`,
+  hex uppercase), hashés en bcrypt comme les mots de passe — générés
+  uniquement à l'activation, jamais régénérés automatiquement (l'utilisateur
+  doit désactiver puis réactiver pour en obtenir de nouveaux).
+- **Flux d'activation en 2 requêtes**, pas 1 : `POST /api/auth/mfa/setup`
+  génère et stocke un secret chiffré mais laisse `mfaEnabled=false` ;
+  `POST /api/auth/mfa/enable` exige un code valide avant de l'activer et
+  ne renvoie les codes de récupération qu'à ce moment — un utilisateur qui
+  abandonne le flux (QR jamais scanné) ne reste jamais bloqué avec un
+  secret actif qu'il ne peut pas produire de code pour.
+- **Désactivation** : mot de passe **et** code (TOTP ou récupération)
+  exigés ensemble — même raisonnement que toute action sensible côté
+  compte, une session volée seule ne suffit pas.
+
+**Intégration au flux de connexion — technique NextAuth v4 peu documentée** :
+`CredentialsProvider().authorize()` qui **retourne** `null` est toujours
+traduit par NextAuth en l'erreur générique `CredentialsSignin`, indistincte
+d'un mauvais mot de passe côté client. Pour que la page de connexion sache
+distinguer "il manque un code MFA" d'un vrai échec, `authorize()` **lève**
+une `Error('MFA_REQUIRED')` à la place — NextAuth propage le message de
+l'exception telle quelle dans `result.error` (technique différente du
+`return null`, documentée informellement dans plusieurs issues NextAuth
+mais pas dans son guide officiel). Le formulaire réagit à
+`result.error === 'MFA_REQUIRED'` en affichant un second champ plutôt que
+relancer tout le formulaire.
+[`/api/auth/mobile`](../apps/web/src/app/api/auth/mobile/route.ts), qui
+n'est pas une session NextAuth (JSON simple), fait la même distinction
+avec un corps `{ error: 'mfa_required' }` en `401`.
+
+**Vérifié en direct contre la vraie BDD Neon avec le compte de démo**
+(cycle complet, MFA restaurée désactivée après coup pour ne pas laisser le
+compte partagé dans un état modifié) : activation (QR + secret manuel +
+code de confirmation réel généré via `otplib` en ligne de commande) →
+codes de récupération reçus → connexion mobile sans code → `401
+mfa_required` → connexion avec code TOTP réel → succès → connexion avec un
+code de récupération → succès, code consommé → réutilisation du même code
+→ rejetée → désactivation (mot de passe + code) → connexion normale de
+nouveau sans code requis.
+
+**Mobile** : l'écran de connexion (`apps/mobile/app/(auth)/login.tsx`)
+gère désormais le second facteur — bascule sur un champ code quand l'API
+répond `mfa_required`, comme le formulaire web. **Non fait** : écran
+d'**activation** MFA côté mobile (générer/scanner le QR, voir les codes de
+récupération) — l'activation reste web-only, ce qui est d'ailleurs
+l'endroit naturel pour scanner un QR code avec son téléphone ; une fois
+activée sur le web, la connexion mobile fonctionne pleinement. CI mobile
+inchangée (hors périmètre, comme depuis la story 15.6).
+
 ## 7. Mapping Story → Fichiers affectés
 
 Voir chaque fichier `specs/epic-XX-*.md` — chaque story y liste ses fichiers
@@ -534,7 +813,7 @@ Utilisés dans [02-prd.md](02-prd.md) et [05-status.md](05-status.md) :
 | g | **TLS** | HTTPS imposé sur comms externes | 🟡 Dépend de l'hébergeur (Vercel force HTTPS) ; non vérifié en local ; aucune vérification explicite dans le code |
 | h | **CORS** | Configuration restrictive, pas de `*` | ✅ Aucune configuration CORS explicite trouvée — API et front sont same-origin par design, donc pas d'exposition cross-origin |
 | i | **CSP** | Content Security Policy stricte | ✅ Déployée globalement dans [next.config.mjs](../apps/web/next.config.mjs) (`default-src 'self'`, etc.) |
-| j | **Coffre secrets** | Variables d'env via gestionnaire dédié | 🔴 `.env` local uniquement, pas de coffre-fort (Vault/AWS Secrets Manager) — acceptable en dev, bloquant pour la Phase 6 |
+| j | **Coffre secrets** | Variables d'env via gestionnaire dédié | 🟡 Décision de cadrage confirmée avec vous le 2026-09-19 (story 15.14, [ADR-012](#adr-012--coffre-de-secrets--variables-denvironnement-vercel-plutôt-que-vaultaws-secrets-manager-story-1514--confirmé)) : variables d'env chiffrées Vercel plutôt que Vault/AWS Secrets Manager, plus validation Zod au boot (`lib/env.ts`) ; reste 🟡 uniquement faute de vérification en direct sur un vrai compte Vercel |
 
 Détail complet des tests de validation par item : [04-tests.md](04-tests.md).
 
@@ -554,13 +833,19 @@ Détail complet des tests de validation par item : [04-tests.md](04-tests.md).
 
 ## 9. Build & outillage
 
-- **Gestionnaire de paquets** : pnpm 9, `.npmrc` avec `shamefully-hoist=true`
-  et `resolve-peers-from-workspace-root=true` pour éviter les conflits entre
-  les arbres de dépendances web (React 18.3) et mobile (React 18.2).
-- **Turborepo** : orchestre `dev`/`build`/`lint`/`type-check`/`format` avec
-  cache par tâche ([turbo.json](../turbo.json)).
-- **Tests** : 2 specs Playwright e2e (`apps/web/tests/`) ; pas de runner
-  unitaire câblé malgré `jest` en devDependency — voir [04-tests.md](04-tests.md).
+- **Gestionnaire de paquets** : pnpm 9, `.npmrc` avec l'équivalent de
+  `shamefully-hoist=true` (`public-hoist-pattern[]=*`) mais **sans**
+  `resolve-peers-from-workspace-root` (retiré en story 15.10/ADR-009 —
+  il faisait résoudre les peers `@types/react` d'`apps/web` contre la
+  version d'`apps/mobile`) ; `@types/react`/`@types/react-dom` explicitement
+  exclus du hoist pour laisser coexister web (React 19) et mobile
+  (React 18.2) sans conflit.
+- **Turborepo** : orchestre `dev`/`build`/`lint`/`type-check`/`format`/`test`
+  avec cache par tâche ([turbo.json](../turbo.json)).
+- **Tests** : 2 specs Playwright e2e (`apps/web/tests/`, connus instables,
+  voir story 15.10) ; suite Jest câblée sur `apps/web` depuis la story 15.9
+  et sur `apps/mobile` (`jest-expo`, ADR-013) depuis la story 15.26 — voir
+  [04-tests.md](04-tests.md).
 
 ## 10. Cible de déploiement
 
@@ -636,3 +921,333 @@ de rollback, selon la fraîcheur de l'incident :
 - Pas de sauvegarde **hors Neon** (export périodique vers un stockage tiers,
   ex. S3) — la restauration Neon ne protège pas contre une suppression du
   compte/projet Neon lui-même. Non traité ici, hors périmètre d'une story S.
+
+## 12. Politique de patching + test de rollback (story 15.15)
+
+**Chevauche partiellement la story 15.7** (rollback BDD, §11 ci-dessus) —
+cette section couvre le volet **applicatif** (code, dépendances) ; §11
+couvre le volet **données/schéma**. Traitée dans la même session `/goal`
+autonome que la story 15.14 — voir la note de transparence dans ADR-012 :
+aucune décision de cadrage à trancher ici (contrairement à 15.14), donc pas
+la même réserve, mais toujours sans confirmation avec vous en temps réel.
+
+### Portée du "patching"
+
+Trois catégories distinctes, avec une cadence propre à chacune :
+
+| Catégorie | Exemple | Cadence recommandée | Précédent dans ce projet |
+|---|---|---|---|
+| Correctifs de sécurité (`pnpm audit`) | Vulnérabilité critique/haute dans une dépendance transitive | Critique : dès détection, avant tout autre travail. Haute : sous 1 semaine. Modérée/basse : lors du prochain cycle de dépendances normal | Story 15.5 (46→14 vulnérabilités via `pnpm.overrides`), story 15.10 (14→0, en corrigeant aussi une vulnérabilité `sharp` détectée en cours de route) |
+| Montées de version mineures/patch (dépendances non-sécurité) | `recharts@2.13.3→2.15.4` | Mensuel ou à la demande, groupées, jamais isolées pour une seule dépendance sauf urgence | — |
+| Montées de version majeures (Next.js, React, Prisma, Node) | Next 14→15 + React 18→19 | **Story dédiée**, précédée d'une recherche explicite avant tout code (l'écosystème a pu bouger depuis la rédaction de la story), décision de scope actée avant implémentation | Story 15.10 — précédent qui fixe le standard à suivre pour toute future montée majeure |
+
+### Qui décide
+
+Projet à un seul opérateur/développeur à ce jour (vous) — pas de comité de
+review formel. Toute déviation par rapport à ce tableau (ex. repousser un
+correctif critique) doit être actée explicitement, la même règle que pour
+toute déviation architecturale (§2.4 du framework, ADR). Si l'équipe
+grandit, ce paragraphe devra désigner un rôle explicite plutôt qu'une
+personne.
+
+### Gate avant tout déploiement
+
+1. `pnpm type-check` + `pnpm test` verts (gate CI existant depuis la story
+   15.6, `type-check-and-test`, requis par la protection de branche
+   `master`).
+2. Pour un changement touchant la BDD ou l'auth : vérification manuelle en
+   direct contre la vraie BDD Neon avec le compte de démo — précédent
+   constant depuis les stories 15.2/15.8/15.10/15.11/15.12.
+3. Pour un changement touchant Redis/le chemin `/dashboard` (rate limiting,
+   cache) : re-jouer au moins `dashboard-only.yml` et `login-latency.yml`
+   (story 15.13, `apps/web/loadtests/`) — ces deux scénarios ont
+   spécifiquement révélé la régression corrigée en story 15.16.
+4. Fusion sur `master` uniquement via PR (protection de branche active
+   depuis 15.6) — jamais de push direct, même si le propriétaire du dépôt
+   peut techniquement bypasser la règle (`enforcement_level: non_admins`).
+
+### Mécanisme de rollback applicatif
+
+- **Code** : `git revert` du commit fautif sur une branche, PR, merge —
+  jamais de rewrite d'historique sur `master`. Vercel conserve par ailleurs
+  chaque déploiement passé et permet de "promote" instantanément un
+  déploiement antérieur sans attendre un nouveau build, pour un rollback
+  encore plus rapide qu'un revert+redeploy — **non vérifié en direct**
+  (pas de compte Vercel connecté dans cette session, même limitation que
+  15.4/15.6/15.14).
+- **Schéma/données** : voir §11 (restauration Neon dans la fenêtre PITR de
+  6h, migration Prisma inverse manuelle au-delà).
+- **Dépendances** : `pnpm.overrides` (déjà en place pour la SCA, ADR-007)
+  ou un simple retour à la version précédente dans `package.json` +
+  `pnpm install` — pas de mécanisme dédié au-delà du contrôle de version
+  normal.
+
+### Test de rollback réellement exécuté dans cette story
+
+Contrairement à la restauration Neon (§11, jamais exercée faute d'accès à
+la console), le rollback **applicatif par `git revert`** a été testé en
+direct, sur une branche locale jetable (`rollback-drill-test`, supprimée
+après coup, jamais poussée) :
+
+1. Régression intentionnelle introduite dans
+   [`lib/pagination.ts`](../apps/web/src/lib/pagination.ts)
+   (`buildPaginationMeta` : `Math.ceil` → `Math.floor`), committée.
+2. `pnpm jest pagination.test.ts` : **échoue** comme attendu
+   (`totalPages` attendu 3, reçu 2) — confirme que le gate CI de l'étape 1
+   ci-dessus aurait bloqué la fusion.
+3. `git revert HEAD` : un commit de revert propre, sans conflit.
+4. `pnpm jest pagination.test.ts` : **repasse au vert**, 7/7 — confirme que
+   le rollback restaure un état fonctionnel identique à l'avant-régression.
+
+**Effet de bord découvert pendant la préparation du test** : une première
+tentative de régression (`MAX_PAGE_SIZE` 100 → 1000) n'a été détectée par
+**aucun** test, car
+[`pagination.test.ts`](../apps/web/src/lib/__tests__/pagination.test.ts)
+compare le résultat à la constante `MAX_PAGE_SIZE` elle-même plutôt qu'à
+une valeur littérale (`expect(result.pageSize).toBe(MAX_PAGE_SIZE)`) — un
+test qui passe même si le plafond réel change. Gap de couverture réel,
+non corrigé ici (hors périmètre de cette story, qui porte sur la politique
+et le mécanisme de rollback, pas un audit de la suite de tests existante) ;
+signalé pour une story de suivi.
+
+### Ce qui n'a pas été vérifié dans cette story
+
+- **Rollback Vercel réel** (promotion d'un déploiement antérieur) — aucun
+  compte Vercel connecté dans cette session.
+- **Restauration Neon réelle** — toujours non exercée, voir §11 (story
+  15.7), aucun changement depuis.
+- **Cadence de patching en pratique** — le tableau ci-dessus est une
+  politique écrite, pas encore éprouvée sur un cycle réel (pas assez de
+  temps écoulé depuis sa rédaction pour évaluer si elle est suivie).
+
+## 13. Dette technique identifiée (décisions tranchées avec l'utilisateur le 2026-09-19)
+
+Quatre découvertes de fin de session précédente, laissées non tranchées le
+temps de consulter l'utilisateur — les quatre décisions ont depuis été
+prises explicitement avec lui (2026-09-19) et implémentées. Section
+conservée telle quelle pour l'historique du constat ; le statut de chaque
+décision est noté dans son propre sous-titre.
+
+**Le package `packages/api-client` est du code mort dans toute la
+codebase, et son mécanisme d'authentification ne fonctionnerait de toute
+façon pas avec le backend actuel.** · ✅ Décision prise : supprimé.
+
+- [`createApiClient()`](../packages/api-client/src/client.ts) envoie un
+  header `Authorization: Bearer <token>` sur chaque requête.
+- Seul consommateur : [`apps/mobile/lib/api.ts`](../apps/mobile/lib/api.ts)
+  l'instancie (`createBudgetPocketClient`, lisant le token depuis
+  `expo-secure-store`) — **mais aucun écran mobile n'importe
+  `lib/api.ts`**. Tous les écrans réels (`advisor`, `expenses`,
+  accueil, `investments`, `add-transaction`) utilisent directement
+  [`lib/mfetch.ts`](../apps/mobile/lib/mfetch.ts), qui authentifie via un
+  header `Cookie: next-auth.session-token=<token>` — un mécanisme
+  entièrement différent.
+- `apps/web` déclare aussi `@budget-pocket/api-client` en dépendance
+  ([package.json](../apps/web/package.json)) mais ne l'importe nulle
+  part.
+- **Même si un écran l'utilisait** : `getServerSession()` (NextAuth v4,
+  App Router) lit la session depuis les cookies de la requête — aucune
+  route de ce projet ne lit ni ne parse un header `Authorization`. Un
+  appel via `createApiClient()` recevrait donc un `401` sur toute route
+  protégée, quel que soit le token fourni.
+- **Risque réel, pas seulement esthétique** : `pnpm audit`/`pnpm
+  type-check` ne détectent rien ici (le code compile, aucune dépendance
+  vulnérable) — seule une lecture attentive des imports révèle qu'il ne
+  fait rien. Un développeur futur pourrait raisonnablement supposer que
+  `api-client` est le client HTTP "officiel" du monorepo (son nom le
+  suggère) et l'utiliser pour un nouvel écran, en découvrant l'échec
+  d'authentification seulement au runtime.
+
+**Décision (2026-09-19)** : option (a) — supprimé. `mfetch.ts` est le
+pattern réel et durable pour les appels API mobile (déjà utilisé par tous
+les écrans réels depuis le début) ; garder un second client HTTP mort
+n'apportait rien et restait un piège pour un futur développeur. Supprimés :
+tout `packages/api-client/` et son unique (et lui-même inutilisé)
+consommateur `apps/mobile/lib/api.ts`, plus la dépendance
+`@budget-pocket/api-client` retirée de `apps/web/package.json` et
+`apps/mobile/package.json`. `pnpm install` reconfirme le monorepo à 3
+packages (`shared`, `web`, `mobile`) au lieu de 4. Aucune régression
+possible : zéro import réel du package supprimé (confirmé avant
+suppression). Voir aussi
+[specs/epic-13-mobile.md](../specs/epic-13-mobile.md#story-134--shared-api-client)
+pour la story d'origine, marquée "Superseded".
+
+### Répertoires de route API vides (scaffold jamais implémenté) · ✅ Décision prise : supprimés
+
+Trouvé en listant récursivement `apps/web/src/app/api` en fin de session
+(15.24/15.20 n'avaient audité que les fichiers `route.ts` déjà présents,
+pas les répertoires vides). Cinq répertoires existent dans
+`apps/web/src/app/api` sans aucun fichier `route.ts` à l'intérieur — donc
+**aucune route réelle**, un appel à n'importe lequel de ces chemins
+renvoie un `404` Next.js standard, pas une erreur applicative :
+
+- `accounts/[id]/` (avec un sous-répertoire `sync/` également vide)
+- `portfolio/[id]/`
+- `alerts/[id]/`
+- `admin/stats/`
+- `admin/users/`
+
+**Confirmé sans consommateur** : aucun composant web ou écran mobile
+n'appelle un de ces chemins (`grep` sur toute la codebase) — seul
+`middleware.ts` référence les motifs `/api/accounts/:path*`,
+`/api/portfolio/:path*`, `/api/alerts/:path*` dans son `matcher` (une
+protection d'authentification pré-configurée pour des routes qui n'ont
+jamais été construites). Les pages `admin/page.tsx` et
+`admin/users/page.tsx` lisent déjà Prisma directement côté serveur (même
+pattern qu'`advisor`/`planning`), donc `admin/stats`/`admin/users` en
+tant que routes API n'ont jamais été nécessaires pour l'app telle qu'elle
+existe.
+
+**Décision (2026-09-19)** : les 5 répertoires vides sont supprimés
+(`accounts/[id]/` avec son sous-répertoire `sync/`, `portfolio/[id]/`,
+`alerts/` en entier — qui n'avait jamais eu de `route.ts` même à sa
+racine —, `admin/stats/`, `admin/users/`, ce dernier retiré une fois vidé
+de ses deux sous-répertoires). Le matcher de
+[middleware.ts](../apps/web/src/middleware.ts) a aussi perdu son entrée
+`/api/alerts/:path*`, qui ne protégeait plus rien de réel. Si un besoin
+réel émerge plus tard (ex. bouton "modifier"/"supprimer" sur une position
+de portefeuille dans l'UI), la story correspondante devra explicitement
+définir le contrat (validation, ownership check, codes d'erreur) plutôt
+que de repartir d'un scaffold vide qui ne donnait aucun indice fiable.
+
+### `projectionByYear` diverge du total final dans 2 des 3 simulateurs financiers · ✅ Décision prise : boucle alignée sur la formule fermée
+
+Trouvé en écrivant les tests de la story 15.29 (`lib/simulators/`) — un
+écart numérique réel, pas un bug caché qui casse quoi que ce soit
+aujourd'hui, mais qui le deviendrait dès qu'un graphique consommerait ce
+champ.
+
+**Constat** : `retirement.ts` (`computeRetirement`) et `stockGrowth.ts`
+(`computeStockGrowth`) renvoient chacun deux chiffres qui devraient
+représenter la même quantité mais qui divergent de ~2,5 à 3 % dans des cas
+réalistes (vérifié avec un script Node isolé avant d'écrire les
+assertions, pour ne pas figer une fausse égalité dans un test) :
+
+- Le total final (`projectedSavings`/`finalValue`) est calculé par une
+  formule fermée de valeur future d'annuité, qui capitalise chaque
+  contribution mensuelle dès son propre mois.
+- Le dernier point de `projectionByYear` est calculé par une boucle
+  an-par-an qui ajoute les 12 contributions de l'année **en une seule
+  fois en fin d'année** (`value * (1+tauxMensuel)^12 + montantMensuel *
+  12`) — une sous-capitalisation systématique par rapport à la formule
+  fermée, qui s'accumule sur toute la durée de la projection.
+
+**Sans impact visible aujourd'hui** : recherché explicitement dans
+`apps/web/src` — `projectionByYear` (et l'équivalent `amortizationTable`
+de `realEstate.ts`, qui n'a pas ce problème car il recalcule mois par
+mois) ne sont **rendus nulle part dans l'UI actuelle**. Seuls
+`finalValue`/`projectedSavings`/`totalGain`/`totalInvested` sont affichés
+par `ScenarioList.tsx`. Le jour où un graphique consommera
+`projectionByYear`, son dernier point ne correspondra plus au total
+affiché juste à côté.
+
+**Décision (2026-09-19)** : capitalisation mensuelle précise retenue plutôt
+que l'approximation annuelle — la boucle `projectionByYear` de
+`retirement.ts` et `stockGrowth.ts` capitalise désormais chaque mois
+individuellement (au lieu d'ajouter les 12 contributions de l'année en un
+bloc en fin d'année), ce qui la rend mathématiquement identique à la
+formule fermée utilisée pour `projectedSavings`/`finalValue` — le dernier
+point de la projection coïncide maintenant exactement avec le total
+affiché, plutôt qu'à ~2,5-3% près. Les deux tests qui documentaient l'écart
+([`retirement.test.ts`](../apps/web/src/lib/simulators/__tests__/retirement.test.ts),
+[`stockGrowth.test.ts`](../apps/web/src/lib/simulators/__tests__/stockGrowth.test.ts))
+ont été réécrits pour vérifier l'égalité exacte plutôt que la divergence.
+`realEstate.ts` n'a jamais eu ce problème (déjà mois par mois).
+
+### Aucun wrapper de route API partagé — `try/catch`/rate-limit/session recopiés à la main dans ~12 fichiers · ✅ Décision prise : HOF `withApiRoute`/`withDynamicApiRoute`
+
+Trouvé par une revue de code holistique (`code-review high master..HEAD`)
+lancée après la story 15.29 sur l'ensemble de la branche (voir le point de
+reprise dans [05-status.md](05-status.md#point-de-reprise-pour-la-prochaine-session--revue-de-code-holistique-interrompue-2026-09-14),
+8 angles au total, tous terminés), remonté indépendamment par 4 des 8
+sous-agents ("angles").
+
+**Constat** : `apps/web/src` n'a aucun helper de type `withAuth`,
+`apiHandler` ou HOF de route équivalent (confirmé : recherche exhaustive,
+aucun résultat). Trois blocs identiques sont donc recopiés à la main, route
+par route, plutôt que factorisés une seule fois :
+
+- Le bloc session (`getServerSession` puis `if (!session) return 401`),
+  dans ~21 handlers.
+- Le bloc rate limit (`checkMutationRateLimit` puis `if (!limit.success)
+  return 429`, story 15.20), dans ~13 handlers de mutation.
+- Le bloc `try { ... } catch (error) { console.error(...); return 500 }`
+  (story 15.24), dans ~21 handlers à travers ~12 fichiers.
+
+**La duplication a déjà produit deux dérives concrètes**, corrigées
+directement (règle #3 — divergence, pas décision de conception) dans le
+cadre de ce même point de reprise, sans attendre un arbitrage :
+`GET /api/advisor/scenarios` avait été oublié par le passage `try/catch`
+de la story 15.24 alors que `POST` du même fichier l'avait déjà (corrigé) ;
+le message d'erreur 401 divergeait entre `'Non autorisé'` (9 occurrences,
+budgets/transactions/analysis) et `'Unauthorized'` (21 occurrences,
+accounts/goals/portfolio/planning/user/cron/advisor) — uniformisé sur
+`'Unauthorized'`, la forme majoritaire et déjà attendue par
+`middleware.test.ts`. Ces deux corrections ne changent le comportement
+d'aucun chemin nominal.
+
+De la même famille, déjà signalée séparément dans cette section (première
+découverte ci-dessus, sous un angle différent) : les schémas Zod complets
+mais inutilisés de `packages/shared` (`retirement.ts`, `portfolio.ts`,
+`goal.ts`) restent non importés par leurs routes, qui maintiennent chacune
+un schéma local légèrement divergent — la même cause racine (pas de
+convention partagée forçant la réutilisation) que le problème décrit ici.
+
+**Effet de bord mesuré, pas corrigé ici non plus** : l'angle "efficiency"
+de la même revue a relevé que `rateLimit()`
+([lib/rateLimit.ts](../apps/web/src/lib/rateLimit.ts)) fait
+systématiquement un aller-retour Redis (`ttl()`) supplémentaire pour
+remplir `resetAt`/`remaining` — confirmé : ces deux champs ne sont lus
+nulle part en dehors des mocks de test (`grep` exhaustif sur `apps/` et
+`packages/`), sur les ~13 handlers de mutation plus les deux points d'entrée
+de login. Non corrigé ici, volontairement, pour deux raisons : (1) le
+supprimer changerait le contrat `RateLimitResult` que `resetAt`/`remaining`
+pourraient légitimement servir plus tard (ex. un header `Retry-After` sur
+un `429`, jamais construit) — même situation que les schémas partagés
+inutilisés ci-dessus, pas une simple faute de frappe ; (2) le coût mesuré
+du fail-open Redis (~410ms, [ADR-011](#adr-011--vraie-cause-du-goulot-dashboard--backoff-de-reconnexion-ioredis-pas-postgres-story-1516))
+inclut déjà cet aller-retour — le retirer changerait un chiffre documenté
+sans nouvelle mesure pour le remplacer. À trancher avec la question du
+wrapper partagé ci-dessus plutôt que corrigé isolément.
+
+**Décision (2026-09-19)** : option (a) — HOF, pas middleware centralisé.
+[`lib/apiRoute.ts`](../apps/web/src/lib/apiRoute.ts) exporte deux
+fonctions plutôt qu'une seule polymorphe :
+
+- `withApiRoute(handler, { name, rateLimit? })` pour les routes sans
+  segment dynamique — la fonction retournée n'a qu'**un seul** paramètre
+  déclaré (`req`), jamais un second optionnel.
+- `withDynamicApiRoute<P>(handler, { name, rateLimit? })` pour les routes
+  avec un `[id]` — la fonction retournée a deux paramètres, tous deux
+  obligatoires (`req`, `{ params: Promise<P> }`).
+
+**Pourquoi deux fonctions et pas une seule avec un second paramètre
+optionnel/par défaut** : le validateur de types généré par Next.js
+(`.next/types/app/api/**/route.ts`, vérifié par `pnpm type-check`) exige
+que le second paramètre d'un handler exporté, s'il est déclaré, soit
+exactement `{ params: Promise<P> }` — sans `undefined` dans le type. Un
+paramètre optionnel (`ctx?: X`) ou avec valeur par défaut est toujours vu
+par TypeScript comme `X | undefined` via `Parameters<>`, ce qui casse ce
+contrat. Un handler avec strictement un seul paramètre déclaré (pas de
+second du tout) satisfait l'interface de Next par la règle standard
+d'arité des fonctions (un appelant peut toujours fournir plus
+d'arguments qu'une fonction n'en déclare) — c'est exactement ainsi que le
+code fonctionnait déjà avant ce wrapper.
+
+Les deux blocs dupliqués — session+401, rate-limit+429 (optionnel),
+`try/catch`→413/500 — vivent maintenant dans un seul endroit
+([`checkAuthAndRateLimit`](../apps/web/src/lib/apiRoute.ts)/
+`handleError`), appelé par les deux fonctions. Les 13 fichiers de routes
+concernés (`accounts`, `advisor/scenarios`, `analysis/forecast`,
+`analysis/snapshot`, `budgets`, `goals`, `goals/[id]`,
+`planning/retirement`, `planning/taxes`, `portfolio`, `transactions`,
+`transactions/[id]`, `user/profile`) sont migrés ; aucun changement de
+comportement sur le chemin nominal (16 tests de wrapper ajoutés, 267/267
+au total, `pnpm type-check` 3/3, `pnpm build` 50/50 pages). Les 5 routes
+`auth/*` et les 2 routes `stripe/*` restent hors périmètre du wrapper —
+contrat d'erreur différent (JSON non-authentifié par design pour les
+premières, redirection navigateur pour les secondes), pas la duplication
+que cette décision visait à résorber. L'aller-retour Redis superflu de
+`rateLimit()` relevé par l'angle "efficiency" (`resetAt`/`remaining`
+jamais lus) n'a pas été touché — indépendant du choix du wrapper, laissé
+tel quel comme documenté précédemment.

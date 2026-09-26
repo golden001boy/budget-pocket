@@ -1,18 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { updateGoalSchema } from '@budget-pocket/shared';
+import { readJsonBody } from '@/lib/requestBody';
+import { withDynamicApiRoute } from '@/lib/apiRoute';
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { id } = await params;
+export const PATCH = withDynamicApiRoute<{ id: string }>(async (req: Request, { session, params }) => {
+  const { id } = params;
   const goal = await prisma.financialGoal.findFirst({ where: { id, userId: session.user.id } });
   if (!goal) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const body   = await req.json();
+  const body   = await readJsonBody(req);
   const parsed = updateGoalSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
@@ -27,16 +24,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
   });
   return NextResponse.json(updated);
-}
+}, { name: 'goals/[id]:PATCH', rateLimit: true });
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { id } = await params;
+export const DELETE = withDynamicApiRoute<{ id: string }>(async (_req: Request, { session, params }) => {
+  const { id } = params;
   const goal = await prisma.financialGoal.findFirst({ where: { id, userId: session.user.id } });
   if (!goal) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   await prisma.financialGoal.delete({ where: { id } });
   return NextResponse.json({ success: true });
-}
+}, { name: 'goals/[id]:DELETE', rateLimit: true });
